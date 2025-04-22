@@ -1,12 +1,14 @@
 defmodule AshNeo4jTest do
   use ExUnit.Case, async: false
-  alias AshNeo4j.Test.Neo4j
-  alias AshNeo4j.Test.Post
-  alias AshNeo4j.Test.Comment
+  alias AshNeo4j.Neo4j.Helper, as: Neo4j
+  alias AshNeo4j.Ex4j.Helper, as: Ex4j
+  alias AshNeo4j.Test.Resource.Post
+  alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
+  require Node.Post
 
   doctest AshNeo4j.Util
-  doctest AshNeo4j.Test.Neo4j
+  doctest AshNeo4j.Neo4j.Helper
 
   setup do
     on_exit(fn ->
@@ -34,6 +36,9 @@ defmodule AshNeo4jTest do
     # setup using Neo4j
     Neo4j.relate_nodes(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
     assert Neo4j.nodes_relate_how?(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
+    # read using Ex4j
+    Ex4j.match_nodes(Node.Post) |> IO.inspect(label: :match_nodes)
+
     # read using Ash
     result = Ash.read!(Post)
     assert length(result) == 1

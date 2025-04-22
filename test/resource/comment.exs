@@ -1,4 +1,4 @@
-defmodule AshNeo4j.Test.Comment do
+defmodule AshNeo4j.Test.Resource.Comment do
   @moduledoc false
   use Ash.Resource,
     domain: AshNeo4j.Test.Domain,
@@ -21,6 +21,6 @@ defmodule AshNeo4j.Test.Comment do
   end
 
   relationships do
-    belongs_to(:post, AshNeo4j.Test.Post, public?: true)
+    belongs_to(:post, AshNeo4j.Test.Resource.Post, public?: true)
   end
 end

@@ -1,6 +1,6 @@
-defmodule AshNeo4j.Test.Neo4j do
+defmodule AshNeo4j.Neo4j.Helper do
   @moduledoc """
-  Test helpers for Neo4j
+  Helpers for Neo4j
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule AshNeo4j.Test.Neo4j do
 
   ## Examples
   ```
-  iex> AshNeo4j.Test.Neo4j.delete_all()
+  iex> AshNeo4j.Neo4j.Helper.delete_all()
   iex> :ok
   ```
   """
@@ -22,7 +22,7 @@ defmodule AshNeo4j.Test.Neo4j do
 
   ## Examples
   ```
-  iex> AshNeo4j.Test.Neo4j.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Actor, %{name: "Bill Nighy"})
   iex> :ok
   ```
   """
@@ -36,7 +36,7 @@ defmodule AshNeo4j.Test.Neo4j do
 
   ## Examples
   ```
-  iex> AshNeo4j.Test.Neo4j.merge_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> AshNeo4j.Neo4j.Helper.merge_node(:Actor, %{name: "Bill Nighy", born: 1949})
   iex> :ok
   ```
   """
@@ -49,7 +49,7 @@ defmodule AshNeo4j.Test.Neo4j do
   Relates two nodes with a relationship type
     ## Examples
   ```
-  iex> result = AshNeo4j.Test.Neo4j.relate_nodes(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
+  iex> result = AshNeo4j.Neo4j.Helper.relate_nodes(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
   iex> :ok
   ```
   """
@@ -63,7 +63,7 @@ defmodule AshNeo4j.Test.Neo4j do
   Tests if two nodes are related with a relationship type
     ## Examples
   ```
-  iex> result = AshNeo4j.Test.Neo4j.nodes_relate_how?(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
+  iex> result = AshNeo4j.Neo4j.Helper.nodes_relate_how?(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
   iex> :ok
   ```
   """
@@ -80,13 +80,12 @@ defmodule AshNeo4j.Test.Neo4j do
     end
   end
 
-
   @doc """
   Reads a node from Neo4j
 
   ## Examples
   ```
-  iex> result = AshNeo4j.Test.Neo4j.read_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> result = AshNeo4j.Neo4j.Helper.read_node(:Actor, %{name: "Bill Nighy", born: 1949})
   iex> {:ok, %Bolt.Sips.Response{}} = result
   ```
   """

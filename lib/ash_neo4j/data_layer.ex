@@ -93,12 +93,11 @@ defmodule AshNeo4j.DataLayer do
   end
 
   @impl true
-  def run_query(_query, _resource) do
-    {:error, "Error run_query not implemented"}
-  end
-
-  defp cast_stored(resource, keys) do
-    resource.ash_neo4j_parse_row(keys)
+  def run_query(query, resource) do
+    IO.inspect(query, label: "query")
+    IO.inspect(resource, label: "resource")
+    #AshNeo4j.Ex4j.Helper.match_nodes(AshNeo4j.Test.Resource.Post) |> IO.inspect(label: "match_nodes")
+    %Ash.Query{}
   end
 
   @impl true

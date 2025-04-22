@@ -1,4 +1,4 @@
-defmodule AshNeo4j.Test.Post do
+defmodule AshNeo4j.Test.Resource.Post do
   @moduledoc false
   use Ash.Resource,
     domain: AshNeo4j.Test.Domain,
@@ -28,6 +28,6 @@ defmodule AshNeo4j.Test.Post do
   end
 
   relationships do
-    has_many(:comments, AshNeo4j.Test.Comment, destination_attribute: :post_id, public?: true)
+    has_many(:comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true)
   end
 end
