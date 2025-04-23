@@ -95,17 +95,13 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def run_query(query, resource) do
     IO.inspect(query, label: "query")
-    result = AshNeo4j.Ex4j.Helper.match_nodes(Node.Post) |> IO.inspect(label: "run query")
+    nodes = AshNeo4j.Ex4j.Helper.match_nodes(Node.Post) |> IO.inspect(label: "run query")
     results =
-      result
+      nodes
       |> Stream.map(fn record ->
         record
         |> Map.get("n")
-        |> Map.from_struct()
-        |> Map.put(:__struct__, resource)
-        |> Map.put(:__data_layer__, __MODULE__)
-        # TODO metadata should be the neo4j node id
-        |> Map.put(:__metadata__, 1)
+        |> convert_node_to_resource(resource)
       end)
       |> filter_stream(query.domain, query.filter)
       |> sort_stream(resource, query.domain, query.sort)
@@ -160,6 +156,24 @@ defmodule AshNeo4j.DataLayer do
   def filter_matches(records, filter, domain) do
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     records
+  end
+
+  defp convert_node_to_resource(node, resource) do
+    store = AshNeo4j.DataLayer.Info.store(resource)
+    translate = AshNeo4j.DataLayer.Info.translate(resource)
+    stored_fields = Enum.into(store, %{}, fn field ->
+      {field, Map.get(node, field)}
+    end)
+    Enum.into(translate, stored_fields, fn {resource_field, node_field} ->
+      {resource_field, Map.get(node, node_field)}
+    end)
+    |> Map.put(:__struct__, resource)
+    |> Map.put(:__data_layer__, __MODULE__)
+    # TODO metadata should be a struct including neo4j node id?
+    |> Map.put(:__metadata__, %{})
+    |> Map.put(:aggregates, %{})
+    |> Map.put(:calculations, %{})
+    |> IO.inspect(label: "convert_node_to_resource")
   end
 
   defp dump_node(resource, changeset) do

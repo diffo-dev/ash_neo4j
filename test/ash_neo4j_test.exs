@@ -50,11 +50,11 @@ defmodule AshNeo4jTest do
     # read using Ash
     result = Post |> Ash.Query.load([:title]) |> Ash.read!()
     assert length(result) == 1
-    post_resource = result[0] |> IO.inspect(label: :post_resource)
+    post_resource = result |> Enum.at(0) |> IO.inspect(label: :post_resource)
     assert post_resource.title == "post1"
     comments = post_resource.comments
     assert length(comments) == 1
-    assert comments[0] == "comment1"
+    assert comments |> Enum.at(0) == "comment1"
 
     assert [%{title: "post1"}] = Ash.read!(Post)
     assert [%{title: "comment1"}] = Ash.read!(Comment)
