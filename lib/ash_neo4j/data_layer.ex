@@ -95,9 +95,24 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def run_query(query, resource) do
     IO.inspect(query, label: "query")
-    IO.inspect(resource, label: "resource")
-    #AshNeo4j.Ex4j.Helper.match_nodes(AshNeo4j.Test.Resource.Post) |> IO.inspect(label: "match_nodes")
-    %Ash.Query{}
+    result = AshNeo4j.Ex4j.Helper.match_nodes(Node.Post) |> IO.inspect(label: "run query")
+    results =
+      result
+      |> Stream.map(fn record ->
+        record
+        |> Map.get("n")
+        |> Map.from_struct()
+        |> Map.put(:__struct__, resource)
+        |> Map.put(:__data_layer__, __MODULE__)
+        # TODO metadata should be the neo4j node id
+        |> Map.put(:__metadata__, 1)
+      end)
+      |> filter_stream(query.domain, query.filter)
+      |> sort_stream(resource, query.domain, query.sort)
+      |> offset_stream(query.offset)
+      |> limit_stream(query.limit)
+      |> IO.inspect(label: ":ok results")
+    {:ok, results}
   end
 
   @impl true

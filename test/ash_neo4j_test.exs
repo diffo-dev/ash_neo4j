@@ -26,8 +26,13 @@ defmodule AshNeo4jTest do
     Neo4j.create_node(:Post, %{title: "post1"})
     assert {:ok, %Bolt.Sips.Response{records: records}} = Neo4j.read_node(:Post, %{title: "post1"})
     assert length(records) == 1
-    node = Enum.at(Enum.at(records ,0), 0)
+    node = Enum.at(Enum.at(records ,0), 0) |> IO.inspect(label: "read using neo4j")
     assert node.properties == %{"title" => "post1"}
+    # read using Ex4j
+    results = Ex4j.match_nodes(Node.Post) |> IO.inspect(label: "read using ex4j")
+    assert length(results) == 1
+    post = results |> Enum.at(0) |> Map.get("n")
+    assert post.title == "post1"
     # read using Ash
     assert [%{title: "post1"}] = Ash.read!(Post)
   end
@@ -37,10 +42,13 @@ defmodule AshNeo4jTest do
     Neo4j.relate_nodes(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
     assert Neo4j.nodes_relate_how?(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
     # read using Ex4j
-    Ex4j.match_nodes(Node.Post) |> IO.inspect(label: :match_nodes)
+    results = Ex4j.match_nodes(Node.Post) |> IO.inspect(label: :match_nodes)
+    assert length(results) == 1
+    post = results |> Enum.at(0) |> Map.get("n")
+    assert post.title == "post1"
 
     # read using Ash
-    result = Ash.read!(Post)
+    result = Post |> Ash.Query.load([:title]) |> Ash.read!()
     assert length(result) == 1
     post_resource = result[0] |> IO.inspect(label: :post_resource)
     assert post_resource.title == "post1"
