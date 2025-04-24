@@ -94,20 +94,23 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    IO.inspect(query, label: "query")
-    nodes = AshNeo4j.Ex4j.Helper.match_nodes(Node.Post) |> IO.inspect(label: "run query")
+    IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    label = AshNeo4j.DataLayer.Info.label(resource)
+    IO.inspect(label, label: "AshNeo4j.DataLayer.run_query label")
+    module = Module.concat(Node, label)
+    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query)
     results =
       nodes
       |> Stream.map(fn record ->
         record
-        |> Map.get("n")
+        |> Map.get(to_string(label))
         |> convert_node_to_resource(resource)
       end)
       |> filter_stream(query.domain, query.filter)
       |> sort_stream(resource, query.domain, query.sort)
       |> offset_stream(query.offset)
       |> limit_stream(query.limit)
-      |> IO.inspect(label: ":ok results")
+      |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
     {:ok, results}
   end
 
@@ -158,7 +161,7 @@ defmodule AshNeo4j.DataLayer do
     records
   end
 
-  defp convert_node_to_resource(node, resource) do
+  defp convert_node_to_resource(node, resource) when is_map(node) do
     store = AshNeo4j.DataLayer.Info.store(resource)
     translate = AshNeo4j.DataLayer.Info.translate(resource)
     stored_fields = Enum.into(store, %{}, fn field ->
@@ -173,11 +176,7 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:__metadata__, %{})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
-    |> IO.inspect(label: "convert_node_to_resource")
-  end
-
-  defp dump_node(resource, changeset) do
-    resource.ash_neo4j_dump_node(struct(changeset.data, changeset.attributes))
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do
