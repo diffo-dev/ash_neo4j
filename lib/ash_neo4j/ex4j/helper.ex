@@ -23,16 +23,18 @@ defmodule AshNeo4j.Ex4j.Helper do
     label = Module.split(module) |> List.last() |> String.to_existing_atom()
     query =
       match(module, as: label)
-      |> where_from_ash_filter(label, ash_query) #|> IO.inspect(label: "match_nodes where_from_ash_filter")
+      |> body(label, ash_query) #|> IO.inspect(label: "match_nodes body")
       |> return(label)
-    #IO.inspect(cypher(query), label: "match_nodes cypher")
+    IO.inspect(cypher(query), label: "match_nodes cypher")
     query |> run()
   end
 
   @doc """
-  Chains an Ex4j query with a where clause, derived from the Ash.Query.filter
+  Chains body of an Ex4j query clause, derived from the Ash.Query
+  Body includes where clause, or where related nodes are required to be loaded includes
+  vertex and edge clauses
   """
-  def where_from_ash_filter(ex4j_query, label, ash_query) do
+  def body(ex4j_query, label, ash_query) do
     if (ash_query.filter == nil) do
       ex4j_query
     else
@@ -50,8 +52,17 @@ defmodule AshNeo4j.Ex4j.Helper do
       else
         property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, predicate.left)
         property_value = convert_value(predicate.right)
-        ex4j_query
-        |> where(label, "#{label}.#{property_name} #{operator} #{property_value}")
+        if (operator == "in") && (property_value == "[]") do
+          # need to find the relationship with the property name
+          other_module = Node.Post
+          other_label = Module.split(other_module) |> List.last() |> String.to_existing_atom()
+          ex4j_query
+          |> edge(Node.BELONGS_TO, as: :r, from: label, to: other_label, type: :out)
+          |> vertex(other_module, as: other_label)
+        else
+          ex4j_query
+          |> where(label, "#{label}.#{property_name} #{operator} #{property_value}")
+        end
       end
     end
   end

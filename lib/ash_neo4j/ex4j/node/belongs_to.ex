@@ -1,4 +1,4 @@
-defmodule Node.Has do
+defmodule Node.BELONGS_TO do
   use Ex4j.Node
 
   graph do

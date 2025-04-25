@@ -56,26 +56,23 @@ defmodule AshNeo4jTest do
   #TODO test fails, need to handle load of related node
   test "nodes can be created and related" do
     # setup using Neo4j
-    Neo4j.relate_nodes(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
-    assert Neo4j.nodes_relate_how?(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
+    Neo4j.relate_nodes(:Comment, %{title: "comment1"}, :Post, %{title: "post1"}, :BELONGS_TO)
+    Neo4j.relate_nodes(:Comment, %{title: "comment2"}, :Post, %{title: "post1"}, :BELONGS_TO)
+    Neo4j.relate_nodes(:Comment, %{title: "comment3"}, :Post, %{title: "post2"}, :BELONGS_TO)
+    assert Neo4j.nodes_relate_how?(:Comment, %{title: "comment1"}, :Post, %{title: "post1"}, :BELONGS_TO)
     # read using Ex4j
     results = Ex4j.match_nodes(Node.Post)
-    assert length(results) == 1
-    post = results |> Enum.at(0) |> Map.get("Post")
-    assert post.title == "post1"
+    assert length(results) == 2
+    results = Ex4j.match_nodes(Node.Comment)
+    assert length(results) == 3
 
-    # read using Ash
-    #resource = Ash.read_one!(Post) |> IO.inspect(label: :ash_read)
-    resource = Ash.read_one!(Post, load: [:comments]) #|> IO.inspect(label: :ash_read)
-    assert resource.title == "post1"
+    # read using Ash, loading related comments
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!() |> IO.inspect(label: :ash_read)
+    assert length(result.comments) == 1
 
-    # check comments are loaded
-    comments = resource.comments
-    assert length(comments) == 1
-    assert comments |> Enum.at(0) == "comment1"
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read!() |> IO.inspect(label: :ash_read)
+    assert length(result.comments) == 2
 
-    assert [%{title: "post1"}] = Ash.read!(Post)
-    assert [%{title: "comment1"}] = Ash.read!(Comment)
   end
 
   test "filters/sorts can be applied" do

@@ -98,7 +98,7 @@ defmodule AshNeo4j.DataLayer do
     label = AshNeo4j.DataLayer.Info.label(resource)
     #IO.inspect(label, label: "AshNeo4j.DataLayer.run_query label")
     module = Module.concat(Node, label)
-    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query)
+    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query) |> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
     results =
       nodes
       |> Stream.map(fn record ->
