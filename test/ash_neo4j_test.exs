@@ -27,16 +27,16 @@ defmodule AshNeo4jTest do
     Neo4j.create_node(:Post, %{title: "post1", uuid: uuid})
     assert {:ok, %Bolt.Sips.Response{records: records}} = Neo4j.read_node(:Post, %{title: "post1"})
     assert length(records) == 1
-    node = Enum.at(Enum.at(records ,0), 0) |> IO.inspect(label: "read using neo4j")
+    node = Enum.at(Enum.at(records ,0), 0)
     assert node.properties == %{"title" => "post1", "uuid" => uuid}
     # read using Ex4j
-    results = Ex4j.match_nodes(Node.Post) |> IO.inspect(label: "read using ex4j")
+    results = Ex4j.match_nodes(Node.Post)
     assert length(results) == 1
     post = results |> Enum.at(0) |> Map.get("Post")
     assert post.title == "post1"
     assert post.uuid == uuid
     # read using Ash
-    resource = Ash.read_one!(Post) |> IO.inspect(label: "read using ash")
+    resource = Ash.read_one!(Post)
     assert resource.title == "post1"
     assert resource.id == uuid
   end
@@ -45,27 +45,28 @@ defmodule AshNeo4jTest do
     Neo4j.merge_node(:Post, %{title: "post1"})
     Neo4j.merge_node(:Post, %{title: "post2"})
     # read using Ash
-    resources = Ash.read!(Post) |> IO.inspect(label: "read using ash")
+    resources = Ash.read!(Post)
     assert length(resources) == 2
     # read using Ash with filter
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!() |> IO.inspect(label: "read using ash with filter")
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!()
     assert length(result) == 1
     assert result |> Enum.at(0) |> Map.get(:title) == "post2"
   end
 
+  #TODO test fails, need to handle load of related node
   test "nodes can be created and related" do
     # setup using Neo4j
     Neo4j.relate_nodes(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
     assert Neo4j.nodes_relate_how?(:Post, %{title: "post1"}, :Comment, %{title: "comment1"}, :HAS)
     # read using Ex4j
-    results = Ex4j.match_nodes(Node.Post) |> IO.inspect(label: :match_nodes)
+    results = Ex4j.match_nodes(Node.Post)
     assert length(results) == 1
     post = results |> Enum.at(0) |> Map.get("Post")
     assert post.title == "post1"
 
     # read using Ash
-    resource = Ash.read_one!(Post) |> IO.inspect(label: :ash_read)
-    #resource = Ash.read_one!(Post, load: [:comments]) |> IO.inspect(label: :ash_read)
+    #resource = Ash.read_one!(Post) |> IO.inspect(label: :ash_read)
+    resource = Ash.read_one!(Post, load: [:comments]) #|> IO.inspect(label: :ash_read)
     assert resource.title == "post1"
 
     # check comments are loaded
@@ -79,9 +80,9 @@ defmodule AshNeo4jTest do
 
   test "filters/sorts can be applied" do
     # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1"})
-    Neo4j.create_node(:Post, %{title: "post2"})
-    Neo4j.create_node(:Post, %{title: "post3"})
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
 
     results =
       Post
@@ -89,7 +90,154 @@ defmodule AshNeo4jTest do
       |> Ash.Query.filter(title in ["post1", "post2"])
       |> Ash.Query.sort(:title)
       |> Ash.read!()
+    assert length(results) == 2
+  end
 
+  test "optimised == predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title == "post2")
+      |> Ash.read!()
+    assert length(results) == 1
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score == 2)
+      |> Ash.read!()
+    assert length(results) == 1
+  end
+
+  test "optimised != predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title != "post2")
+      |> Ash.read!()
+    assert length(results) == 2
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score != 2)
+      |> Ash.read!()
+    assert length(results) == 2
+  end
+
+  test "optimised in predicate can be applied" do
+    # setup using Neo4j
+
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title in ["post2", "post3"])
+      |> Ash.read!()
+    assert length(results) == 2
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score in [1, 2])
+      |> Ash.read!()
+    assert length(results) == 2
+  end
+
+  test "optimised > predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title > "post1")
+      |> Ash.read!()
+    assert length(results) == 2
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score > 1)
+      |> Ash.read!()
+    assert length(results) == 2
+  end
+
+  test "optimised >= predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title >= "post2")
+      |> Ash.read!()
+    assert length(results) == 2
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score >= 2)
+      |> Ash.read!()
+    assert length(results) == 2
+  end
+
+  test "optimised < predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title < "post2")
+      |> Ash.read!()
+    assert length(results) == 1
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score < 3)
+      |> Ash.read!()
+    assert length(results) == 2
+  end
+
+  test "optimised <= predicate can be applied" do
+    # setup using Neo4j
+    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
+    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
+    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(title <= "post2")
+      |> Ash.read!()
+    assert length(results) == 2
+
+    results =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.filter(score <= 2)
+      |> Ash.read!()
     assert length(results) == 2
   end
 end

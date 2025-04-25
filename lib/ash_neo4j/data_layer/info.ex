@@ -20,7 +20,7 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref) do
-    IO.inspect(ash_query_ref, label: "AshNeo4j.DataLayer.convert_to_property_name ash_query_ref")
+    #IO.inspect(ash_query_ref, label: "AshNeo4j.DataLayer.convert_to_property_name ash_query_ref")
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     translate = translate(resource)
     case Keyword.get(translate, attribute_name) do
@@ -28,7 +28,7 @@ defmodule AshNeo4j.DataLayer.Info do
       resource_name -> resource_name
     end
     |> to_string()
-    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_property_name result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_property_name result")
   end
 
   @doc """

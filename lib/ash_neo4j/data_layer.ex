@@ -94,9 +94,9 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     label = AshNeo4j.DataLayer.Info.label(resource)
-    IO.inspect(label, label: "AshNeo4j.DataLayer.run_query label")
+    #IO.inspect(label, label: "AshNeo4j.DataLayer.run_query label")
     module = Module.concat(Node, label)
     nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query)
     results =
@@ -110,7 +110,7 @@ defmodule AshNeo4j.DataLayer do
       |> sort_stream(resource, query.domain, query.sort)
       |> offset_stream(query.offset)
       |> limit_stream(query.limit)
-      |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+      #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
     {:ok, results}
   end
 

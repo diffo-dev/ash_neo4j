@@ -18,28 +18,19 @@ defmodule AshNeo4j.Ex4j.Helper do
   """
   @spec match_nodes(module(), term()) :: list(Ex4j.Node.t())
   def match_nodes(module, ash_query) when is_atom(module) do
-    IO.inspect(ash_query, label: "match_nodes ash_query")
+    #IO.inspect(ash_query, label: "match_nodes ash_query")
     Code.ensure_loaded(module)
     label = Module.split(module) |> List.last() |> String.to_existing_atom()
     query =
       match(module, as: label)
-      |> where_from_ash_filter(label, ash_query) |> IO.inspect(label: "match_nodes where_from_ash_filter")
+      |> where_from_ash_filter(label, ash_query) #|> IO.inspect(label: "match_nodes where_from_ash_filter")
       |> return(label)
-    IO.inspect(cypher(query), label: "match_nodes cypher")
+    #IO.inspect(cypher(query), label: "match_nodes cypher")
     query |> run()
   end
 
   @doc """
-  Chains an Ex4j query with a where clause, derived from the Ash.Query.filter()
-  filter: #Ash.Filter<title == "post2">
-  resource_predicates_map: %{
-    left: title,
-    right: "post2",
-    operator: :==,
-    embedded?: false,
-    __predicate__?: true,
-    __operator__?: true
-  }
+  Chains an Ex4j query with a where clause, derived from the Ash.Query.filter
   """
   def where_from_ash_filter(ex4j_query, label, ash_query) do
     if (ash_query.filter == nil) do
@@ -48,16 +39,33 @@ defmodule AshNeo4j.Ex4j.Helper do
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter)
       predicates = Map.get(simple_filter, :predicates, [])
       # TODO handle mulitple predicates
-      first_predicate = Enum.at(predicates, 0)
-      case first_predicate do
-        %{left: attribute_name, operator: :==, right: value} ->
-          property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, attribute_name)
-          #TODO enum is not correct here, need to update ex4j_query
-          where(ex4j_query, label, "#{label}.#{property_name} = '#{value}'") |> IO.inspect(label: "AshNeo4j.DataLayer.where_from_ash_filter where")
-        _ ->
-          ex4j_query
-          # TODO handle other predicates
+      if (length(predicates) > 1) do
+        IO.puts("Multiple predicates, only handling first of: #{inspect(predicates)}")
+      end
+      predicate = hd(predicates)
+      operator = convert_operator(predicate.operator)
+      if (operator == nil) do
+        IO.puts("Unsupported operator: #{inspect(predicate.operator)}")
+        ex4j_query
+      else
+        property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, predicate.left)
+        property_value = convert_value(predicate.right)
+        ex4j_query
+        |> where(label, "#{label}.#{property_name} #{operator} #{property_value}")
       end
     end
   end
+
+  defp convert_operator(:==), do: "="
+  defp convert_operator(:!=), do: "<>"
+  defp convert_operator(:in), do: "in"
+  defp convert_operator(:<=), do: "<="
+  defp convert_operator(:<), do: "<"
+  defp convert_operator(:>), do: ">"
+  defp convert_operator(:>=), do: ">="
+  defp convert_operator(_), do: nil
+
+  defp convert_value(value) when is_binary(value), do: "'#{value}'"
+  defp convert_value(values) when is_struct(values, MapSet), do: "[#{Enum.map(values, fn value -> convert_value(value) end) |> Enum.join(",")}]"
+  defp convert_value(value), do: value
 end
