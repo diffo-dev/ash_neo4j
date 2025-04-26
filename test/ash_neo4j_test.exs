@@ -42,8 +42,7 @@ defmodule AshNeo4jTest do
   end
 
   test "node can be read using filter" do
-    Neo4j.merge_node(:Post, %{title: "post1"})
-    Neo4j.merge_node(:Post, %{title: "post2"})
+    create_post_nodes(2)
     # read using Ash
     resources = Ash.read!(Post)
     assert length(resources) == 2
@@ -56,10 +55,22 @@ defmodule AshNeo4jTest do
   #TODO test fails, need to handle load of related node
   test "nodes can be created and related" do
     # setup using Neo4j
-    Neo4j.relate_nodes(:Comment, %{title: "comment1"}, :Post, %{title: "post1"}, :BELONGS_TO)
-    Neo4j.relate_nodes(:Comment, %{title: "comment2"}, :Post, %{title: "post1"}, :BELONGS_TO)
-    Neo4j.relate_nodes(:Comment, %{title: "comment3"}, :Post, %{title: "post2"}, :BELONGS_TO)
-    assert Neo4j.nodes_relate_how?(:Comment, %{title: "comment1"}, :Post, %{title: "post1"}, :BELONGS_TO)
+    uuid1 = Ash.UUID.generate()
+    uuid2 = Ash.UUID.generate()
+    uuid3 = Ash.UUID.generate()
+    uuid4 = Ash.UUID.generate()
+    uuid5 = Ash.UUID.generate()
+    Neo4j.create_node(:Post, %{title: "post1", uuid: uuid1})
+    Neo4j.create_node(:Post, %{title: "post2", uuid: uuid2})
+    Neo4j.create_node(:Comment, %{title: "comment3", uuid: uuid3})
+    Neo4j.create_node(:Comment, %{title: "comment4", uuid: uuid4})
+    Neo4j.create_node(:Comment, %{title: "comment5", uuid: uuid5})
+    Neo4j.relate_nodes(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    Neo4j.relate_nodes(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    Neo4j.relate_nodes(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
+    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
     # read using Ex4j
     results = Ex4j.match_nodes(Node.Post)
     assert length(results) == 2
@@ -76,10 +87,7 @@ defmodule AshNeo4jTest do
   end
 
   test "filters/sorts can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -91,10 +99,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised == predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -112,10 +117,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised != predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -133,11 +135,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised in predicate can be applied" do
-    # setup using Neo4j
-
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -155,10 +153,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised > predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -176,10 +171,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised >= predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -197,10 +189,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised < predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3)
 
     results =
       Post
@@ -218,10 +207,7 @@ defmodule AshNeo4jTest do
   end
 
   test "optimised <= predicate can be applied" do
-    # setup using Neo4j
-    Neo4j.create_node(:Post, %{title: "post1", score: 1, public: true})
-    Neo4j.create_node(:Post, %{title: "post2", score: 2, public: true})
-    Neo4j.create_node(:Post, %{title: "post3", score: 3, public: false})
+    create_post_nodes(3 )
 
     results =
       Post
@@ -236,5 +222,17 @@ defmodule AshNeo4jTest do
       |> Ash.Query.filter(score <= 2)
       |> Ash.read!()
     assert length(results) == 2
+  end
+
+  defp create_post_nodes(count) do
+    for i <- 1..count do
+      Neo4j.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
+    end
+  end
+
+  defp create_comment_nodes(count) do
+    for i <- 1..count do
+      Neo4j.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+    end
   end
 end

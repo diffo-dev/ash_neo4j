@@ -100,12 +100,7 @@ defmodule AshNeo4j.DataLayer do
     module = Module.concat(Node, label)
     nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query) |> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
     results =
-      nodes
-      |> Stream.map(fn record ->
-        record
-        |> Map.get(to_string(label))
-        |> convert_node_to_resource(resource)
-      end)
+      convert_nodes_to_resources(nodes, label, resource)
       |> filter_stream(query.domain, query.filter)
       |> sort_stream(resource, query.domain, query.sort)
       |> offset_stream(query.offset)
@@ -159,6 +154,17 @@ defmodule AshNeo4j.DataLayer do
   def filter_matches(records, filter, domain) do
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     records
+  end
+
+  # converts nodes to resources of the given resource type, linking related resources
+  # TODO handle related resources
+  defp convert_nodes_to_resources(nodes, label, resource) when is_list(nodes) do
+    nodes
+    |> Stream.map(fn record ->
+      record
+      |> Map.get(to_string(label))
+      |> convert_node_to_resource(resource)
+    end)
   end
 
   defp convert_node_to_resource(node, resource) when is_map(node) do

@@ -9,7 +9,7 @@ defmodule AshNeo4j.Neo4j.Helper do
   ## Examples
   ```
   iex> AshNeo4j.Neo4j.Helper.delete_all()
-  iex> :ok
+  :ok
   ```
   """
   def delete_all() do
@@ -23,7 +23,7 @@ defmodule AshNeo4j.Neo4j.Helper do
   ## Examples
   ```
   iex> AshNeo4j.Neo4j.Helper.create_node(:Actor, %{name: "Bill Nighy"})
-  iex> :ok
+  :ok
   ```
   """
   def create_node(label, properties) when is_atom(label) do
@@ -37,7 +37,7 @@ defmodule AshNeo4j.Neo4j.Helper do
   ## Examples
   ```
   iex> AshNeo4j.Neo4j.Helper.merge_node(:Actor, %{name: "Bill Nighy", born: 1949})
-  iex> :ok
+  :ok
   ```
   """
   def merge_node(label, properties) when is_atom(label) do
@@ -49,22 +49,27 @@ defmodule AshNeo4j.Neo4j.Helper do
   Relates two nodes with a relationship type
     ## Examples
   ```
-  iex> result = AshNeo4j.Neo4j.Helper.relate_nodes(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
-  iex> :ok
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4j.Helper.relate_nodes(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
+  :ok
   ```
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, relationship) when is_atom(source_label) and is_atom(dest_label) do
     relationship = to_string(relationship)
-    cypher = "MERGE (s:#{to_string(source_label)} #{AshNeo4j.Util.cypher_properties(source_properties)})-[r:#{relationship}]->(d:#{to_string(dest_label)} #{AshNeo4j.Util.cypher_properties(dest_properties)}) RETURN s, r, d"
-    run_cypher(cypher)
+    cypher = "MATCH (s:#{to_string(source_label)} #{AshNeo4j.Util.cypher_properties(source_properties)}) MATCH (d:#{to_string(dest_label)} #{AshNeo4j.Util.cypher_properties(dest_properties)}) CREATE (s)-[r:#{relationship}]->(d) RETURN s, r, d"
+    cypher |> IO.inspect(label: "relate_nodes cypher") |> run_cypher()
   end
 
   @doc """
   Tests if two nodes are related with a relationship type
     ## Examples
   ```
-  iex> result = AshNeo4j.Neo4j.Helper.nodes_relate_how?(:Actor, %{name: "Bill Nighy", born: 1949}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
-  iex> :ok
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4j.Helper.relate_nodes(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
+  iex> AshNeo4j.Neo4j.Helper.nodes_relate_how?(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN)
+  true
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, relationship) when is_atom(source_label) and is_atom(dest_label) do
@@ -85,8 +90,10 @@ defmodule AshNeo4j.Neo4j.Helper do
 
   ## Examples
   ```
-  iex> result = AshNeo4j.Neo4j.Helper.read_node(:Actor, %{name: "Bill Nighy", born: 1949})
-  iex> {:ok, %Bolt.Sips.Response{}} = result
+  iex> AshNeo4j.Neo4j.Helper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> {:ok, %Bolt.Sips.Response{records: records}} = AshNeo4j.Neo4j.Helper.read_node(:Actor, %{name: "Bill Nighy"})
+  iex> length(records)
+  1
   ```
   """
   def read_node(label, properties) when is_atom(label) do

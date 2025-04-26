@@ -11,7 +11,7 @@ defmodule AshNeo4j.Util do
   ## Examples
   ```
   iex> AshNeo4j.Util.cypher_properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
-  iex> "{name: 'Bill Nighy', born: 1949, bafta_winner: true}"
+  "{name: 'Bill Nighy', born: 1949, bafta_winner: true}"
   ```
   """
   def cypher_properties(map) when is_map(map) do

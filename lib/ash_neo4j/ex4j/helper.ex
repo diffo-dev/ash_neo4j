@@ -59,6 +59,7 @@ defmodule AshNeo4j.Ex4j.Helper do
           ex4j_query
           |> edge(Node.BELONGS_TO, as: :r, from: label, to: other_label, type: :out)
           |> vertex(other_module, as: other_label)
+          |> return(other_label)
         else
           ex4j_query
           |> where(label, "#{label}.#{property_name} #{operator} #{property_value}")
