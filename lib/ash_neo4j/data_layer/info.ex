@@ -33,7 +33,6 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref) when is_struct(ash_query_ref) do
-    #IO.inspect(ash_query_ref, label: "AshNeo4j.DataLayer.convert_to_property_name ash_query_ref")
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     convert_to_property_name(resource, attribute_name)
   end

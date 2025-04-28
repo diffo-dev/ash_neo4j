@@ -53,22 +53,21 @@ defmodule AshNeo4j.Ex4j.Helper do
         property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, predicate.left)
         property_value = convert_value(predicate.right)
         relationship_name = String.split(property_name, "_") |> List.first()
-        relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name) |> IO.inspect(label: "relationship")
+        relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
         # does the query require a related node to be loaded?
         if (operator == "in") && (relationship != nil) && (to_string(relationship.source_attribute) == property_name) do
-          other_label = relationship_name |> String.capitalize() |> String.to_atom() |> IO.inspect(label: "other_label")
+          other_label = relationship_name |> String.capitalize() |> String.to_atom()
           other_module = Module.concat(Node, other_label)
           Code.ensure_loaded(other_module)
-          # need to find the relationship with the property name
-          other_resource = AshNeo4j.DataLayer.Info.resource(other_label) |> IO.inspect(label: "other_resource")
-          other_property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(other_resource, relationship.destination_attribute) |> IO.inspect(label: "other_property_name")
-          # TODO introspect relationship type and direction
+          other_resource = AshNeo4j.DataLayer.Info.resource(other_label)
+          other_property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(other_resource, relationship.destination_attribute)
+          # form the query
           ex4j_query
           |> edge(Node.BELONGS_TO, as: :r, from: label, to: other_label, type: :out)
           |> vertex(other_module, as: other_label)
           |> where(other_label, "#{other_label}.#{other_property_name} #{operator} #{property_value}")
           |> return(other_label)
-          |> IO.inspect(label: "ex4j_query")
+          #|> IO.inspect(label: "ex4j_query")
         else
           ex4j_query
           |> where(label, "#{label}.#{property_name} #{operator} #{property_value}")
