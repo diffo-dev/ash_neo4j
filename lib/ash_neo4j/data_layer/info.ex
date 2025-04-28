@@ -15,6 +15,15 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :translate, [], true)
   end
 
+  def resource(label) do
+    #TODO: this should be a reverse lookup, may need to be done using a protocol implemented by the generated node?
+    case label do
+      :Post -> AshNeo4j.Test.Resource.Post
+      :Comment -> AshNeo4j.Test.Resource.Comment
+      _ -> nil
+    end
+  end
+
   @doc """
   Converts an Ash.Query.Ref to a node property name string, translating if necessary
   """

@@ -78,10 +78,12 @@ defmodule AshNeo4jTest do
     assert length(results) == 3
 
     # read using Ash, loading related comments
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!() |> IO.inspect(label: :ash_read)
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!()
+    #|> IO.inspect(label: :ash_read)
     assert length(result.comments) == 1
 
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read!() |> IO.inspect(label: :ash_read)
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!()
+    #|> IO.inspect(label: :ash_read)
     assert length(result.comments) == 2
 
   end

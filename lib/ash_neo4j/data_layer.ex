@@ -94,13 +94,12 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     label = AshNeo4j.DataLayer.Info.label(resource)
-    #IO.inspect(label, label: "AshNeo4j.DataLayer.run_query label")
     module = Module.concat(Node, label)
-    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query) |> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
+    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query)
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
     results =
-      convert_nodes_to_resources(nodes, label, resource)
+      convert_nodes_to_resources(nodes, label)
       |> filter_stream(query.domain, query.filter)
       |> sort_stream(resource, query.domain, query.sort)
       |> offset_stream(query.offset)
@@ -158,16 +157,28 @@ defmodule AshNeo4j.DataLayer do
 
   # converts nodes to resources of the given resource type, linking related resources
   # TODO handle related resources
-  defp convert_nodes_to_resources(nodes, label, resource) when is_list(nodes) do
-    nodes
-    |> Stream.map(fn record ->
-      record
-      |> Map.get(to_string(label))
-      |> convert_node_to_resource(resource)
-    end)
+  defp convert_nodes_to_resources(rows_of_related_nodes, label) when is_list(rows_of_related_nodes) do
+    #IO.inspect(label, label: "AshNeo4j.DataLayer.convert_nodes_to_resources label")
+    rows_of_related_nodes
+    |> Stream.map(fn related_nodes ->
+        resource = convert_node_to_resource(Map.get(related_nodes, to_string(label)))
+        if length(Map.keys(related_nodes)) > 1 do
+          #TODO fix so uses introspection
+          related_resource = convert_node_to_resource(Map.get(related_nodes, "Post"))
+          if (related_resource != nil) do
+            resource |> Map.put(:post_id, related_resource.id) #|> Map.put(:post, related_resource)
+          else
+            resource
+          end
+        else
+          resource
+        end
+      end)
   end
 
-  defp convert_node_to_resource(node, resource) when is_map(node) do
+  defp convert_node_to_resource(node) when is_map(node) do
+    #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
+    resource = AshNeo4j.Ex4j.Helper.resource(node)
     store = AshNeo4j.DataLayer.Info.store(resource)
     translate = AshNeo4j.DataLayer.Info.translate(resource)
     stored_fields = Enum.into(store, %{}, fn field ->

@@ -4,7 +4,7 @@ defmodule AshNeo4j.Ex4j.Helper do
   @doc """
   Queries neo4j using Ex4j to return list of Ex4j.Node
   """
-  @spec match_nodes(module()) :: list(Ex4j.Node.t())
+  @spec match_nodes(module()) :: list(struct())
   def match_nodes(module) when is_atom(module) do
     Code.ensure_loaded(module)
     label = Module.split(module) |> List.last() |> String.to_existing_atom()
@@ -16,7 +16,7 @@ defmodule AshNeo4j.Ex4j.Helper do
   @doc """
   Queries neo4j using Ex4j to return list of Ex4j.Node, using Ash.Query
   """
-  @spec match_nodes(module(), term()) :: list(Ex4j.Node.t())
+  @spec match_nodes(module(), term()) :: list(struct())
   def match_nodes(module, ash_query) when is_atom(module) do
     #IO.inspect(ash_query, label: "match_nodes ash_query")
     Code.ensure_loaded(module)
@@ -25,7 +25,7 @@ defmodule AshNeo4j.Ex4j.Helper do
       match(module, as: label)
       |> body(label, ash_query) #|> IO.inspect(label: "match_nodes body")
       |> return(label)
-    IO.inspect(cypher(query), label: "match_nodes cypher")
+    #IO.inspect(cypher(query), label: "match_nodes cypher")
     query |> run()
   end
 
@@ -52,13 +52,14 @@ defmodule AshNeo4j.Ex4j.Helper do
       else
         property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, predicate.left)
         property_value = convert_value(predicate.right)
-        if (operator == "in") && (property_value == "[]") do
+        if (operator == "in") && (property_name == "post_id") do
           # need to find the relationship with the property name
           other_module = Node.Post
           other_label = Module.split(other_module) |> List.last() |> String.to_existing_atom()
           ex4j_query
           |> edge(Node.BELONGS_TO, as: :r, from: label, to: other_label, type: :out)
           |> vertex(other_module, as: other_label)
+          |> where(other_label, "#{other_label}.uuid #{operator} #{property_value}")
           |> return(other_label)
         else
           ex4j_query
@@ -66,6 +67,15 @@ defmodule AshNeo4j.Ex4j.Helper do
         end
       end
     end
+  end
+
+  @doc """
+  Get the resource module from a node
+  """
+  @spec resource(struct()) :: module()
+  def resource(node) do
+    label = Module.split(node.__struct__) |> List.last() |> String.to_existing_atom()
+    AshNeo4j.DataLayer.Info.resource(label)
   end
 
   defp convert_operator(:==), do: "="

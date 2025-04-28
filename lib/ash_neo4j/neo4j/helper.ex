@@ -57,8 +57,9 @@ defmodule AshNeo4j.Neo4j.Helper do
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, relationship) when is_atom(source_label) and is_atom(dest_label) do
     relationship = to_string(relationship)
-    cypher = "MATCH (s:#{to_string(source_label)} #{AshNeo4j.Util.cypher_properties(source_properties)}) MATCH (d:#{to_string(dest_label)} #{AshNeo4j.Util.cypher_properties(dest_properties)}) CREATE (s)-[r:#{relationship}]->(d) RETURN s, r, d"
-    cypher |> IO.inspect(label: "relate_nodes cypher") |> run_cypher()
+    "MATCH (s:#{to_string(source_label)} #{AshNeo4j.Util.cypher_properties(source_properties)}) MATCH (d:#{to_string(dest_label)} #{AshNeo4j.Util.cypher_properties(dest_properties)}) CREATE (s)-[r:#{relationship}]->(d) RETURN s, r, d"
+    # |> IO.inspect(label: "relate_nodes cypher")
+    |> run_cypher()
   end
 
   @doc """
