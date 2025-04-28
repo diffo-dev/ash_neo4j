@@ -3,14 +3,17 @@ defmodule AshNeo4j.DataLayer.Info do
 
   alias Spark.Dsl.Extension
 
+  @spec label(Ash.Resource.t()) :: atom() | nil
   def label(resource) do
     Extension.get_opt(resource, [:neo4j], :label, nil, true)
   end
 
+  @spec label(Ash.Resource.t()) :: list() | nil
   def store(resource) do
     Extension.get_opt(resource, [:neo4j], :store, [], true)
   end
 
+  @spec label(Ash.Resource.t()) :: keyword() | nil
   def translate(resource) do
     Extension.get_opt(resource, [:neo4j], :translate, [], true)
   end
@@ -25,38 +28,23 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Converts an Ash.Query.Ref to a node property name string, translating if necessary
+  Converts an attribute name to a node property name string, translating if necessary
+  The attribute name can be an Ash.Query.Ref or atom
   """
-  @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil
-  def convert_to_property_name(resource, ash_query_ref) do
+  @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
+  def convert_to_property_name(resource, ash_query_ref) when is_struct(ash_query_ref) do
     #IO.inspect(ash_query_ref, label: "AshNeo4j.DataLayer.convert_to_property_name ash_query_ref")
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
+    convert_to_property_name(resource, attribute_name)
+  end
+
+  @spec convert_to_property_name(Ash.Resource.t(), atom()) :: String.t() | nil
+  def convert_to_property_name(resource, attribute_name) when is_atom(attribute_name) do
     translate = translate(resource)
     case Keyword.get(translate, attribute_name) do
       nil -> attribute_name
       resource_name -> resource_name
     end
     |> to_string()
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_property_name result")
-  end
-
-  @doc """
-  Converts a keyword list (such as resource predicates) such that the resulting keyword list
-  only contains keywords that are valid node properties (i.e. stored attributes and translated attributes)
-  """
-  def convert_resource_to_node_keys(resource, keywords) do
-    store = store(resource)
-    translate = translate(resource)
-    Enum.into(keywords, [], fn {key, value} ->
-      if Enum.member?(store, key) do
-        {key, value}
-      else
-        case Keyword.get(translate, key) do
-          nil -> nil
-          translated_key -> {translated_key, value}
-        end
-      end
-    end)
-    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_resource_to_node_keys result")
   end
 end

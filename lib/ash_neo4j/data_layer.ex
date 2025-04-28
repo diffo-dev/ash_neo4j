@@ -155,45 +155,44 @@ defmodule AshNeo4j.DataLayer do
     records
   end
 
-  # converts nodes to resources of the given resource type, linking related resources
-  # TODO handle related resources
-  defp convert_nodes_to_resources(rows_of_related_nodes, label) when is_list(rows_of_related_nodes) do
-    #IO.inspect(label, label: "AshNeo4j.DataLayer.convert_nodes_to_resources label")
-    rows_of_related_nodes
+  # converts nodes to resources, where the input is a list of related node groups
+  # the output of each group is a single resource, enriched with attributes linking related nodes
+  defp convert_nodes_to_resources(groups, label) when is_list(groups) do
+    IO.inspect(label, label: "AshNeo4j.DataLayer.convert_nodes_to_resources label")
+    groups |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(fn related_nodes ->
-        resource = convert_node_to_resource(Map.get(related_nodes, to_string(label)))
-        if length(Map.keys(related_nodes)) > 1 do
-          #TODO fix so uses introspection
-          related_resource = convert_node_to_resource(Map.get(related_nodes, "Post"))
-          if (related_resource != nil) do
-            resource |> Map.put(:post_id, related_resource.id) #|> Map.put(:post, related_resource)
-          else
-            resource
-          end
-        else
-          resource
-        end
-      end)
+      other_labels = Map.keys(related_nodes) -- [to_string(label)] |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources other_labels")
+      enrichments = Enum.into(other_labels, [], fn other_label ->
+        related_resource = convert_node_to_resource(Map.get(related_nodes, other_label), [])
+        #TODO fix so uses introspection
+        {:post_id, related_resource.id}
+      end) |> IO.inspect(label: :enrichments)
+      convert_node_to_resource(Map.get(related_nodes, to_string(label)), enrichments)
+      |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources resource")
+    end)
   end
 
-  defp convert_node_to_resource(node) when is_map(node) do
+  defp convert_node_to_resource(node, enrichments) when is_map(node) do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     resource = AshNeo4j.Ex4j.Helper.resource(node)
     store = AshNeo4j.DataLayer.Info.store(resource)
     translate = AshNeo4j.DataLayer.Info.translate(resource)
-    stored_fields = Enum.into(store, %{}, fn field ->
+    stored = Enum.into(store, %{}, fn field ->
       {field, Map.get(node, field)}
     end)
-    Enum.into(translate, stored_fields, fn {resource_field, node_field} ->
+    translated = Enum.into(translate, stored, fn {resource_field, node_field} ->
       {resource_field, Map.get(node, node_field)}
     end)
+    Enum.into(enrichments, translated, fn {field, value} ->
+      {field, value}
+    end) |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource enriched")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
     |> Map.put(:__metadata__, %{})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do
