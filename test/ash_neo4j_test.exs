@@ -5,7 +5,6 @@ defmodule AshNeo4jTest do
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
-  require Node.Post
 
   doctest AshNeo4j.Util
   doctest AshNeo4j.Neo4j.Helper
@@ -21,7 +20,7 @@ defmodule AshNeo4jTest do
     assert info[:default] != nil
   end
 
-  test "node can be read" do
+  test "post node can be read using Ex4j" do
     # setup using Neo4j
     uuid = Ash.UUID.generate()
     Neo4j.create_node(:Post, %{title: "post1", uuid: uuid})
@@ -35,13 +34,25 @@ defmodule AshNeo4jTest do
     post = results |> Enum.at(0) |> Map.get("Post")
     assert post.title == "post1"
     assert post.uuid == uuid
-    # read using Ash
-    resource = Ash.read_one!(Post)
-    assert resource.title == "post1"
-    assert resource.id == uuid
   end
 
-  test "node can be read using filter" do
+  test "comment node can be read using Ex4j" do
+    # setup using Neo4j
+    uuid = Ash.UUID.generate()
+    Neo4j.create_node(:Comment, %{title: "comment1", uuid: uuid})
+    assert {:ok, %Bolt.Sips.Response{records: records}} = Neo4j.read_node(:Comment, %{title: "comment1"})
+    assert length(records) == 1
+    node = Enum.at(Enum.at(records ,0), 0)
+    assert node.properties == %{"title" => "comment1", "uuid" => uuid}
+    # read using Ex4j
+    results = Ex4j.match_nodes(Node.Comment)
+    assert length(results) == 1
+    post = results |> Enum.at(0) |> Map.get("Comment")
+    assert post.title == "comment1"
+    assert post.uuid == uuid
+  end
+
+  test "post node can be read using ash" do
     create_post_nodes(2)
     # read using Ash
     resources = Ash.read!(Post)
@@ -50,6 +61,17 @@ defmodule AshNeo4jTest do
     result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!()
     assert length(result) == 1
     assert result |> Enum.at(0) |> Map.get(:title) == "post2"
+  end
+
+  test "comment node can be read using ash" do
+    create_comment_nodes(2)
+    # read using Ash
+    resources = Ash.read!(Comment)
+    assert length(resources) == 2
+    # read using Ash with filter
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "comment2"]]) |> Ash.read!()
+    assert length(result) == 1
+    assert result |> Enum.at(0) |> Map.get(:title) == "comment2"
   end
 
   #TODO test fails, need to handle load of related node
@@ -71,11 +93,6 @@ defmodule AshNeo4jTest do
     assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
     assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
     assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
-    # read using Ex4j
-    results = Ex4j.match_nodes(Node.Post)
-    assert length(results) == 2
-    results = Ex4j.match_nodes(Node.Comment)
-    assert length(results) == 3
 
     # read using Ash, loading related comments
     result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!()

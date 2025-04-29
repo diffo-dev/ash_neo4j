@@ -1,4 +1,4 @@
-defmodule AshNeo4j.DataLayer.Transformers.BuildParser do
+defmodule AshNeo4j.DataLayer.Transformer do
   @moduledoc false
   use Spark.Dsl.Transformer
 
@@ -87,29 +87,29 @@ defmodule AshNeo4j.DataLayer.Transformers.BuildParser do
        ]}
 
     {:ok,
-     Spark.Dsl.Transformer.eval(
-       dsl,
-       [],
-       quote do
-         def ash_neo4j_dump_node(unquote(map)) do
-           {:ok, unquote(dump_fields)}
-         catch
-           {:error, error} ->
-             {:error, error}
-         end
+      Spark.Dsl.Transformer.eval(
+        dsl,
+        [],
+        quote do
+          def ash_neo4j_dump_node(unquote(map)) do
+            {:ok, unquote(dump_fields)}
+          catch
+            {:error, error} ->
+              {:error, error}
+          end
 
-         def ash_neo4j_parse_node([unquote_splicing(func_args) | _]) do
-           unquote(fields)
-           {:ok, unquote(struct)}
-         catch
-           {:error, error} ->
-             {:error, error}
-         end
+          def ash_neo4j_parse_node([unquote_splicing(func_args) | _]) do
+            unquote(fields)
+            {:ok, unquote(struct)}
+          catch
+            {:error, error} ->
+              {:error, error}
+          end
 
-         def ash_neo4j_parse_node([unquote_splicing(func_args)]) do
-           {:error, "Invalid node #{inspect([unquote_splicing(func_args)])}"}
-         end
-       end
-     )}
+          def ash_neo4j_parse_node([unquote_splicing(func_args)]) do
+            {:error, "Invalid node #{inspect([unquote_splicing(func_args)])}"}
+          end
+        end
+      )}
   end
 end

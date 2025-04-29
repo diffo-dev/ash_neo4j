@@ -85,7 +85,7 @@ defmodule AshNeo4j.DataLayer do
   """
   use Spark.Dsl.Extension,
     sections: @sections,
-    persisters: [AshNeo4j.DataLayer.Transformers.BuildParser]
+    persisters: [AshNeo4j.DataLayer.Transformer]
 
   defmodule Query do
     @moduledoc false
