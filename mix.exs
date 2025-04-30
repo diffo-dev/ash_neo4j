@@ -65,8 +65,7 @@ defmodule AshNeo4j.MixProject do
     [
       name: :ash_neo4j,
       licenses: ["MIT"],
-      files: ~w(lib .formatter.exs mix.exs README* LICENSE*
-      CHANGELOG* documentation),
+      files: ~w(lib .formatter.exs mix.exs README* LICENSE* documentation),
       links: %{
         GitHub: "https://github.com/diffo-dev/ash_neo4j"
       }
