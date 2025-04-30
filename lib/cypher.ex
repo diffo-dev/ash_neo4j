@@ -1,6 +1,6 @@
-defmodule AshNeo4j.Util do
+defmodule AshNeo4j.Cypher do
   @moduledoc """
-  Ash Neo4j utility functions
+  Ash Neo4j cypher functions
   """
 
   @doc """
@@ -10,7 +10,7 @@ defmodule AshNeo4j.Util do
 
   ## Examples
   ```
-  iex> AshNeo4j.Util.cypher_properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
+  iex> AshNeo4j.Cypher.cypher_properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
   "{name: 'Bill Nighy', born: 1949, bafta_winner: true}"
   ```
   """
@@ -30,5 +30,20 @@ defmodule AshNeo4j.Util do
         end)
 
     "{#{properties}}"
+  end
+
+  @doc """
+  Runs some cypher,
+
+  ## Examples
+  ```
+  iex> cypher = "CREATE (n:Actor {name: 'Bill Nighy', born: 1949, bafta_winner: true}) RETURN n"
+  iex> {result, _} = run_cypher(cypher)
+  iex> result
+  :ok
+  ```
+  """
+  def run_cypher(cypher) do
+    Boltx.query(Bolt, cypher)
   end
 end

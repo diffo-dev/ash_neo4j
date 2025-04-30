@@ -1,55 +1,62 @@
 defmodule AshNeo4jTest do
   use ExUnit.Case, async: false
-  alias AshNeo4j.Neo4j.Helper, as: Neo4j
-  alias AshNeo4j.Ex4j.Helper, as: Ex4j
+  alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
 
-  doctest AshNeo4j.Util
-  doctest AshNeo4j.Neo4j.Helper
+  doctest AshNeo4j.Neo4jHelper
+  doctest AshNeo4j.QueryHelper
+
+  setup_all do
+    {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
+    result
+  end
 
   setup do
     on_exit(fn ->
-      Neo4j.delete_all()
+      Neo4jHelper.delete_all()
     end)
   end
 
   test "neo4j is running" do
-    info = Bolt.Sips.info()
-    assert info[:default] != nil
+    assert Boltx.query!(Bolt, "return 1 as n") |> Boltx.Response.first() == %{"n" => 1}
   end
 
-  test "post node can be read using Ex4j" do
-    # setup using Neo4j
+  test "post node can be read using Neo4jHelper" do
+    # setup using Neo4jHelper
     uuid = Ash.UUID.generate()
-    Neo4j.create_node(:Post, %{title: "post1", uuid: uuid})
-    assert {:ok, %Bolt.Sips.Response{records: records}} = Neo4j.read_node(:Post, %{title: "post1"})
+    Neo4jHelper.create_node(:Post, %{title: "post1", uuid: uuid})
+    # read using Neo4jHelper
+    assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Post, %{title: "post1"})
     assert length(records) == 1
-    node = Enum.at(Enum.at(records ,0), 0)
+    node = records |> List.first() |> List.first()
+    assert node.labels == ["Post"]
     assert node.properties == %{"title" => "post1", "uuid" => uuid}
-    # read using Ex4j
-    results = Ex4j.match_nodes(Node.Post)
-    assert length(results) == 1
-    post = results |> Enum.at(0) |> Map.get("Post")
-    assert post.title == "post1"
-    assert post.uuid == uuid
+    # read all using Neo4jHelper
+    assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Post)
+    assert length(records) == 1
+    node = records |> List.first() |> List.first()
+    assert node.labels == ["Post"]
+    assert node.properties == %{"title" => "post1", "uuid" => uuid}
   end
 
-  test "comment node can be read using Ex4j" do
-    # setup using Neo4j
+  test "comment node can be read using Neo4jHelper" do
+    # setup using Neo4jHelper
     uuid = Ash.UUID.generate()
-    Neo4j.create_node(:Comment, %{title: "comment1", uuid: uuid})
-    assert {:ok, %Bolt.Sips.Response{records: records}} = Neo4j.read_node(:Comment, %{title: "comment1"})
+    Neo4jHelper.create_node(:Comment, %{title: "comment1", uuid: uuid})
+    # read using Neo4jHelper
+    assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Comment, %{title: "comment1"})
     assert length(records) == 1
-    node = Enum.at(Enum.at(records ,0), 0)
+    node = records |> List.first() |> List.first()
+    assert node.labels == ["Comment"]
     assert node.properties == %{"title" => "comment1", "uuid" => uuid}
-    # read using Ex4j
-    results = Ex4j.match_nodes(Node.Comment)
-    assert length(results) == 1
-    post = results |> Enum.at(0) |> Map.get("Comment")
-    assert post.title == "comment1"
-    assert post.uuid == uuid
+    # read all using Neo4jHelper
+    assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Comment)
+    assert length(records) == 1
+    node = records |> List.first() |> List.first()
+    assert node.labels == ["Comment"]
+    assert node.properties == %{"title" => "comment1", "uuid" => uuid}
   end
 
   test "post node can be read using ash" do
@@ -76,23 +83,23 @@ defmodule AshNeo4jTest do
 
   #TODO test fails, need to handle load of related node
   test "nodes can be created and related" do
-    # setup using Neo4j
+    # setup using Neo4jHelper
     uuid1 = Ash.UUID.generate()
     uuid2 = Ash.UUID.generate()
     uuid3 = Ash.UUID.generate()
     uuid4 = Ash.UUID.generate()
     uuid5 = Ash.UUID.generate()
-    Neo4j.create_node(:Post, %{title: "post1", uuid: uuid1})
-    Neo4j.create_node(:Post, %{title: "post2", uuid: uuid2})
-    Neo4j.create_node(:Comment, %{title: "comment3", uuid: uuid3})
-    Neo4j.create_node(:Comment, %{title: "comment4", uuid: uuid4})
-    Neo4j.create_node(:Comment, %{title: "comment5", uuid: uuid5})
-    Neo4j.relate_nodes(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    Neo4j.relate_nodes(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    Neo4j.relate_nodes(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
-    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    assert Neo4j.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
+    Neo4jHelper.create_node(:Post, %{title: "post1", uuid: uuid1})
+    Neo4jHelper.create_node(:Post, %{title: "post2", uuid: uuid2})
+    Neo4jHelper.create_node(:Comment, %{title: "comment3", uuid: uuid3})
+    Neo4jHelper.create_node(:Comment, %{title: "comment4", uuid: uuid4})
+    Neo4jHelper.create_node(:Comment, %{title: "comment5", uuid: uuid5})
+    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
+    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
+    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
 
     # read using Ash, loading related comments
     result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!()
@@ -245,13 +252,13 @@ defmodule AshNeo4jTest do
 
   defp create_post_nodes(count) do
     for i <- 1..count do
-      Neo4j.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
+      Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
     end
   end
 
   defp create_comment_nodes(count) do
     for i <- 1..count do
-      Neo4j.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+      Neo4jHelper.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
     end
   end
 end

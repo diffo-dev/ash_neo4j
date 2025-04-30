@@ -1,10 +1,10 @@
 # AshNeo4j
 
 [![Module Version](https://img.shields.io/hexpm/v/ash_neo4j)](https://hex.pm/packages/ash_neo4j)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen)](https://hexdocs.pm/ash_outstanding/)
-[![License](https://img.shields.io/hexpm/l/ash_outstanding)](https://github.com/diffo-dev/ash_outstanding/blob/master/LICENSE.md)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen)](https://hexdocs.pm/ash_neo4j/)
+[![License](https://img.shields.io/hexpm/l/ash_neo4j)](https://github.com/diffo-dev/ash_neo4j/blob/master/LICENSE.md)
 
-Ash datalayer for Neo4j, configurable using a simple DSL
+Ash DataLayer for Neo4j, configurable using a simple DSL
 
 ## Installation
 
@@ -86,17 +86,25 @@ The DSL may be used to translate the Ash Resource's attributes to node propertie
   end
 ```
 
+## Installing Neo4j and Configuring Boltx
+
+ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.
+
+Your Ash application needs to configure, start and supervise [boltx](https://github.com/sagastume/boltx), see [boltx documentation](https://hexdocs.pm/boltx/). Make sure to configure any required authorisation.
+
+I've used Neo4j community edition 4.4 (bolt 4.4) and to connect using boltx I needed to also set the environment variable ```BOLT_VERSIONS=4.4``` to steer [bolt protocol handshake] (https://neo4j.com/docs/bolt/current/bolt/handshake).
+
 ## Limitations and Future Work
 
-Currently ash_neo4j inherits the read-only limitation from [ex4j](https://github.com/tiagodavi/ex4j). Ideally ex4j would be extended and ash_neo4j would lever this to support create, update and destroy actions. [bolt_sips](https://github.com/florinpatrascu/bolt_sips) is not maintained and should be replaced by [boltx](https://github.com/sagastume/boltx). Collaboration on ash_neo4j and/or upstream dependencies welcome via github.
+Currently ash_neo4j only supports Ash read actions, with some limited support for relationships. Support for create, update and destroy actions is next.
+
+Collaboration on ash_neo4j welcome via github, please use discussions and/or issues as appropriate.
 
 ## Acknowledgements
 
 Thanks to the [Ash Core](https://github.com/ash-project) for [ash](https://github.com/ash-project/ash) 🚀, including [ash_csv](https://github.com/vonagam/ash_jason) which was an exemplar.
 
-Thanks to [Tiago Davi](https://github.com/tiagodavi) for [ex4j](https://github.com/tiagodavi/ex4j) which is limited to reads.
-
-Thanks to [Florin Patrascu](https://github.com/florinpatrascu) for [bolt_sips](https://github.com/florinpatrascu/bolt_sips) which is used by both ash_neo4j and ex4j.
+Thanks to [Sagastume](https://github.com/sagastume) for [boltx](https://github.com/tiagodavi/ex4j) which AFAIK was based on [bolt_sips](https://github.com/florinpatrascu/bolt_sips) by [Florin Patrascu](https://github.com/florinpatrascu).
 
 Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) which pioneered graph databases.
 

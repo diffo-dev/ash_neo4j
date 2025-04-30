@@ -2,6 +2,8 @@ defmodule AshNeo4j.DataLayer do
   @behaviour Ash.DataLayer
 
   alias Ash.Actions.Sort
+  alias AshNeo4j.DataLayer.Info
+  alias AshNeo4j.QueryHelper
 
   @filter_stream_size 100
 
@@ -94,9 +96,8 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    label = AshNeo4j.DataLayer.Info.label(resource)
-    module = Module.concat(Node, label)
-    nodes = AshNeo4j.Ex4j.Helper.match_nodes(module, query)
+    label = Info.label(resource)
+    nodes = QueryHelper.query_nodes(label, query)
     #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
     results =
       convert_nodes_to_resources(nodes, label)
@@ -115,7 +116,7 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def transaction(resource, fun, _timeout, _) do
-    label = AshNeo4j.DataLayer.Info.label(resource)
+    label = Info.label(resource)
 
     :global.trans(
       {{:neo4j, label}, System.unique_integer()},
@@ -140,12 +141,12 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def rollback(resource, error) do
-    throw({{:neo4j_rollback, AshNeo4j.DataLayer.Info.label(resource)}, error})
+    throw({{:neo4j_rollback, Info.label(resource)}, error})
   end
 
   @impl true
   def in_transaction?(resource) do
-    Process.get({:neo4j_in_transaction, AshNeo4j.DataLayer.Info.label(resource)}, false) == true
+    Process.get({:neo4j_in_transaction, Info.label(resource)}, false) == true
   end
 
   def filter_matches(records, nil, _domain), do: records
@@ -157,32 +158,35 @@ defmodule AshNeo4j.DataLayer do
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
-  defp convert_nodes_to_resources(groups, label) when is_list(groups) do
+  defp convert_nodes_to_resources(groups, label) when is_list(groups) and is_atom(label) do
     #IO.inspect(label, label: "AshNeo4j.DataLayer.convert_nodes_to_resources label")
+    resource = Info.resource(label)
     groups #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(fn related_nodes ->
-      other_labels = Map.keys(related_nodes) -- [to_string(label)]
-      enrichments = Enum.into(other_labels, [], fn other_label ->
-        related_resource = convert_node_to_resource(Map.get(related_nodes, other_label), [])
-        resource = AshNeo4j.DataLayer.Info.resource(label)
-        relationship = Ash.Resource.Info.relationship(resource, String.downcase(other_label))
-        {relationship.source_attribute, Map.get(related_resource, relationship.destination_attribute)}
-      end)
-      convert_node_to_resource(Map.get(related_nodes, to_string(label)), enrichments)
+      source_node = Map.get(related_nodes, "s")
+      dest_node = Map.get(related_nodes, "d")
+      if dest_node != nil do
+        dest_label = List.first(dest_node.labels)
+        dest_resource = convert_node_to_resource(Info.resource(String.to_atom(dest_label)), dest_node, [])
+        relationship = Ash.Resource.Info.relationship(resource, String.downcase(dest_label))
+        enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+        convert_node_to_resource(resource, source_node, [enrichment])
+      else
+        convert_node_to_resource(resource, source_node, [])
+      end
       #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources resource")
     end)
   end
 
-  defp convert_node_to_resource(node, enrichments) when is_map(node) do
+  defp convert_node_to_resource(resource, node, enrichments) when is_atom(resource) and is_map(node) do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
-    resource = AshNeo4j.Ex4j.Helper.resource(node)
-    store = AshNeo4j.DataLayer.Info.store(resource)
-    translate = AshNeo4j.DataLayer.Info.translate(resource)
+    store = Info.store(resource)
+    translate = Info.translate(resource)
     stored = Enum.into(store, %{}, fn field ->
-      {field, Map.get(node, field)}
+      {field, Map.get(node.properties, to_string(field))}
     end)
     translated = Enum.into(translate, stored, fn {resource_field, node_field} ->
-      {resource_field, Map.get(node, node_field)}
+      {resource_field, Map.get(node.properties, to_string(node_field))}
     end)
     Enum.into(enrichments, translated, fn {field, value} ->
       {field, value}
@@ -193,7 +197,7 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:__metadata__, %{})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do

@@ -21,7 +21,7 @@ defmodule AshNeo4j.MixProject do
       docs: &docs/0,
       aliases: aliases(),
       description: @description,
-      source_url: "https://github.com/matt-beanland/ash_neo4j",
+      source_url: "https://github.com/diffo-dev/ash_neo4j",
       homepage_url: "https://diffo.dev"
     ]
   end
@@ -84,7 +84,7 @@ defmodule AshNeo4j.MixProject do
       files: ~w(lib .formatter.exs mix.exs README* LICENSE*
       CHANGELOG* documentation),
       links: %{
-        GitHub: "https://github.com/matt-beanland/ash_neo4j"
+        GitHub: "https://github.com/diffo-dev/ash_neo4j"
       }
     ]
   end
@@ -100,7 +100,7 @@ defmodule AshNeo4j.MixProject do
   defp deps do
     [
       {:ash, ash_version("~> 3.5")},
-      {:ex4j, "~> 0.1.0"},
+      {:boltx, ">= 0.0.6"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},
