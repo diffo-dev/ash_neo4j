@@ -1,4 +1,6 @@
 defmodule AshNeo4j.DataLayer do
+  @moduledoc "Ash DataLayer for Neo4j"
+
   @behaviour Ash.DataLayer
 
   alias Ash.Actions.Sort
@@ -82,9 +84,6 @@ defmodule AshNeo4j.DataLayer do
 
   @sections [@neo4j]
 
-  @moduledoc """
-  The data layer implementation for AshNeo4j
-  """
   use Spark.Dsl.Extension,
     sections: @sections,
     persisters: [AshNeo4j.DataLayer.Transformer]

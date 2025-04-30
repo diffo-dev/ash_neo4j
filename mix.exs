@@ -2,8 +2,9 @@ defmodule AshNeo4j.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-
-  @description "The Neo4j data layer for Ash Framework"
+  @name "AshNeo4j"
+  @description "Ash DataLayer for Neo4j"
+  @github_url "https://github.com/diffo-dev/ash_neo4j"
 
   def project do
     [
@@ -20,60 +21,43 @@ defmodule AshNeo4j.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: &docs/0,
       aliases: aliases(),
+      # ex_doc
+      name: @name,
+      source_url: @github_url,
+      homepage_url: "https://diffo.dev/diffo/ash_neo4j",
+      docs: [main: "readme", extras: ["README.md"]],
+      # hex.pm stuff
       description: @description,
-      source_url: "https://github.com/diffo-dev/ash_neo4j",
-      homepage_url: "https://diffo.dev"
+      package: [
+        name: "ash_neo4j",
+        licenses: ["MIT"],
+        files: ["lib", "mix.exs", "README*", "VERSION*"],
+        maintainers: ["Matt Beanland"],
+        links: %{
+          "GitHub" => @github_url,
+          "Author's home page" => "https://www.diffo.dev"
+        }
+      ]
     ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  defp docs do
+  def docs do
     [
-      main: "readme",
+      homepage_url: @github_url,
+      source_url: @github_url,
       source_ref: "v#{@version}",
-      before_closing_head_tag: fn type ->
-        if type == :html do
-          """
-          <script>
-            if (location.hostname === "hexdocs.pm") {
-              var script = document.createElement("script");
-              script.src = "https://plausible.io/js/script.js";
-              script.setAttribute("defer", "defer")
-              script.setAttribute("data-domain", "ashhexdocs")
-              document.head.appendChild(script);
-            }
-          </script>
-          """
-        end
-      end,
+      main: "readme",
       extras: [
-        {"README.md", title: "Home"},
-        "documentation/tutorials/getting-started-with-ash-neo4j.md",
-        {"documentation/dsls/DSL-AshNeo4j.DataLayer.md", search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)},
-        "CHANGELOG.md"
-      ],
-      groups_for_extras: [
-        Tutorials: ~r'documentation/tutorials',
-        "How To": ~r'documentation/how_to',
-        Topics: ~r'documentation/topics',
-        DSLs: ~r'documentation/dsls',
-        "About AshCsv": [
-          "CHANGELOG.md"
+        "README.md": [title: "Guide"],
+        "LICENSE.md": [title: "License"],
+        "documentation/dsls/DSL-AshNeo4j.DataLayer.md": [
+          title: "DSL: AshNeo4j.DataLayer",
+          search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer),
         ]
-      ],
-      groups_for_modules: [
-        AshNeo4j: [
-          AshNeo4j,
-          AshNeo4j.DataLayer
-        ],
-        Introspection: [
-          AshNeo4j.DataLayer.Info
-        ],
-        Internals: ~r/.*/
-      ],
-      logo: "logos/small-logo.png"
+      ]
     ]
   end
 
