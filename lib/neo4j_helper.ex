@@ -51,7 +51,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run_cypher()
   end
 
-  @spec relate_nodes(atom(), map(), atom(), map(), any()) :: keyword()
+  @spec relate_nodes(atom(), map(), atom(), map(), any()) :: term()
   @doc """
   Relates two nodes with a relationship type
     ## Examples

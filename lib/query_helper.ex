@@ -16,7 +16,7 @@ defmodule AshNeo4j.QueryHelper do
     cypher = cypher(label, ash_query) #|> IO.inspect(label: "query_nodes cypher")
     case Cypher.run_cypher(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
-        results
+        results #|> IO.inspect(label: "query_nodes result")
       {:error, _} ->
         throw({:error, "Error running cypher #{cypher}"})
     end
@@ -39,8 +39,8 @@ defmodule AshNeo4j.QueryHelper do
         "MATCH (s:#{label}) RETURN s"
       else
         property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-        property_value = convert_value(predicate.right)
-        relationship_name = String.split(property_name, "_") |> List.first()
+        property_value = convert_value(predicate.right) #|> IO.inspect(label: :property_value)
+        relationship_name = String.split(property_name, "_") |> List.first() #|> IO.inspect(label: :relationship_name)
         relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
         # does the query require a related node to be loaded?
         if (operator == "in") && (relationship != nil) && (to_string(relationship.source_attribute) == property_name) do
@@ -52,8 +52,9 @@ defmodule AshNeo4j.QueryHelper do
           other_property_name = Info.convert_to_property_name(other_resource, relationship.destination_attribute)
           "MATCH (s:#{label}) -[r:BELONGS_TO]-> (d:#{to_string(other_label)}) WHERE d.#{other_property_name} #{operator} #{property_value} RETURN s, d "
         else
-          # filter is about same node
-          "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} RETURN s"
+            # filter is about same node, but if the node belongs to other nodes, load them
+            "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} OPTIONAL MATCH (s)-[r:BELONGS_TO]-> (d) RETURN s, d"
+          #end
         end
       end
     end

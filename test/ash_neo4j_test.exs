@@ -65,7 +65,7 @@ defmodule AshNeo4jTest do
     resources = Ash.read!(Post)
     assert length(resources) == 2
     # read using Ash with filter
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!()
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read!() |> IO.inspect(label: :post_node)
     assert length(result) == 1
     assert result |> Enum.at(0) |> Map.get(:title) == "post2"
   end
@@ -76,12 +76,11 @@ defmodule AshNeo4jTest do
     resources = Ash.read!(Comment)
     assert length(resources) == 2
     # read using Ash with filter
-    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "comment2"]]) |> Ash.read!()
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input([title: [eq: "comment2"]]) |> Ash.read!() |> IO.inspect(label: :comment_node)
     assert length(result) == 1
     assert result |> Enum.at(0) |> Map.get(:title) == "comment2"
   end
 
-  #TODO test fails, need to handle load of related node
   test "nodes can be created and related" do
     # setup using Neo4jHelper
     uuid1 = Ash.UUID.generate()
@@ -101,15 +100,25 @@ defmodule AshNeo4jTest do
     assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
     assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
 
-    # read using Ash, loading related comments
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: :ash_read)
+    # read Post using Ash, loading related comments
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!() |> IO.inspect(label: "ash read post2 loading comments")
     assert length(result.comments) == 1
 
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: :ash_read)
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!() |> IO.inspect(label: "ash read post1 loading comments")
     assert length(result.comments) == 2
 
+    # read Comments using Ash, loading related Post
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment3"]]) |> Ash.read_one!() |> IO.inspect(label: "ash read comment3 loading post")
+    assert result.post != nil
+    assert result.post |> Map.get(:title) == "post1"
+
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment4"]]) |> Ash.read_one!() |> IO.inspect(label: "ash read comment4 loading post")
+    assert result.post != nil
+    assert result.post |> Map.get(:title) == "post1"
+
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment5"]]) |> Ash.read_one!() |> IO.inspect(label: "ash read comment4 loading post")
+    assert result.post != nil
+    assert result.post |> Map.get(:title) == "post2"
   end
 
   test "filters/sorts can be applied" do
