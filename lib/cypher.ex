@@ -43,7 +43,7 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
-  def run_cypher(cypher) do
+  def run_cypher(cypher) when is_bitstring(cypher) do
     Boltx.query(Bolt, cypher)
   end
 end

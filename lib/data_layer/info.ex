@@ -8,18 +8,19 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :label, nil, true)
   end
 
-  @spec label(Ash.Resource.t()) :: list() | nil
+  @spec store(Ash.Resource.t()) :: list() | nil
   def store(resource) do
     Extension.get_opt(resource, [:neo4j], :store, [], true)
   end
 
-  @spec label(Ash.Resource.t()) :: keyword() | nil
+  @spec translate(Ash.Resource.t()) :: keyword() | nil
   def translate(resource) do
     Extension.get_opt(resource, [:neo4j], :translate, [], true)
   end
 
   def resource(label) do
     #TODO: this should be a reverse lookup, may need to be done using a protocol implemented by the generated node?
+    #IO.inspect(label, label: "AshNeo4j.DataLayer.Info.resource label")
     case label do
       :Post -> AshNeo4j.Test.Resource.Post
       :Comment -> AshNeo4j.Test.Resource.Comment
