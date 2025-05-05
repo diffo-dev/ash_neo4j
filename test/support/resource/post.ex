@@ -12,7 +12,7 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   actions do
     default_accept(:*)
-    defaults([:read])
+    defaults([:read, :create])
   end
 
   attributes do

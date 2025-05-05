@@ -266,6 +266,16 @@ defmodule AshNeo4jTest do
     assert length(results) == 2
   end
 
+  test "post node can be created using ash" do
+   {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post4"}) |> Ash.create()
+   assert post.title == "post4"
+  end
+
+  test "comment node can be created using ash" do
+    {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment4"}) |> Ash.create()
+    assert comment.title == "comment4"
+   end
+
   defp create_post_nodes(count) do
     for i <- 1..count do
       Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})

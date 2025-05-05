@@ -6,12 +6,13 @@ defmodule AshNeo4j.DataLayer do
   alias Ash.Actions.Sort
   alias AshNeo4j.DataLayer.Info
   alias AshNeo4j.QueryHelper
+  alias AshNeo4j.Neo4jHelper
 
   @filter_stream_size 100
 
   @impl true
   def can?(_, :read), do: true
-  #def can?(_, :create), do: true
+  def can?(_, :create), do: true
   #def can?(_, :update), do: true
   #def can?(_, :upsert), do: true
   #def can?(_, :destroy), do: true
@@ -96,16 +97,30 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def run_query(query, resource) do
     label = Info.label(resource)
-    nodes = QueryHelper.query_nodes(label, query)
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
-    results =
-      convert_nodes_to_resources(nodes, label)
-      |> filter_stream(query.domain, query.filter)
-      |> sort_stream(resource, query.domain, query.sort)
-      |> offset_stream(query.offset)
-      |> limit_stream(query.limit)
-      #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
-    {:ok, results}
+    case QueryHelper.query_nodes(label, query) do
+      {:error, error} ->
+        {:error, error}
+      {:ok, nodes} ->
+        #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
+        results =
+          convert_nodes_to_resources(nodes, label)
+          |> filter_stream(query.domain, query.filter)
+          |> sort_stream(resource, query.domain, query.sort)
+          |> offset_stream(query.offset)
+          |> limit_stream(query.limit)
+          #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+        {:ok, results}
+    end
+  end
+
+  @impl true
+  def create(resource, changeset) do
+    case run_query(%Query{resource: resource}, resource) do
+      {:ok, records} ->
+        create_from_records(records, resource, changeset, false)
+      {:error, _} ->
+        {:error, "create failed"}
+    end
   end
 
   @impl true
@@ -171,13 +186,13 @@ defmodule AshNeo4j.DataLayer do
         enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
         convert_node_to_resource(resource, source_node, [enrichment])
       else
-        convert_node_to_resource(resource, source_node, [])
+        convert_node_to_resource(resource, source_node)
       end
       #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources resource")
     end)
   end
 
-  defp convert_node_to_resource(resource, node, enrichments) when is_atom(resource) and is_map(node) do
+  defp convert_node_to_resource(resource, node, enrichments \\ []) when is_atom(resource) and is_map(node) and is_list(enrichments) do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     store = Info.store(resource)
     translate = Info.translate(resource)
@@ -222,4 +237,29 @@ defmodule AshNeo4j.DataLayer do
 
   defp limit_stream(stream, nil), do: stream
   defp limit_stream(stream, limit), do: Stream.take(stream, limit)
+
+  defp create_from_records(records, resource, changeset, _retry?) do
+    pkey = Ash.Resource.Info.primary_key(resource)
+    pkey_value = Map.take(changeset.attributes, pkey)
+    if Enum.find(records, fn record -> Map.take(record, pkey) == pkey_value end) do
+      {:error, "Record is not unique"}
+    else
+      create_from_attributes(resource, changeset.attributes)
+    end
+  end
+
+  defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    store = Info.store(resource)
+    stored = Enum.into(store, %{}, fn field-> {field, Map.get(attributes, field)} end)
+    translate = Info.translate(resource)
+    properties = Enum.into(translate, stored, fn {resource_field, node_field} ->
+      {node_field, Map.get(attributes, resource_field)} end)
+    case Info.label(resource) |> Neo4jHelper.create_node(properties) do
+      {:ok, %Boltx.Response{results: [ node_map | _ ]}} ->
+        node = Map.get(node_map, "n")
+        {:ok, convert_node_to_resource(resource, node)}
+      {:error, error} ->
+        {:error, error}
+    end
+  end
 end

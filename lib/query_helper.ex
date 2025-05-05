@@ -16,10 +16,11 @@ defmodule AshNeo4j.QueryHelper do
     cypher = cypher(label, ash_query) #|> IO.inspect(label: "query_nodes cypher")
     case Cypher.run_cypher(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
-        results #|> IO.inspect(label: "query_nodes result")
+        {:ok, results}
       {:error, _} ->
-        throw({:error, "Error running cypher #{cypher}"})
+        {:error, "Error running cypher #{cypher}"}
     end
+    #|> IO.inspect(label: "query_nodes results")
   end
 
   defp cypher(label, ash_query) when is_atom(label) and is_struct(ash_query) do

@@ -102,7 +102,7 @@ defmodule AshNeo4j.Neo4jHelper do
   1
   ```
   """
-  def read_nodes(label, properties \\ %{}) when is_atom(label) do
+  def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
     "MATCH (n:#{to_string(label)} #{Cypher.cypher_properties(properties)}) RETURN n"
     |> Cypher.run_cypher()
   end
