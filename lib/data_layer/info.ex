@@ -18,14 +18,37 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :translate, [], true)
   end
 
-  def resource(label) do
-    #TODO: this should be a reverse lookup, may need to be done using a protocol implemented by the generated node?
-    #IO.inspect(label, label: "AshNeo4j.DataLayer.Info.resource label")
-    case label do
-      :Post -> AshNeo4j.Test.Resource.Post
-      :Comment -> AshNeo4j.Test.Resource.Comment
-      _ -> nil
+  @spec relate(Ash.Resource.t()) :: list(tuple()) | nil
+  def relate(resource) do
+    Extension.get_opt(resource, [:neo4j], :relate, [], true)
+  end
+
+  @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: list(tuple) | nil
+  def node_relationship(resource, source_attribute) do
+    List.keyfind(relate(resource), String.to_atom(source_attribute), 0)
+  end
+
+  @doc"""
+  Returns any matching Ash.Resource.Info relationship given relationship and destination node labels
+  """
+  @spec relationship(Ash.Resource.t(), atom(), atom()) :: struct() | nil
+  def relationship(resource, relationship_label, dest_label) when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
+    #IO.inspect(resource, label: "Info.relationship resource")
+    #IO.inspect(relationship_label, label: "Info.relationship relationship_label")
+    #IO.inspect(dest_label, label: "Info.relationship dest_label")
+    relationships = Enum.into(relate(resource), [], fn {relationship_name, edge_label, _edge_direction} ->
+      relationship = Ash.Resource.Info.relationship(resource, relationship_name)
+      relationship_destination_label = Module.split(relationship.destination) |> List.last() |> String.to_atom() |> IO.inspect(label: :relationship_destination_label)
+      if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
+        relationship
+      end
+    end)
+    if length(relationships) == 1 do
+      List.first(relationships)
+    else
+      nil
     end
+    |> IO.inspect(label: "Info.relationship result")
   end
 
   @doc """

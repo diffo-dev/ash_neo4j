@@ -29,6 +29,8 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
 
+  @node_relationship {:tuple, [:atom, :atom, :atom]}
+
   @neo4j %Spark.Dsl.Section{
     name: :neo4j,
     examples: [
@@ -37,6 +39,7 @@ defmodule AshNeo4j.DataLayer do
         label :Comment
         store [:title]
         translate id: :uuid
+        relate [{:post, :BELONGS_TO, :outgoing}]
       end
       """
     ],
@@ -54,6 +57,10 @@ defmodule AshNeo4j.DataLayer do
       translate: [
         type: :keyword_list,
         doc: "Optional attribute to node property translations"
+      ],
+      relate: [
+        type: {:list, @node_relationship},
+        doc: "Optional list of node relationships, as tuples of {relationship_name, edge_label, edge_direction}"
       ]
     ]
   }
@@ -95,20 +102,19 @@ defmodule AshNeo4j.DataLayer do
   end
 
   @impl true
-  def run_query(query, resource) do
-    label = Info.label(resource)
-    case QueryHelper.query_nodes(label, query) do
+  @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
+  def run_query(query, _resource) do
+    IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
       {:ok, nodes} ->
-        #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query match_nodes result")
         results =
-          convert_nodes_to_resources(nodes, label)
+          convert_nodes_to_resources(query.resource, nodes)
           |> filter_stream(query.domain, query.filter)
-          |> sort_stream(resource, query.domain, query.sort)
+          |> sort_stream(query.resource, query.domain, query.sort)
           |> offset_stream(query.offset)
           |> limit_stream(query.limit)
-          #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
   end
@@ -172,39 +178,45 @@ defmodule AshNeo4j.DataLayer do
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
-  defp convert_nodes_to_resources(groups, label) when is_list(groups) and is_atom(label) do
-    #IO.inspect(label, label: "AshNeo4j.DataLayer.convert_nodes_to_resources label")
-    resource = Info.resource(label)
-    groups #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
+  defp convert_nodes_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
+    groups |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(fn related_nodes ->
       source_node = Map.get(related_nodes, "s")
+      edge = Map.get(related_nodes, "r")
       dest_node = Map.get(related_nodes, "d")
-      if dest_node != nil do
-        dest_label = List.first(dest_node.labels)
-        dest_resource = convert_node_to_resource(Info.resource(String.to_atom(dest_label)), dest_node, [])
-        relationship = Ash.Resource.Info.relationship(resource, String.downcase(dest_label))
-        enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
-        convert_node_to_resource(resource, source_node, [enrichment])
+      if edge != nil && dest_node != nil do
+        # enrich the source node
+        dest_label = String.to_atom(List.first(dest_node.labels))
+        relationship_label = String.to_atom(edge.type)
+        relationship = Info.relationship(resource, relationship_label, dest_label)
+        if (relationship != nil) do
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, []) |> IO.inspect(label: :dest_resource)
+          enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)} |> IO.inspect(label: :enrichment)
+          convert_node_to_resource(resource, source_node, [enrichment]) |> IO.inspect(label: :enriched_source_resource)
+        else
+          IO.puts("unable to enrich source node")
+          convert_node_to_resource(resource, source_node)
+        end
       else
         convert_node_to_resource(resource, source_node)
       end
-      #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources resource")
+      |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
     end)
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ []) when is_atom(resource) and is_map(node) and is_list(enrichments) do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
-    store = Info.store(resource)
-    translate = Info.translate(resource)
-    stored = Enum.into(store, %{}, fn field ->
+    enriched = Enum.into(enrichments, %{}, fn {field, value} ->
+      {field, value}
+    end)
+    # stored or translated fields will overwrite enrichments
+    stored = Enum.into(Info.store(resource), enriched, fn field ->
       {field, Map.get(node.properties, to_string(field))}
     end)
-    translated = Enum.into(translate, stored, fn {resource_field, node_field} ->
+    Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
       {resource_field, Map.get(node.properties, to_string(node_field))}
     end)
-    Enum.into(enrichments, translated, fn {field, value} ->
-      {field, value}
-    end) # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource enriched")
+    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?

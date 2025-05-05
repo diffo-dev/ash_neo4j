@@ -10,11 +10,11 @@ defmodule AshNeo4j.Cypher do
 
   ## Examples
   ```
-  iex> AshNeo4j.Cypher.cypher_properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
+  iex> AshNeo4j.Cypher.properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
   "{name: 'Bill Nighy', born: 1949, bafta_winner: true}"
   ```
   """
-  def cypher_properties(map) when is_map(map) do
+  def properties(map) when is_map(map) do
     properties =
       map
       |> Enum.map_join(", ",
@@ -33,17 +33,97 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Runs some cypher,
+  Converts a node variable, label and optional properties to cypher expression
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[Bill Nighy]")
+  "s.name in [Bill Nighy]"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[]")
+  "s.name IS NOT NULL"
+  ```
+  """
+  def expression(variable, left, operator, right) when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
+    if operator == "in" && right == "[]" do
+      "#{variable}.#{left} IS NOT NULL"
+    else
+      "#{variable}.#{left} #{operator} #{right}"
+    end
+  end
+
+  @doc """
+  Converts a node variable, label and optional properties to cypher node.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.node(:s, :Actor)
+  "(s:Actor)"
+  iex> AshNeo4j.Cypher.node(:s, :Actor, %{name: "Bill Nighy"})
+  "(s:Actor {name: 'Bill Nighy'})"
+  ```
+  """
+  def node(variable, label, properties \\ %{}) when is_atom(variable) and is_atom(label) and is_map(properties) do
+    if properties == %{} do
+      "(#{variable}:#{label})"
+    else
+      "(#{variable}:#{label} " <> properties(properties) <> ")"
+    end
+  end
+
+  @doc """
+  Converts a relationship variable, label and optional direction to cypher relationship.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.relationship(:r, :ACTED_IN, :outgoing)
+  "-[r:ACTED_IN]->"
+  iex> AshNeo4j.Cypher.relationship(:r, :ACTED_IN, :incoming)
+  "<-[r:ACTED_IN]-"
+  iex> AshNeo4j.Cypher.relationship(:r, :KNOWS)
+  "-[r:KNOWS]-"
+  ```
+  """
+  def relationship(variable, label, direction \\ nil) when is_atom(variable) and is_atom(label) and is_atom(direction) do
+    case direction do
+      :outgoing ->
+        "-[#{variable}:#{label}]->"
+      :incoming ->
+        "<-[#{variable}:#{label}]-"
+      _ ->
+        "-[#{variable}:#{label}]-"
+    end
+  end
+
+  @doc """
+  Converts a node_relationship tuple to cypher clause, ignoring the label
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.relationship({:movies, :ACTED_IN, :outgoing})
+  "-[r:ACTED_IN]->"
+  iex> AshNeo4j.Cypher.relationship(nil)
+  "-[r]-"
+  ```
+  """
+  def relationship(node_relationship) when is_tuple(node_relationship) do
+    relationship(:r, elem(node_relationship, 1), elem(node_relationship, 2))
+  end
+
+  def relationship(nil) when is_nil(nil), do: "-[r]-"
+
+  @doc """
+  Runs some cypher
 
   ## Examples
   ```
   iex> cypher = "CREATE (n:Actor {name: 'Bill Nighy', born: 1949, bafta_winner: true}) RETURN n"
-  iex> {result, _} = run_cypher(cypher)
+  iex> {result, _} = AshNeo4j.Cypher.run(cypher)
   iex> result
   :ok
   ```
   """
-  def run_cypher(cypher) when is_bitstring(cypher) do
+  def run(cypher) when is_bitstring(cypher) do
+    IO.inspect(cypher, label: :run_cypher)
     Boltx.query(Bolt, cypher)
   end
 end
