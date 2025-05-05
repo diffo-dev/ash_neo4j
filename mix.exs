@@ -51,7 +51,7 @@ defmodule AshNeo4j.MixProject do
       source_url: @github_url,
       source_ref: "v#{@version}",
       main: "readme",
-      logo: "logos/diffo.png",
+      logo: "logos/diffo.jpg",
       extras: [
         "README.md": [title: "Guide"],
         "LICENSE.md": [title: "License"],

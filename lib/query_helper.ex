@@ -5,7 +5,7 @@ defmodule AshNeo4j.QueryHelper do
   alias AshNeo4j.DataLayer.Info
 
   @moduledoc """
-  AshNeo4j Datalayer QueryHelper
+  AshNeo4j DataLayer QueryHelper
   """
 
   @doc """

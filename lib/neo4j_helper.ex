@@ -3,7 +3,7 @@ defmodule AshNeo4j.Neo4jHelper do
   alias AshNeo4j.Cypher
 
   @moduledoc """
-  AshNeo4j Datalayer Neo4j Helper
+  AshNeo4j DataLayer Neo4j Helper
   """
 
   @doc """

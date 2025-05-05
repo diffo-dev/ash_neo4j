@@ -13,14 +13,14 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.0"},
+    {:ash_neo4j, "~> 0.1.1"},
   ]
 end
 ```
 
 ## Usage
 
-Configure `AshNeo4j.Datalayer` as `data_layer:` within `use Ash.Resource` options:
+Configure `AshNeo4j.DataLayer` as `data_layer:` within `use Ash.Resource` options:
 
 ```elixir
   use Ash.Resource,
