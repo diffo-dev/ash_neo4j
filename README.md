@@ -13,14 +13,14 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.0"},
+    {:ash_neo4j, "~> 0.1.1"},
   ]
 end
 ```
 
 ## Usage
 
-Configure `AshNeo4j.Datalayer` as `data_layer:` within `use Ash.Resource` options:
+Configure `AshNeo4j.DataLayer` as `data_layer:` within `use Ash.Resource` options:
 
 ```elixir
   use Ash.Resource,
@@ -40,6 +40,7 @@ defmodule Comment.Resource do
     label :Comment
     store [:id, :title]
     translate id: :uuid
+    relate [{:post, :BELONGS_TO, :outgoing}]
   end
 
   actions do
@@ -83,6 +84,15 @@ The DSL may be used to translate the Ash Resource's attributes to node propertie
 ```elixir
   neo4j do
     translate id: :uuid
+  end
+```
+
+## Relate
+
+The DSL is used to direct any node relationships.
+```elixir
+  neo4j do
+    relate [{:post, :BELONGS_TO, :outgoing}]
   end
 ```
 

@@ -5,29 +5,30 @@ defmodule AshNeo4j.Test.Resource.Post do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label(:Post)
-    store([:title, :score, :public, :unique])
-    translate(id: :uuid)
+    label :Post
+    store [:title, :score, :public, :unique]
+    translate id: :uuid
+    relate [{:comments, :BELONGS_TO, :incoming}]
   end
 
   actions do
-    default_accept(:*)
-    defaults([:read, :create])
+    default_accept :*
+    defaults [:read, :create]
   end
 
   attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true)
-    attribute(:score, :integer, public?: true)
-    attribute(:public, :boolean, public?: true)
-    attribute(:unique, :string, public?: true)
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
+    attribute :score, :integer, public?: true
+    attribute :public, :boolean, public?: true
+    attribute :unique, :string, public?: true
   end
 
   identities do
-    identity(:unique_unique, [:unique])
+    identity :unique_unique, [:unique]
   end
 
   relationships do
-    has_many(:comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true)
+    has_many :comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true
   end
 end

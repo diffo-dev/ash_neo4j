@@ -5,22 +5,23 @@ defmodule AshNeo4j.Test.Resource.Comment do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label(:Comment)
-    store([:title])
-    translate(id: :uuid)
+    label :Comment
+    store [:title]
+    translate id: :uuid
+    relate [{:post, :BELONGS_TO, :outgoing}]
   end
 
   actions do
-    default_accept(:*)
-    defaults([:read, :create])
+    default_accept :*
+    defaults [:read, :create]
   end
 
   attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true)
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
   end
 
   relationships do
-    belongs_to(:post, AshNeo4j.Test.Resource.Post, public?: true)
+    belongs_to :post, AshNeo4j.Test.Resource.Post, public?: true
   end
 end

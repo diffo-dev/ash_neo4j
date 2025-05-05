@@ -5,6 +5,7 @@ defmodule AshNeo4jTest do
   alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
 
+  doctest AshNeo4j.Cypher
   doctest AshNeo4j.Neo4jHelper
   doctest AshNeo4j.QueryHelper
 
@@ -83,49 +84,33 @@ defmodule AshNeo4jTest do
     assert result |> Enum.at(0) |> Map.get(:title) == "comment2"
   end
 
-  test "nodes can be created and related" do
-    # setup using Neo4jHelper
-    uuid1 = Ash.UUID.generate()
-    uuid2 = Ash.UUID.generate()
-    uuid3 = Ash.UUID.generate()
-    uuid4 = Ash.UUID.generate()
-    uuid5 = Ash.UUID.generate()
-    Neo4jHelper.create_node(:Post, %{title: "post1", uuid: uuid1})
-    Neo4jHelper.create_node(:Post, %{title: "post2", uuid: uuid2})
-    Neo4jHelper.create_node(:Comment, %{title: "comment3", uuid: uuid3})
-    Neo4jHelper.create_node(:Comment, %{title: "comment4", uuid: uuid4})
-    Neo4jHelper.create_node(:Comment, %{title: "comment5", uuid: uuid5})
-    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    Neo4jHelper.relate_nodes(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
-    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid3}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid4}, :Post, %{uuid: uuid1}, :BELONGS_TO)
-    assert Neo4jHelper.nodes_relate_how?(:Comment, %{uuid: uuid5}, :Post, %{uuid: uuid2}, :BELONGS_TO)
+  test "nodes can be created and related - read post with single comment" do
+    create_posts_with_comments(1, 1)
 
     # read Post using Ash, loading related comments
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post2"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: "ash read post2 loading comments")
-    assert length(result.comments) == 1
-
     result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!()
     #|> IO.inspect(label: "ash read post1 loading comments")
-    assert length(result.comments) == 2
+    assert length(result.comments) == 1
+  end
+
+  test "nodes can be created and related - read post with two comments" do
+    create_posts_with_comments(1, 2)
+
+    # read Post using Ash, loading related comments
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read!()
+    #|> IO.inspect(label: "ash read post1 loading comments")
+    [post | _ ] = result
+    assert length(post.comments) == 2
+  end
+
+  test "nodes can be created and related - read comment with related post" do
+    create_posts_with_comments(1, 2)
 
     # read Comments using Ash, loading related Post
-    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment3"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: "ash read comment3 loading post")
-    assert result.post != nil
-    assert result.post |> Map.get(:title) == "post1"
-
-    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment4"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: "ash read comment4 loading post")
-    assert result.post != nil
-    assert result.post |> Map.get(:title) == "post1"
-
-    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment5"]]) |> Ash.read_one!()
-    #|> IO.inspect(label: "ash read comment4 loading post")
-    assert result.post != nil
-    assert result.post |> Map.get(:title) == "post2"
+    result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment1.1"]]) |> Ash.read_one!()
+    #|> IO.inspect(label: "ash read comment1.1 loading post")
+    assert result.title == "comment1.1"
+    assert result.post.title == "post1"
   end
 
   test "filters/sorts can be applied" do
@@ -276,15 +261,25 @@ defmodule AshNeo4jTest do
     assert comment.title == "comment4"
    end
 
-  defp create_post_nodes(count) do
+  defp create_post_nodes(count) when is_integer(count) do
     for i <- 1..count do
       Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
     end
   end
 
-  defp create_comment_nodes(count) do
+  defp create_comment_nodes(count) when is_integer(count) do
     for i <- 1..count do
       Neo4jHelper.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+    end
+  end
+
+  defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
+    for post <- 1..posts do
+      Neo4jHelper.create_node(:Post, %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
+      for comment <- 1..comments do
+        Neo4jHelper.create_node(:Comment, %{title: "comment#{post}.#{comment}", uuid: comment_uuid = Ash.UUID.generate()})
+        Neo4jHelper.relate_nodes(:Comment, %{uuid: comment_uuid}, :Post, %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
+      end
     end
   end
 end
