@@ -186,9 +186,10 @@ defmodule AshNeo4j.DataLayer do
       primary_keys = Ash.Resource.Info.primary_key(resource) #|> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate keys")
       case length(primary_keys) do
         1 ->
-          primary_key = List.first(primary_keys)
+          #primary_key = List.first(primary_keys)
           Enum.into(records, %{}, fn record ->
-            {Map.get(record, primary_key), record} end)
+            composite_key_value = Enum.map_join(primary_keys, "_", fn primary_key -> Map.get(record, primary_key) end)
+            {composite_key_value, record} end)
           |> Map.values()
           # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate result")
         _ ->
