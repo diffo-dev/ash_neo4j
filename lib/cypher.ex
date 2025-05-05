@@ -123,7 +123,7 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   def run(cypher) when is_bitstring(cypher) do
-    IO.inspect(cypher, label: :run_cypher)
+    #IO.inspect(cypher, label: :run_cypher)
     Boltx.query(Bolt, cypher)
   end
 end

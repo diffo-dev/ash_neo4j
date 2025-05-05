@@ -104,7 +104,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
@@ -115,8 +115,10 @@ defmodule AshNeo4j.DataLayer do
           |> sort_stream(query.resource, query.domain, query.sort)
           |> offset_stream(query.offset)
           |> limit_stream(query.limit)
+          #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
+
   end
 
   @impl true
@@ -172,14 +174,38 @@ defmodule AshNeo4j.DataLayer do
   def filter_matches(records, nil, _domain), do: records
 
   def filter_matches(records, filter, domain) do
+    #IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
-    records
+    deduplicate(filter.resource, records)
+  end
+
+  # deduplicates records by primary key
+  defp deduplicate(resource, records) when is_atom(resource) and is_list(records) do
+    if length(records) > 1 do
+      #IO.inspect(records, label: "AshNeo4j.DataLayer.deduplicate records")
+      primary_keys = Ash.Resource.Info.primary_key(resource) #|> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate keys")
+      case length(primary_keys) do
+        1 ->
+          primary_key = List.first(primary_keys)
+          Enum.into(records, %{}, fn record ->
+            {Map.get(record, primary_key), record} end)
+          |> Map.values()
+          # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate result")
+        _ ->
+          # TODO handle composite primary key
+          records
+      end
+
+    else
+      records
+    end
   end
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
   defp convert_nodes_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
-    groups |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
+    groups
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(fn related_nodes ->
       source_node = Map.get(related_nodes, "s")
       edge = Map.get(related_nodes, "r")
@@ -190,9 +216,10 @@ defmodule AshNeo4j.DataLayer do
         relationship_label = String.to_atom(edge.type)
         relationship = Info.relationship(resource, relationship_label, dest_label)
         if (relationship != nil) do
-          dest_resource = convert_node_to_resource(relationship.destination, dest_node, []) |> IO.inspect(label: :dest_resource)
-          enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)} |> IO.inspect(label: :enrichment)
-          convert_node_to_resource(resource, source_node, [enrichment]) |> IO.inspect(label: :enriched_source_resource)
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+          convert_node_to_resource(resource, source_node, [enrichment])
+          #|> IO.inspect(label: :enriched_source_resource)
         else
           IO.puts("unable to enrich source node")
           convert_node_to_resource(resource, source_node)
@@ -200,7 +227,7 @@ defmodule AshNeo4j.DataLayer do
       else
         convert_node_to_resource(resource, source_node)
       end
-      |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
+      #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
     end)
   end
 
@@ -216,7 +243,7 @@ defmodule AshNeo4j.DataLayer do
     Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
       {resource_field, Map.get(node.properties, to_string(node_field))}
     end)
-    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?

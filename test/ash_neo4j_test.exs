@@ -89,7 +89,7 @@ defmodule AshNeo4jTest do
 
     # read Post using Ash, loading related comments
     result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!()
-    |> IO.inspect(label: "ash read post1 loading comments")
+    #|> IO.inspect(label: "ash read post1 loading comments")
     assert length(result.comments) == 1
   end
 
@@ -97,9 +97,10 @@ defmodule AshNeo4jTest do
     create_posts_with_comments(1, 2)
 
     # read Post using Ash, loading related comments
-    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read_one!()
-    |> IO.inspect(label: "ash read post1 loading comments")
-    assert length(result.comments) == 2
+    result = Post |> Ash.Query.for_read(:read) |> Ash.Query.load([:comments]) |> Ash.Query.filter_input([title: [eq: "post1"]]) |> Ash.read!()
+    #|> IO.inspect(label: "ash read post1 loading comments")
+    [post | _ ] = result
+    assert length(post.comments) == 2
   end
 
   test "nodes can be created and related - read comment with related post" do
@@ -107,9 +108,9 @@ defmodule AshNeo4jTest do
 
     # read Comments using Ash, loading related Post
     result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.load([:post]) |> Ash.Query.filter_input([title: [eq: "comment1.1"]]) |> Ash.read_one!()
-    |> IO.inspect(label: "ash read comment1.1 loading post")
-    assert result.post != nil
-    assert result.post |> Map.get(:title) == "post1"
+    #|> IO.inspect(label: "ash read comment1.1 loading post")
+    assert result.title == "comment1.1"
+    assert result.post.title == "post1"
   end
 
   test "filters/sorts can be applied" do

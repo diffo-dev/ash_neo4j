@@ -33,12 +33,9 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec relationship(Ash.Resource.t(), atom(), atom()) :: struct() | nil
   def relationship(resource, relationship_label, dest_label) when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
-    #IO.inspect(resource, label: "Info.relationship resource")
-    #IO.inspect(relationship_label, label: "Info.relationship relationship_label")
-    #IO.inspect(dest_label, label: "Info.relationship dest_label")
     relationships = Enum.into(relate(resource), [], fn {relationship_name, edge_label, _edge_direction} ->
       relationship = Ash.Resource.Info.relationship(resource, relationship_name)
-      relationship_destination_label = Module.split(relationship.destination) |> List.last() |> String.to_atom() |> IO.inspect(label: :relationship_destination_label)
+      relationship_destination_label = Module.split(relationship.destination) |> List.last() |> String.to_atom()
       if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
         relationship
       end
@@ -48,7 +45,7 @@ defmodule AshNeo4j.DataLayer.Info do
     else
       nil
     end
-    |> IO.inspect(label: "Info.relationship result")
+    #|> IO.inspect(label: "Info.relationship result")
   end
 
   @doc """
