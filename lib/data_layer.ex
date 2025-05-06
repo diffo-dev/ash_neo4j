@@ -236,15 +236,17 @@ defmodule AshNeo4j.DataLayer do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     enriched = Enum.into(enrichments, %{}, fn {field, value} ->
       {field, value}
-    end)
+    end) |> IO.inspect(label: :enriched)
     # stored or translated fields will overwrite enrichments
     stored = Enum.into(Info.store(resource), enriched, fn field ->
-      {field, Map.get(node.properties, to_string(field))}
-    end)
+      property_value = Map.get(node.properties, to_string(field))
+      {field, cast(resource, field, property_value)}
+    end) |> IO.inspect(label: :stored)
     Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
-      {resource_field, Map.get(node.properties, to_string(node_field))}
+      property_value = Map.get(node.properties, to_string(node_field))
+      {resource_field, cast(resource, resource_field, property_value)}
     end)
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
@@ -252,6 +254,52 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
     #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+  end
+
+  defp cast(resource, name, value) do
+    IO.inspect(name, label: :name)
+    IO.inspect(value, label: :value)
+    attribute = Ash.Resource.Info.attribute(resource, name) |> IO.inspect(label: :attribute)
+    case attribute.type do
+      Ash.Type.Atom ->
+        String.to_atom(value)
+      Ash.Type.Function ->
+        # &AshNeo4j.Neo4jHelper.create_node/2
+        [ module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
+        module_function_splits = String.split(module_function, ".")
+        function = List.last(module_function_splits) |> IO.inspect(label: :function)
+        module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse) |> IO.inspect(label: :module)
+        Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
+      Ash.Type.Module ->
+        String.to_atom(value)
+      Ash.Type.Date ->
+        Date.from_iso8601!(value)
+      Ash.Type.DateTime ->
+        case DateTime.from_iso8601(value) do
+          {:ok, datetime, 0} ->
+            datetime
+          {:error, _message} ->
+            raise(Ash.Error.Invalid)
+        end
+      Ash.Type.NaiveDateTime ->
+        NaiveDateTime.from_iso8601!(value)
+      Ash.Type.Time ->
+        Time.from_iso8601!(value)
+      Ash.Type.Struct ->
+        if (value == nil) do
+          nil
+        else
+          case Regex.compile(value) do
+            {:ok, regex} ->
+              regex
+            {:error, _message} ->
+              value
+          end
+        end
+
+      _ ->
+        value
+    end
   end
 
   defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do

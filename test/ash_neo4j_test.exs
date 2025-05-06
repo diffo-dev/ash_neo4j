@@ -1,13 +1,12 @@
 defmodule AshNeo4jTest do
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
 
-  doctest AshNeo4j.Cypher
-  doctest AshNeo4j.Neo4jHelper
-  doctest AshNeo4j.QueryHelper
+  defstruct [a: "a", b: 0, c: false]
 
   setup_all do
     {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
@@ -16,7 +15,9 @@ defmodule AshNeo4jTest do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_all()
+      Neo4jHelper.delete_nodes(:Post)
+      Neo4jHelper.delete_nodes(:Comment)
+      Neo4jHelper.delete_nodes(:Test)
     end)
   end
 
@@ -58,6 +59,41 @@ defmodule AshNeo4jTest do
     node = records |> List.first() |> List.first()
     assert node.labels == ["Comment"]
     assert node.properties == %{"title" => "comment1", "uuid" => uuid}
+  end
+
+  test "type node can be read using ash" do
+    properties = %{
+      uuid: Ash.UUID.generate(),
+      #array_atom: [:a, :b, :c],
+      #array_integer: [1, 2, 3],
+      #array_strings: ["a", "b", "c"],
+      #array_boolean: [true, true, false],
+      atom: :atom,
+      binary: <<104, 101, 197, 130, 197, 130, 111>>,
+      boolean: true,
+      ci_string: "hello",
+      date: Date.utc_today(),
+      datetime: DateTime.utc_now(),
+      decimal: 1.2,
+      float: 1.23456789,
+      function: &Neo4jHelper.create_node/2,
+      integer: 1,
+      json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
+      #keyword: [{:a, "a"}, {:b, 1}, {:c, false}],
+      #map: %{a: "a", b: 1, c: false},
+      module: AshNeo4j.DataLayer,
+      naive_datetime: NaiveDateTime.utc_now(),
+      regex: ~r/foo/,
+      string: "Hello",
+      #struct: %AshNeo4jTest{a: "a", b: 1, c: false},
+      #term: %AshNeo4jTest{a: "a", b: 1, c: false},
+      time: Time.utc_now(),
+      #tuple: [{:a, 1, false}, {:b, 2, true}],
+      url_encoded_binary: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
+    }
+    Neo4jHelper.create_node(:Type, properties) |> IO.inspect(label: "create_node response")
+    type = Ash.read_one!(Type) |> IO.inspect(label: :type) |> IO.inspect(label: "ash read_one response")
+    Enum.each(properties, fn {key, value} -> assert Map.get(type, key) == value end)
   end
 
   test "post node can be read using ash" do

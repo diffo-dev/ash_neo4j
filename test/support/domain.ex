@@ -3,7 +3,6 @@ defmodule AshNeo4j.Test.Domain do
   use Ash.Domain
 
   resources do
-    resource(AshNeo4j.Test.Resource.Post)
-    resource(AshNeo4j.Test.Resource.Comment)
+    allow_unregistered? true
   end
 end

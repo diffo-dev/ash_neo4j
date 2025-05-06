@@ -21,10 +21,17 @@ defmodule AshNeo4j.Cypher do
         fn {k, v} ->
           case v do
             nil -> "#{k}: null"
+            _ when is_boolean(v) -> "#{k}: #{v}"
             _ when is_integer(v) -> "#{k}: #{v}"
             _ when is_float(v) -> "#{k}: #{v}"
-            _ when is_boolean(v) -> "#{k}: #{v}"
-            _ when is_list(v) -> "#{k}: #{inspect(v)}"
+            _ when is_list(v) -> "#{k}: '#{inspect(v)}'"
+            _ when is_function(v) -> "#{k}: '#{inspect(v)}'"
+            _ when is_struct(v, Date) -> "#{k}: '" <> Date.to_iso8601(v) <> "'"
+            _ when is_struct(v, DateTime) -> "#{k}: '" <> DateTime.to_iso8601(v) <> "'"
+            _ when is_struct(v, NaiveDateTime) -> "#{k}: '" <> NaiveDateTime.to_iso8601(v) <> "'"
+            _ when is_struct(v, Time) -> "#{k}: '" <> Time.to_iso8601(v) <> "'"
+            _ when is_struct(v, Regex) -> "#{k}: '#{Regex.source(v)}'"
+            _ when is_map(v) -> "#{k}: '#{inspect(v)}'"
             _ -> "#{k}: '#{v}'"
           end
         end)
