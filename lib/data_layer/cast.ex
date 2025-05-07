@@ -8,21 +8,33 @@ defmodule AshNeo4j.DataLayer.Cast do
   Casts an Ash.Resource.Attribute
   """
   def cast(resource, name, value) do
-    IO.inspect(name, label: :name)
-    IO.inspect(value, label: :value)
-    attribute = Ash.Resource.Info.attribute(resource, name) |> IO.inspect(label: :attribute)
+    attribute = Ash.Resource.Info.attribute(resource, name)
+    #|> IO.inspect(label: :attribute)
     case attribute.type do
       Ash.Type.Atom ->
-        String.to_atom(value)
+        cast_atom(value)
+      Ash.Type.String ->
+        cast_string(value)
+      Ash.Type.UUID ->
+        cast_string(value)
+      Ash.Type.Boolean ->
+        value
+      Ash.Type.Integer ->
+        value
+      Ash.Type.Float ->
+        value
+      Ash.Type.Binary ->
+        value
+      Ash.Type.CiString ->
+        case Keyword.fetch!(attribute.constraints, :casing) do
+          :upper -> String.upcase(value)
+          :lower -> String.downcase(value)
+          nil -> value
+        end
       Ash.Type.Function ->
-        # &AshNeo4j.Neo4jHelper.create_node/2
-        [ module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
-        module_function_splits = String.split(module_function, ".")
-        function = List.last(module_function_splits) |> IO.inspect(label: :function)
-        module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse) |> IO.inspect(label: :module)
-        Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
+        cast_function(value)
       Ash.Type.Module ->
-        String.to_atom(value)
+        cast_atom(value)
       Ash.Type.Date ->
         Date.from_iso8601!(value)
       Ash.Type.DateTime ->
@@ -32,7 +44,7 @@ defmodule AshNeo4j.DataLayer.Cast do
           {:error, _message} ->
             raise(Ash.Error.Invalid)
         end
-      Ash.Type.NaiveDateTime ->
+      Ash.Type.NaiveDatetime ->
         NaiveDateTime.from_iso8601!(value)
       Ash.Type.Time ->
         Time.from_iso8601!(value)
@@ -42,11 +54,29 @@ defmodule AshNeo4j.DataLayer.Cast do
         cast_map(value)
       Ash.Type.Decimal ->
         cast_decimal(value)
+      {:array, _} ->
+        cast_list(value)
       _ ->
         IO.puts("warning no specific cast for type #{inspect(attribute.type)}")
         value
     end
-    |> IO.inspect(label: "cast result")
+    #|> IO.inspect(label: "cast result")
+  end
+
+  defp cast_atom(nil) when is_nil(nil) do
+    nil
+  end
+
+  defp cast_atom(value) when is_binary(value) do
+    String.to_atom(String.replace_leading(value, ":", ""))
+  end
+
+  defp cast_function(value) when is_binary(value) do
+    [ module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
+    module_function_splits = String.split(module_function, ".")
+    function = List.last(module_function_splits) #|> IO.inspect(label: :function)
+    module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse) #|> IO.inspect(label: :module)
+    Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
   end
 
   defp cast_struct(nil) when is_nil(nil) do
@@ -54,7 +84,6 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast_struct(value) when is_binary(value) do
-    IO.inspect(value, label: "cast_struct value")
     cond do
       String.starts_with?(value, "~r/") ->
         cast_regex(value)
@@ -65,7 +94,6 @@ defmodule AshNeo4j.DataLayer.Cast do
           nil ->
             value
           name ->
-            IO.inspect(name, label: :name)
             module = Module.concat([name])
             properties = cast_struct_properties(value)
             struct(module, properties)
@@ -74,7 +102,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp struct_name(value) when is_binary(value) do
-    Regex.run(@struct_name_regex, value) |> Enum.at(1) |> IO.inspect(label: :struct_name)
+    Regex.run(@struct_name_regex, value) |> Enum.at(1)
   end
 
   defp cast_struct_properties(value) when is_binary(value) do
@@ -83,11 +111,23 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast_property(property) when is_binary(property) do
-    whitespace_removed = String.replace(property, " ", "")
-    splits = String.split(whitespace_removed, ":")
+    trimmed = String.trim(property)
+    splits = String.split(trimmed, ":")
     key = hd(splits)
     value = Enum.map_join(tl(splits), ":", &String.trim(&1))
     {String.to_atom(key), cast(value)}
+  end
+
+  defp cast(boolean) when is_boolean(boolean) do
+    boolean
+  end
+
+  defp cast(integer) when is_integer(integer) do
+    integer
+  end
+
+  defp cast(float) when is_float(float) do
+    float
   end
 
   defp cast(value) when is_binary(value) do
@@ -98,9 +138,9 @@ defmodule AshNeo4j.DataLayer.Cast do
       _ ->
         cond do
           String.starts_with?(value, ":") ->
-            String.to_atom(String.replace_leading(value, ":", ""))
+            cast_atom(value)
           String.starts_with?(value, "\"") && String.ends_with?(value, "\"") ->
-            String.replace(value, "\"", "")
+            cast_string(value)
           String.starts_with?(value, "[") && String.ends_with?(value, "]") ->
             cast_list(value)
           String.starts_with?(value, "%{") && String.ends_with?(value, "}") ->
@@ -121,21 +161,48 @@ defmodule AshNeo4j.DataLayer.Cast do
                     float
                   :error ->
                     IO.puts("warning: value #{value} has leading integer but isn't an integer or float")
-                    cast_remaining(value)
+                    value
                 end
               :error ->
-                cast_remaining(value)
+                IO.puts("warning: no cast for value #{value}")
+                value
             end
         end
     end
   end
 
-  defp cast_remaining(value) when is_bitstring(value) do
-    value |> IO.inspect(label: :cast_remaining_value)
+  defp cast_string(nil) when is_nil(nil) do
+    nil
+  end
+
+  defp cast_string(value) when is_bitstring(value) do
+    String.replace(value, "\"", "")
+  end
+
+  defp cast_list(nil) when is_nil(nil) do
+    nil
+  end
+
+  defp cast_list(value) when is_list(value) do
+    value
+    |> Enum.into([], &cast(&1))
+  end
+
+  defp cast_list(value) when is_bitstring(value) do
+    value
+    |> String.replace_leading("[", "")
+    |> String.replace_trailing("]", "")
+    |> String.split(",")
+    |> Enum.into([], &cast(String.trim(&1)))
   end
 
   defp cast_map(nil) when is_nil(nil) do
     nil
+  end
+
+  defp cast_map(value) when is_map(value) do
+    value
+    |> Enum.into(%{}, &cast(&1))
   end
 
   defp cast_map(value) when is_bitstring(value) do
@@ -146,16 +213,11 @@ defmodule AshNeo4j.DataLayer.Cast do
     |> Enum.into(%{}, &cast_property(&1))
   end
 
-  defp cast_list(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("[", "")
-    |> String.replace_trailing("]", "")
-    |> String.split(",")
-    |> Enum.into([], &cast_property(&1))
+  defp cast_decimal(nil) when is_nil(nil) do
+    nil
   end
 
   defp cast_decimal(value) when is_bitstring(value) do
-    IO.inspect(value, label: :cast_decimal_value)
     string =
       value
       |> String.replace_leading("Decimal.new(\"", "")
@@ -167,11 +229,9 @@ defmodule AshNeo4j.DataLayer.Cast do
         IO.puts("warning: value #{value} can't be parsed as a Decimal")
         value
     end
-    |> IO.inspect(label: :cast_decimal_result)
   end
 
   defp cast_regex(value) when is_bitstring(value) do
-    IO.inspect(value, label: :cast_regex_value)
     splits = String.split(value, "/")
     case length(splits) do
       2 ->
@@ -194,6 +254,5 @@ defmodule AshNeo4j.DataLayer.Cast do
         IO.puts("warning: value #{value} can't be parsed as Regex")
         value
     end
-    |> IO.inspect(label: :cast_regex_result)
   end
 end

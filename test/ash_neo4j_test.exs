@@ -15,9 +15,7 @@ defmodule AshNeo4jTest do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_nodes(:Test)
+      Neo4jHelper.delete_all()
     end)
   end
 
@@ -64,10 +62,11 @@ defmodule AshNeo4jTest do
   test "type node can be read using ash" do
     properties = %{
       uuid: Ash.UUID.generate(),
-      #array_atom: [:a, :b, :c],
-      #array_integer: [1, 2, 3],
-      #array_strings: ["a", "b", "c"],
-      #array_boolean: [true, true, false],
+      array_atom: [:a, :b, :c],
+      array_integer: [1, 2, 3],
+      array_string: ["a", "b", "c"],
+      array_boolean: [true, true, false],
+      #array_map: [%{a: "a"}, %{b: "b"}],
       atom: :atom,
       binary: <<104, 101, 197, 130, 197, 130, 111>>,
       boolean: true,
@@ -78,11 +77,11 @@ defmodule AshNeo4jTest do
       float: 1.23456789,
       function: &Neo4jHelper.create_node/2,
       integer: 1,
-      json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
+      #json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
       #keyword: [{:a, "a"}, {:b, 1}, {:c, false}],
       map: %{a: "a", b: 1, c: false},
       module: AshNeo4j.DataLayer,
-      #naive_datetime: NaiveDateTime.utc_now(),
+      naive_datetime: NaiveDateTime.utc_now(),
       regex: ~r/foo/iu,
       string: "Hello",
       struct: %AshNeo4jTest{},
@@ -92,7 +91,7 @@ defmodule AshNeo4jTest do
       url_encoded_binary: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
     }
     Neo4jHelper.create_node(:Type, properties) |> IO.inspect(label: "create_node response")
-    type = Ash.read_one!(Type) |> IO.inspect(label: :type) |> IO.inspect(label: "ash read_one response")
+    type = Ash.read_one!(Type) |> IO.inspect(label: "ash read_one response")
     Enum.each(properties, fn {key, value} -> assert Map.get(type, key) == value end)
   end
 

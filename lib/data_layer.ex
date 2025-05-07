@@ -237,17 +237,17 @@ defmodule AshNeo4j.DataLayer do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     enriched = Enum.into(enrichments, %{}, fn {field, value} ->
       {field, value}
-    end) |> IO.inspect(label: :enriched)
+    end) #|> IO.inspect(label: :enriched)
     # stored or translated fields will overwrite enrichments
     stored = Enum.into(Info.store(resource), enriched, fn field ->
       property_value = Map.get(node.properties, to_string(field))
       {field, Cast.cast(resource, field, property_value)}
-    end) |> IO.inspect(label: :stored)
+    end) #|> IO.inspect(label: :stored)
     Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
