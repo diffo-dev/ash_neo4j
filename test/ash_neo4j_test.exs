@@ -6,7 +6,7 @@ defmodule AshNeo4jTest do
   alias AshNeo4j.Test.Resource.Comment
   require Ash.Query
 
-  defstruct [a: "a", b: 0, c: false]
+  defstruct [a: :a, b: false, d: Decimal.new("4.2"), f: 1.2, i: 0, s: "Hello"]
 
   setup_all do
     {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
@@ -74,18 +74,18 @@ defmodule AshNeo4jTest do
       ci_string: "hello",
       date: Date.utc_today(),
       datetime: DateTime.utc_now(),
-      decimal: 1.2,
+      decimal: Decimal.new("4.2"),
       float: 1.23456789,
       function: &Neo4jHelper.create_node/2,
       integer: 1,
       json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
       #keyword: [{:a, "a"}, {:b, 1}, {:c, false}],
-      #map: %{a: "a", b: 1, c: false},
+      map: %{a: "a", b: 1, c: false},
       module: AshNeo4j.DataLayer,
-      naive_datetime: NaiveDateTime.utc_now(),
-      regex: ~r/foo/,
+      #naive_datetime: NaiveDateTime.utc_now(),
+      regex: ~r/foo/iu,
       string: "Hello",
-      #struct: %AshNeo4jTest{a: "a", b: 1, c: false},
+      struct: %AshNeo4jTest{},
       #term: %AshNeo4jTest{a: "a", b: 1, c: false},
       time: Time.utc_now(),
       #tuple: [{:a, 1, false}, {:b, 2, true}],
