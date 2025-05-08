@@ -66,7 +66,7 @@ defmodule AshNeo4jTest do
       array_integer: [1, 2, 3],
       array_string: ["a", "b", "c"],
       array_boolean: [true, true, false],
-      #array_map: [%{a: "a"}, %{b: "b"}],
+      array_map: [%{a: "a"}, %{b: "b"}],
       atom: :atom,
       binary: <<104, 101, 197, 130, 197, 130, 111>>,
       boolean: true,
@@ -78,16 +78,16 @@ defmodule AshNeo4jTest do
       function: &Neo4jHelper.create_node/2,
       integer: 1,
       #json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
-      #keyword: [{:a, "a"}, {:b, 1}, {:c, false}],
+      keyword: {:key, "value"},
       map: %{a: "a", b: 1, c: false},
       module: AshNeo4j.DataLayer,
       naive_datetime: NaiveDateTime.utc_now(),
       regex: ~r/foo/iu,
       string: "Hello",
       struct: %AshNeo4jTest{},
-      #term: %AshNeo4jTest{a: "a", b: 1, c: false},
+      term: %AshNeo4jTest{},
       time: Time.utc_now(),
-      #tuple: [{:a, 1, false}, {:b, 2, true}],
+      tuple: {:a, 1, false},
       url_encoded_binary: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
     }
     Neo4jHelper.create_node(:Type, properties) |> IO.inspect(label: "create_node response")

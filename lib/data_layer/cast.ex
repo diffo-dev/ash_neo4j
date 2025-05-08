@@ -48,16 +48,24 @@ defmodule AshNeo4j.DataLayer.Cast do
         NaiveDateTime.from_iso8601!(value)
       Ash.Type.Time ->
         Time.from_iso8601!(value)
+      Ash.Type.Map ->
+          cast_map(value)
       Ash.Type.Struct ->
         cast_struct(value)
-      Ash.Type.Map ->
-        cast_map(value)
+      Ash.Type.Keyword ->
+        cast_tuple(value)
+      Ash.Type.Tuple ->
+        cast_tuple(value)
       Ash.Type.Decimal ->
         cast_decimal(value)
+      Ash.Type.Term ->
+        cast(value)
+      Ash.Type.Union ->
+        cast(value)
       {:array, _} ->
         cast_list(value)
       _ ->
-        IO.puts("warning no specific cast for type #{inspect(attribute.type)}")
+        IO.puts("warning: no specific cast for type #{inspect(attribute.type)}")
         value
     end
     #|> IO.inspect(label: "cast result")
@@ -118,6 +126,10 @@ defmodule AshNeo4j.DataLayer.Cast do
     {String.to_atom(key), cast(value)}
   end
 
+  defp cast(atom) when is_atom(atom) do
+    atom
+  end
+
   defp cast(boolean) when is_boolean(boolean) do
     boolean
   end
@@ -147,6 +159,8 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_map(value)
           String.starts_with?(value, "%") && String.contains?(value, "{") && String.ends_with?(value, "}") ->
             cast_struct(value)
+          String.starts_with?(value, "{") && String.ends_with?(value, "}") ->
+            cast_tuple(value)
           String.starts_with?(value, "Decimal.new(\"") && String.ends_with?(value, "\")") ->
             cast_decimal(value)
           String.starts_with?(value, "~r/") ->
@@ -211,6 +225,23 @@ defmodule AshNeo4j.DataLayer.Cast do
     |> String.replace_trailing("}", "")
     |> String.split(",")
     |> Enum.into(%{}, &cast_property(&1))
+  end
+
+  defp cast_tuple(nil) when is_nil(nil) do
+    nil
+  end
+
+  defp cast_tuple(value) when is_tuple(value) do
+    value
+  end
+
+  defp cast_tuple(value) when is_bitstring(value) do
+    value
+    |> String.replace_leading("{", "")
+    |> String.replace_trailing("}", "")
+    |> String.split(",")
+    |> Enum.into([], &cast(String.trim(&1)))
+    |> List.to_tuple()
   end
 
   defp cast_decimal(nil) when is_nil(nil) do

@@ -24,27 +24,39 @@ defmodule AshNeo4j.Cypher do
 
   defp property(property) when is_tuple(property) do
     {k, v} = property
-    "#{k}: " <> value(v)
+    "#{k}: " <> value(v, "'")
   end
 
-  defp value(v) do
+  defp value(v, wrap \\ nil) do
     case v do
       nil -> "null"
       _ when is_boolean(v) -> "#{v}"
-      _ when is_atom(v) -> "':#{v}'"
+      # atom must be after boolean
+      _ when is_atom(v) -> wrap(":#{v}", wrap)
       _ when is_integer(v) -> "#{v}"
       _ when is_float(v) -> "#{v}"
-      _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1)) <> "]"
-      _ when is_function(v) -> "'#{inspect(v)}'"
-      _ when is_struct(v, Date) -> "'" <> Date.to_iso8601(v) <> "'"
-      _ when is_struct(v, DateTime) -> "'" <> DateTime.to_iso8601(v) <> "'"
-      _ when is_struct(v, Decimal) -> "'#{inspect(v)}'"
-      _ when is_struct(v, NaiveDateTime) -> "'" <> NaiveDateTime.to_iso8601(v) <> "'"
-      _ when is_struct(v, Regex) -> "'#{inspect(v)}'"
-      _ when is_struct(v, Time) -> "'" <> Time.to_iso8601(v) <> "'"
-      _ when is_map(v) -> "'#{inspect(v)}'"
-      _ -> "'#{v}'"
+      _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
+      _ when is_function(v) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, Date) -> wrap(Date.to_iso8601(v), wrap)
+      _ when is_struct(v, DateTime) -> wrap(DateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, Decimal) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, NaiveDateTime) -> wrap(NaiveDateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
+      # map must be after struct
+      _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
+      _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
+      # no specific property value format
+      _ -> wrap("#{v}", wrap)
     end
+  end
+
+  defp wrap(v, nil) when is_nil(nil) do
+    v
+  end
+
+  defp wrap(v, wrap) when is_bitstring(wrap) do
+    wrap <> v <> wrap
   end
 
   @doc """

@@ -6,7 +6,7 @@ defmodule AshNeo4j.Test.Resource.Type do
 
   neo4j do
     label :Type
-    store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map,
+    store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_term,
       :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :float,
       :function, :integer, :json, :keyword, :map, :module, :naive_datetime, :regex, :string, :struct, :term, :time, :tuple, :url_encoded_binary]
   end
@@ -23,7 +23,12 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :array_integer, {:array, :integer}, public?: true
     attribute :array_string, {:array, :string}, public?: true
     attribute :array_map, {:array, :map}, public?: true
-    attribute :atom, :atom, public?: true
+    attribute :array_term, {:array, :term}, public?: true
+    attribute :atom, :atom do
+      public? true
+      default :a
+      constraints one_of: [:a, :b]
+    end
     attribute :binary, :binary, public?: true
     attribute :boolean, :boolean, public?: true
     attribute :ci_string, :ci_string, public?: true
@@ -34,7 +39,13 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :function, :function, public?: true
     attribute :integer, :integer, public?: true
     attribute :json, :string, public?: true
-    attribute :keyword, :map, public?: true
+    attribute :keyword, :keyword do
+      public? true
+      constraints fields: [
+        a: [type: :atom],
+        s: [type: :string]
+      ]
+    end
     attribute :map, :map, public?: true
     attribute :module, :module, public?: true
     attribute :naive_datetime, :naive_datetime, public?: true
@@ -43,7 +54,14 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :struct, :struct, public?: true
     attribute :term, :term, public?: true
     attribute :time, :time, public?: true
-    attribute :tuple, :map, public?: true
+    attribute :tuple, :tuple do
+      public? true
+      constraints fields: [
+        a: [type: :atom],
+        i: [type: :integer],
+        b: [type: :boolean]
+      ]
+    end
     attribute :url_encoded_binary, :url_encoded_binary, public?: true
   end
 end
