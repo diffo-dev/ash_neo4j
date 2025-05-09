@@ -77,7 +77,7 @@ defmodule AshNeo4jTest do
       float: 1.23456789,
       function: &Neo4jHelper.create_node/2,
       integer: 1,
-      #json: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
+      json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
       keyword: {:key, "value"},
       map: %{a: "a", b: 1, c: false},
       module: AshNeo4j.DataLayer,

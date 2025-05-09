@@ -8,7 +8,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     label :Type
     store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_term,
       :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :float,
-      :function, :integer, :json, :keyword, :map, :module, :naive_datetime, :regex, :string, :struct, :term, :time, :tuple, :url_encoded_binary]
+      :function, :integer, :json_string, :keyword, :map, :module, :naive_datetime, :regex, :string, :struct, :term, :time, :tuple, :url_encoded_binary]
   end
 
   actions do
@@ -38,7 +38,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :float, :float, public?: true
     attribute :function, :function, public?: true
     attribute :integer, :integer, public?: true
-    attribute :json, :string, public?: true
+    attribute :json_string, :string, public?: true
     attribute :keyword, :keyword do
       public? true
       constraints fields: [
