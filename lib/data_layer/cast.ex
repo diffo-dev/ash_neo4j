@@ -8,70 +8,77 @@ defmodule AshNeo4j.DataLayer.Cast do
   Casts an Ash.Resource.Attribute
   """
   def cast(resource, name, value) do
-    attribute = Ash.Resource.Info.attribute(resource, name) |> IO.inspect(label: :attribute)
-    if (attribute == nil) do
-      IO.puts("warning: cannot cast as name #{name} is not an attribute of resource #{resource}")
-      value
+    attribute = Ash.Resource.Info.attribute(resource, name)
+    if (value == nil) do
+      nil
     else
-      #|> IO.inspect(label: :attribute)
-      case attribute.type do
-        Ash.Type.Atom ->
-          cast_atom(value)
-        Ash.Type.String ->
-          cast_string(value)
-        Ash.Type.UUID ->
-          cast_string(value)
-        Ash.Type.Boolean ->
-          value
-        Ash.Type.Integer ->
-          value
-        Ash.Type.Float ->
-          value
-        Ash.Type.Binary ->
-          value
-        Ash.Type.CiString ->
-          case Keyword.fetch!(attribute.constraints, :casing) do
-            :upper -> String.upcase(value)
-            :lower -> String.downcase(value)
-            nil -> value
-          end
-        Ash.Type.Function ->
-          cast_function(value)
-        Ash.Type.Module ->
-          cast_atom(value)
-        Ash.Type.Date ->
-          Date.from_iso8601!(value)
-        Ash.Type.DateTime ->
-          case DateTime.from_iso8601(value) do
-            {:ok, datetime, 0} ->
-              datetime
-            {:error, _message} ->
-              raise(Ash.Error.Invalid)
-          end
-        Ash.Type.NaiveDatetime ->
-          NaiveDateTime.from_iso8601!(value)
-        Ash.Type.Time ->
-          Time.from_iso8601!(value)
-        Ash.Type.Map ->
+      if (attribute == nil) do
+        IO.puts("warning: cannot cast as name #{name} is not an attribute of resource #{resource}")
+        value
+      else
+        #|> IO.inspect(label: :attribute)
+        case attribute.type do
+          Ash.Type.Atom ->
+            cast_atom(value)
+          Ash.Type.String ->
+            cast_string(value)
+          Ash.Type.UUID ->
+            cast_string(value)
+          Ash.Type.Boolean ->
+            value
+          Ash.Type.Integer ->
+            value
+          Ash.Type.Float ->
+            value
+          Ash.Type.Binary ->
+            value
+          Ash.Type.CiString ->
+            case Keyword.fetch!(attribute.constraints, :casing) do
+              :upper -> String.upcase(value)
+              :lower -> String.downcase(value)
+              nil -> value
+            end
+          Ash.Type.Function ->
+            cast_function(value)
+          Ash.Type.Module ->
+            cast_atom(value)
+          Ash.Type.Date ->
+            Date.from_iso8601!(value)
+          Ash.Type.DateTime ->
+            case DateTime.from_iso8601(value) do
+              {:ok, datetime, 0} ->
+                datetime
+              {:error, _message} ->
+                raise(Ash.Error.Invalid)
+            end
+          Ash.Type.NaiveDatetime ->
+            NaiveDateTime.from_iso8601!(value)
+          Ash.Type.Time ->
+            IO.inspect(value, label: :time)
+            Time.from_iso8601!(value)
+          Ash.Type.Map ->
             cast_map(value)
-        Ash.Type.Struct ->
-          cast_struct(value)
-        Ash.Type.Keyword ->
-          cast_tuple(value)
-        Ash.Type.Tuple ->
-          cast_tuple(value)
-        Ash.Type.Decimal ->
-          cast_decimal(value)
-        Ash.Type.Term ->
-          cast(value)
-        Ash.Type.Union ->
-          cast(value)
-        {:array, _} ->
-          cast_list(value)
-        _ ->
-          IO.puts("warning: no specific cast for type #{inspect(attribute.type)}")
-          value
-       end
+          Ash.Type.Struct ->
+            cast_struct(value)
+          Ash.Type.Keyword ->
+            cast_tuple(value)
+          Ash.Type.Tuple ->
+            cast_tuple(value)
+          Ash.Type.Decimal ->
+            cast_decimal(value)
+          Ash.Type.Term ->
+            cast(value)
+          Ash.Type.Union ->
+            cast(value)
+          Ash.Type.UrlEncodedBinary ->
+            cast_string(value)
+          {:array, _} ->
+            cast_list(value)
+          _ ->
+            IO.puts("warning: no specific cast for type #{inspect(attribute.type)}")
+            value
+        end
+      end
     end
     #|> IO.inspect(label: "cast result")
   end
@@ -179,11 +186,11 @@ defmodule AshNeo4j.DataLayer.Cast do
                   {float, _} ->
                     float
                   :error ->
-                    IO.puts("warning: value #{value} has leading integer but isn't an integer or float")
+                    #IO.puts("warning: value #{value} has leading integer but isn't an integer or float")
                     value
                 end
               :error ->
-                IO.puts("warning: no cast for value #{value}")
+                #IO.puts("warning: no cast for value #{value}")
                 value
             end
         end
