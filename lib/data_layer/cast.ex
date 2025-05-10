@@ -105,12 +105,14 @@ defmodule AshNeo4j.DataLayer.Cast do
 
   defp cast_struct(value) when is_binary(value) do
     cond do
+      String.starts_with?(value, "Decimal.new(\"") && String.ends_with?(value, "\")") ->
+        cast_decimal(value)
+      String.starts_with?(value, "MapSet.new(") && String.ends_with?(value, ")") ->
+        cast_mapset(value)
       String.starts_with?(value, "~r/") ->
         cast_regex(value)
       true ->
         case struct_name(value) do
-          "Decimal" ->
-            value
           nil ->
             value
           name ->
@@ -183,6 +185,8 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_struct(value)
           String.starts_with?(value, "{") && String.ends_with?(value, "}") ->
             cast_tuple(value)
+          String.starts_with?(value, "MapSet.new(") && String.ends_with?(value, ")") ->
+            cast_mapset(value)
           String.starts_with?(value, "Decimal.new(\"") && String.ends_with?(value, "\")") ->
             cast_decimal(value)
           String.starts_with?(value, "~r/") ->
@@ -284,6 +288,14 @@ defmodule AshNeo4j.DataLayer.Cast do
         IO.puts("warning: value #{value} can't be parsed as a Decimal")
         value
     end
+  end
+
+  defp cast_mapset(value) when is_bitstring(value) do
+    value
+    |> String.replace_leading("MapSet.new(", "")
+    |> String.replace_trailing(")", "")
+    |> cast_list()
+    |> MapSet.new()
   end
 
   defp cast_regex(value) when is_bitstring(value) do

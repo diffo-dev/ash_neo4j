@@ -34,6 +34,7 @@ defmodule AshNeo4j.Test do
     json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
     keyword: [a: :atom, s: "string"],
     map: %{a: "a", b: 1, c: false},
+    mapset: MapSet.new([1, :two, false]),
     module: AshNeo4j.DataLayer,
     naive_datetime: @naive_datetime_sec_now,
     regex: ~r/foo/iu,
