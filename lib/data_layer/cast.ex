@@ -61,7 +61,7 @@ defmodule AshNeo4j.DataLayer.Cast do
           Ash.Type.Struct ->
             cast_struct(value)
           Ash.Type.Keyword ->
-            cast_tuple(value)
+            cast_list(value)
           Ash.Type.Tuple ->
             cast_tuple(value)
           Ash.Type.Decimal ->
