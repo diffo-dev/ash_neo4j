@@ -45,16 +45,16 @@ defmodule AshNeo4j.DataLayer.Cast do
           Ash.Type.Date ->
             Date.from_iso8601!(value)
           Ash.Type.DateTime ->
-            case DateTime.from_iso8601(value) do
-              {:ok, datetime, 0} ->
-                datetime
-              {:error, _message} ->
-                raise(Ash.Error.Invalid)
-            end
+            cast_datetime(value)
+          Ash.Type.UtcDatetime ->
+            cast_datetime(value)
+          Ash.Type.UtcDatetimeUsec ->
+            cast_datetime(value)
           Ash.Type.NaiveDatetime ->
             NaiveDateTime.from_iso8601!(value)
           Ash.Type.Time ->
-            IO.inspect(value, label: :time)
+            Time.from_iso8601!(value)
+          Ash.Type.TimeUsec ->
             Time.from_iso8601!(value)
           Ash.Type.Map ->
             cast_map(value)
@@ -136,6 +136,16 @@ defmodule AshNeo4j.DataLayer.Cast do
     key = hd(splits)
     value = Enum.map_join(tl(splits), ":", &String.trim(&1))
     {String.to_atom(key), cast(value)}
+  end
+
+  defp cast_datetime(value) when is_bitstring(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, 0} ->
+        datetime
+      {:error, _message} ->
+        IO.puts("warning: value #{value} can't be parsed as DateTime")
+        value
+    end
   end
 
   defp cast(atom) when is_atom(atom) do

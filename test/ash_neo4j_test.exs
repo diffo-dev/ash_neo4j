@@ -7,6 +7,13 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
+  @datetime_usec_now DateTime.utc_now()
+  @datetime_sec_now @datetime_usec_now |> DateTime.truncate(:second)
+  @naive_datetime_sec_now @datetime_usec_now |> DateTime.to_naive() |> NaiveDateTime.truncate(:second)
+  @time_usec_now @datetime_usec_now |> DateTime.to_time()
+  @time_sec_now @time_usec_now |> Time.truncate(:second)
+  @today @datetime_usec_now |> DateTime.to_date()
+
   @type_properties %{
     #uuid: Ash.UUID.generate(),
     #array_atom: [:a, :b, :c],
@@ -18,8 +25,8 @@ defmodule AshNeo4j.Test do
     #binary: <<104, 101, 197, 130, 197, 130, 111>>,
     boolean: true,
     #ci_string: "hello",
-    date: Date.utc_today(),
-    datetime: DateTime.utc_now(),
+    date: @today,
+    datetime: @datetime_sec_now,
     #decimal: Decimal.new("4.2"),
     #float: 1.23456789,
     #function: &Neo4jHelper.create_node/2,
@@ -28,17 +35,18 @@ defmodule AshNeo4j.Test do
     #keyword: {:key, "value"},
     #map: %{a: "a", b: 1, c: false},
     #module: AshNeo4j.DataLayer,
-    naive_datetime: NaiveDateTime.utc_now(),
+    naive_datetime: @naive_datetime_sec_now,
     #regex: ~r/foo/iu,
     string: "Hello",
     #struct: %Struct{},
     #term: %Struct{},
-    time: Time.utc_now(),
+    time: @time_sec_now,
+    time_usec: @time_usec_now, # needs ash with #2023 PR
     tuple: {:a, 1, false},
-    utc_datetime_usec: DateTime.utc_now(),
+    utc_datetime_usec: @datetime_usec_now,
     url_encoded_binary: "https://www.diffo.dev/"
   }
-  @url_
+
   @base64_url_encoded_binary "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   @type_node_properties Map.put(@type_properties, :url_encoded_binary, @base64_url_encoded_binary)
 
@@ -336,16 +344,15 @@ defmodule AshNeo4j.Test do
 
   describe "ash create action tests" do
     test "type node can be created using ash without properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create() |> IO.inspect(label: "ash create response")
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
       refute type.uuid == nil
       assert type.atom == :a
       Enum.each(Map.drop(@type_properties, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
     end
 
     test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> IO.inspect(label: :create_changeset)|> Ash.create() |> IO.inspect(label: "ash create response")
-      refute type.uuid == nil
-      Enum.each(@type_properties, fn {key, value} -> assert Map.get(type, key) == value end)
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> Ash.create() |> IO.inspect(label: "ash create response")
+      Enum.each(@type_properties, fn {key, value} ->  assert Map.get(type, key) == value end)
     end
 
     test "post node can be created using ash" do
