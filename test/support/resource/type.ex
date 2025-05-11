@@ -6,7 +6,7 @@ defmodule AshNeo4j.Test.Resource.Type do
 
   neo4j do
     label :Type
-    store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_term,
+    store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_struct, :array_term,
       :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :float,:function, :integer,
       :json_string, :keyword, :map, :mapset, :module, :naive_datetime, :regex, :string, :struct, :term,
       :time, :time_usec, :tuple, :url_encoded_binary, :utc_datetime_usec]
@@ -24,6 +24,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :array_integer, {:array, :integer}, public?: true
     attribute :array_string, {:array, :string}, public?: true
     attribute :array_map, {:array, :map}, public?: true
+    attribute :array_struct, {:array, :struct}, public?: true
     attribute :array_term, {:array, :term}, public?: true
     attribute :atom, :atom do
       public? true

@@ -7,26 +7,20 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
-  @datetime_usec_now DateTime.utc_now()
-  @datetime_sec_now @datetime_usec_now |> DateTime.truncate(:second)
-  @naive_datetime_sec_now @datetime_usec_now |> DateTime.to_naive() |> NaiveDateTime.truncate(:second)
-  @time_usec_now @datetime_usec_now |> DateTime.to_time()
-  @time_sec_now @time_usec_now |> Time.truncate(:second)
-  @today @datetime_usec_now |> DateTime.to_date()
-
   @type_properties %{
-    #uuid: Ash.UUID.generate(),
-    #array_atom: [:a, :b, :c],
-    #array_integer: [1, 2, 3],
-    #array_string: ["a", "b", "c"],
-    #array_boolean: [true, true, false],
-    #array_map: [%{a: "a"}, %{b: "b"}],
+    array_atom: [:a, :b, :c],
+    array_integer: [1, 2, 3],
+    array_string: ["a", "b", "c"],
+    array_boolean: [true, true, false],
+    array_map: [%{a: "a"}, %{b: "b"}],
+    array_struct: [%Struct{}],
+    array_term: [:a, "a", %Struct{}], # note neo4j arrays must all be same neo4j type (in this case all strings)
     atom: :a,
     binary: <<104, 101, 197, 130, 197, 130, 111>>,
     boolean: true,
     ci_string: "HELLO",
-    date: @today,
-    datetime: @datetime_sec_now,
+    date: ~D[2025-05-11],
+    datetime: ~U[2025-05-11 07:45:41Z],
     decimal: Decimal.new("4.2"),
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
@@ -36,20 +30,52 @@ defmodule AshNeo4j.Test do
     map: %{a: "a", b: 1, c: false},
     mapset: MapSet.new([1, :two, false]),
     module: AshNeo4j.DataLayer,
-    naive_datetime: @naive_datetime_sec_now,
+    naive_datetime: ~N[2025-05-11 07:45:41],
     regex: ~r/foo/iu,
     string: "Hello",
     struct: %Struct{},
     term: %Struct{},
-    time: @time_sec_now,
-    time_usec: @time_usec_now, # needs ash with #2023 PR
+    time: ~T[07:45:41Z],
+    time_usec: ~T[07:45:41.429903Z], # needs ash with #2023 PR
     tuple: {:a, 1, false},
-    utc_datetime_usec: @datetime_usec_now,
+    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
     url_encoded_binary: "https://www.diffo.dev/"
   }
 
-  @base64_url_encoded_binary "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
-  @type_node_properties Map.put(@type_properties, :url_encoded_binary, @base64_url_encoded_binary)
+  @type_node_properties %{
+    "array_atom" => [":a", ":b", ":c"],
+    "array_integer" =>  [1, 2, 3],
+    "array_string" => ["a", "b", "c"],
+    "array_boolean" => [true, true, false],
+    "array_map" => ["%{a: \"a\"}", "%{b: \"b\"}"],
+    "array_struct" => ["%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}"],
+    "array_term" => [":a", "a", "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}"], # note neo4j arrays must all be same neo4j type (in this case all strings)
+    "atom" => ":a",
+    "binary" => <<104, 101, 197, 130, 197, 130, 111>>,
+    "boolean" => true,
+    "ci_string" => "HELLO",
+    "date" => "2025-05-11",
+    "datetime" => "2025-05-11T07:45:41Z",
+    "decimal" => "Decimal.new(\"4.2\")",
+    "float" => 1.23456789,
+    "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
+    "integer" => 1,
+    "json_string" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
+    "keyword" => ["{:a, :atom}", "{:s, string}"],
+    "map" => "%{a: \"a\", b: 1, c: false}", # serialisation order indeterminate
+    "mapset" => "MapSet.new([1, :two, false])", # serialisation order indeterminate
+    "module" => ":Elixir.AshNeo4j.DataLayer",
+    "naive_datetime" => "2025-05-11T07:45:41",
+    "regex" => "~r/foo/iu",
+    "string" => "Hello",
+    "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}",
+    "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}",
+    "time" => "07:45:41",
+    "time_usec" => "07:45:41.429903", # needs ash with #2023 PR
+    "tuple" => "{:a, 1, false}",
+    "utc_datetime_usec" => "2025-05-11T07:45:41.429903Z",
+    "url_encoded_binary" => "https://www.diffo.dev/"
+  }
 
   setup_all do
     {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
@@ -90,6 +116,7 @@ defmodule AshNeo4j.Test do
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
+      Enum.each(@type_node_properties, fn {key, _value} -> assert Map.get(node.properties, "#{key}") == nil end)
     end
 
     test "type node with properties can be created using Neo4jHelper" do
@@ -97,6 +124,10 @@ defmodule AshNeo4j.Test do
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
+      # map and mapset have indeterminate order so we don't check them exactly
+      refute Map.get(node.properties, "map") == nil
+      refute Map.get(node.properties, "mapset") == nil
+      Enum.each(Map.drop(@type_node_properties, ["map", "mapset"]), fn {key, value} -> assert Map.get(node.properties, "#{key}") == value end)
     end
 
     test "type node with properties can be read using Neo4jHelper" do
@@ -352,7 +383,8 @@ defmodule AshNeo4j.Test do
     end
 
     test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> Ash.create() |> IO.inspect(label: "ash create response")
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> Ash.create()
+      #|> IO.inspect(label: "ash create response")
       Enum.each(@type_properties, fn {key, value} ->  assert Map.get(type, key) == value end)
     end
 
