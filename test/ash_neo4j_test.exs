@@ -16,7 +16,8 @@ defmodule AshNeo4j.Test do
     array_struct: [%Struct{}],
     array_term: [:a, "a", %Struct{}], # note neo4j arrays must all be same neo4j type (in this case all strings)
     atom: :a,
-    binary: <<104, 101, 197, 130, 197, 130, 111>>,
+    binary: <<1, 2, 3>>,
+    #binary: <<104, 101, 197, 130, 197, 130, 111>>,
     boolean: true,
     ci_string: "HELLO",
     date: ~D[2025-05-11],
@@ -27,7 +28,7 @@ defmodule AshNeo4j.Test do
     integer: 1,
     json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
     keyword: [a: :atom, s: "string"],
-    map: %{a: "a", b: 1, c: false},
+    map: %{a: "a", b: 1, c: false, d: nil},
     mapset: MapSet.new([1, :two, false]),
     module: AshNeo4j.DataLayer,
     naive_datetime: ~N[2025-05-11 07:45:41],
@@ -39,7 +40,7 @@ defmodule AshNeo4j.Test do
     time_usec: ~T[07:45:41.429903Z], # needs ash with #2023 PR
     tuple: {:a, 1, false},
     utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
-    url_encoded_binary: "https://www.diffo.dev/"
+    url: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   }
 
   @type_node_properties %{
@@ -48,10 +49,10 @@ defmodule AshNeo4j.Test do
     "array_string" => ["a", "b", "c"],
     "array_boolean" => [true, true, false],
     "array_map" => ["%{a: \"a\"}", "%{b: \"b\"}"],
-    "array_struct" => ["%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}"],
-    "array_term" => [":a", "a", "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}"], # note neo4j arrays must all be same neo4j type (in this case all strings)
+    "array_struct" => ["%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"],
+    "array_term" => [":a", "a", "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"], # note neo4j arrays must all be same neo4j type (in this case all strings)
     "atom" => ":a",
-    "binary" => <<104, 101, 197, 130, 197, 130, 111>>,
+    "binary" => "\x01\x02\x03",
     "boolean" => true,
     "ci_string" => "HELLO",
     "date" => "2025-05-11",
@@ -62,20 +63,22 @@ defmodule AshNeo4j.Test do
     "integer" => 1,
     "json_string" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
     "keyword" => ["{:a, :atom}", "{:s, string}"],
-    "map" => "%{a: \"a\", b: 1, c: false}", # serialisation order indeterminate
+    "map" => "%{a: \"a\", b: 1, c: false, d: nil}", # serialisation order indeterminate
     "mapset" => "MapSet.new([1, :two, false])", # serialisation order indeterminate
     "module" => ":Elixir.AshNeo4j.DataLayer",
     "naive_datetime" => "2025-05-11T07:45:41",
     "regex" => "~r/foo/iu",
     "string" => "Hello",
-    "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}",
-    "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, s: \"Hello\"}",
+    "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
+    "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "time" => "07:45:41",
     "time_usec" => "07:45:41.429903", # needs ash with #2023 PR
     "tuple" => "{:a, 1, false}",
     "utc_datetime_usec" => "2025-05-11T07:45:41.429903Z",
-    "url_encoded_binary" => "https://www.diffo.dev/"
+    "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   }
+
+  @url "https://www.diffo.dev/"
 
   setup_all do
     {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
@@ -385,7 +388,8 @@ defmodule AshNeo4j.Test do
     test "type node can be created using ash with properties" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> Ash.create()
       #|> IO.inspect(label: "ash create response")
-      Enum.each(@type_properties, fn {key, value} ->  assert Map.get(type, key) == value end)
+      assert type.url == @url
+      Enum.each(Map.drop(@type_properties, [:url]), fn {key, value} ->  assert Map.get(type, key) == value end)
     end
 
     test "post node can be created using ash" do

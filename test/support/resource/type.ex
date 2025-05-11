@@ -9,7 +9,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_struct, :array_term,
       :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :float,:function, :integer,
       :json_string, :keyword, :map, :mapset, :module, :naive_datetime, :regex, :string, :struct, :term,
-      :time, :time_usec, :tuple, :url_encoded_binary, :utc_datetime_usec]
+      :time, :time_usec, :tuple, :url, :utc_datetime_usec]
   end
 
   actions do
@@ -69,7 +69,7 @@ defmodule AshNeo4j.Test.Resource.Type do
         b: [type: :boolean]
       ]
     end
-    attribute :url_encoded_binary, :url_encoded_binary, public?: true
+    attribute :url, :url_encoded_binary, public?: true
     attribute :utc_datetime_usec, :utc_datetime_usec, public?: true
   end
 end
