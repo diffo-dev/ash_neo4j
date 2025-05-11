@@ -282,8 +282,6 @@ defmodule AshNeo4j.DataLayer do
   defp limit_stream(stream, limit), do: Stream.take(stream, limit)
 
   defp create_from_records(records, resource, changeset, _retry?) do
-    IO.inspect(records, label: "create_from_records records")
-    IO.inspect(changeset, label: "create_from_records changeset")
     pkey = Ash.Resource.Info.primary_key(resource)
     pkey_value = Map.take(changeset.attributes, pkey)
     if (pkey_value == nil) do

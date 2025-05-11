@@ -24,7 +24,7 @@ defmodule AshNeo4j.Test do
     atom: :a,
     binary: <<104, 101, 197, 130, 197, 130, 111>>,
     boolean: true,
-    #ci_string: "hello",
+    ci_string: "HELLO",
     date: @today,
     datetime: @datetime_sec_now,
     decimal: Decimal.new("4.2"),

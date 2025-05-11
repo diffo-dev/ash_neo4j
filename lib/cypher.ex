@@ -43,10 +43,11 @@ defmodule AshNeo4j.Cypher do
       _ when is_struct(v, NaiveDateTime) -> wrap(NaiveDateTime.to_iso8601(v), wrap)
       _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
       _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
+      _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       # map must be after struct
       _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
       _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
-      # no specific property value format
+      # no specific property value format, requires String.Chars protocol
       _ -> wrap("#{v}", wrap)
     end
   end

@@ -33,11 +33,7 @@ defmodule AshNeo4j.DataLayer.Cast do
           Ash.Type.Binary ->
             value
           Ash.Type.CiString ->
-            case Keyword.fetch!(attribute.constraints, :casing) do
-              :upper -> String.upcase(value)
-              :lower -> String.downcase(value)
-              nil -> value
-            end
+            value
           Ash.Type.Function ->
             cast_function(value)
           Ash.Type.Module ->

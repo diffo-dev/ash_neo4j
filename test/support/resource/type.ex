@@ -32,7 +32,10 @@ defmodule AshNeo4j.Test.Resource.Type do
     end
     attribute :binary, :binary, public?: true
     attribute :boolean, :boolean, public?: true
-    attribute :ci_string, :ci_string, public?: true
+    attribute :ci_string, :ci_string do
+      public? true
+      constraints casing: :upper
+    end
     attribute :date, :date, public?: true
     attribute :datetime, :datetime, public?: true
     attribute :decimal, :decimal, public?: true
