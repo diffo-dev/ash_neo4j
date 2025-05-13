@@ -139,6 +139,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :naive_datetime     | Ash.Type.NaiveDateTime    | NaiveDateTime      | ~N[2025-05-11 07:45:41]                                | 2025-05-11T07:45:41                                    | LOCAL_DATETIME |
 | :time               | Ash.Type.Time             | Time               | ~T[07:45:41Z]                                          | 07:45:41                                               | TIME           |
 | :time_usec          | Ash.Type.TimeUsec         | Time               | ~T[07:45:41.429903Z]                                   | 07:45:41.429903                                        | TIME           |
+| :duration           | Ash.Type.Duration         | Duration           | %Duration{month: 2}                                    | PT2H                                                   | DURATION       |
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Note that :time_usec requires ash ~> 3.5.10 (to be released).
 

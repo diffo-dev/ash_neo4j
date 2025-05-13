@@ -44,6 +44,8 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_datetime(value)
           Ash.Type.UtcDatetime ->
             cast_datetime(value)
+          Ash.Type.Duration ->
+            AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration(value)
           Ash.Type.UtcDatetimeUsec ->
             cast_datetime(value)
           Ash.Type.NaiveDatetime ->

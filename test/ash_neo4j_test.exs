@@ -23,6 +23,7 @@ defmodule AshNeo4j.Test do
     date: ~D[2025-05-11],
     datetime: ~U[2025-05-11 07:45:41Z],
     decimal: Decimal.new("4.2"),
+    duration: %Duration{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
     integer: 1,
@@ -58,6 +59,7 @@ defmodule AshNeo4j.Test do
     "date" => "2025-05-11",
     "datetime" => "2025-05-11T07:45:41Z",
     "decimal" => "Decimal.new(\"4.2\")",
+    "duration" => %Boltx.Types.Duration{seconds: 7, nanoseconds: 8000, minutes: 6, hours: 5, days: 25, months: 2, weeks: 0, years: 1},
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
@@ -88,15 +90,16 @@ defmodule AshNeo4j.Test do
   setup do
     on_exit(fn ->
       #Neo4jHelper.delete_notes(:Type)
-      #Neo4jHelper.delete_nodes(:Post)
-      #Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_all()
+      Neo4jHelper.delete_nodes(:Post)
+      Neo4jHelper.delete_nodes(:Comment)
+      #Neo4jHelper.delete_all()
     end)
   end
 
   describe "doctests" do
+    doctest AshNeo4j.DataLayer.BoltxHelper
     doctest AshNeo4j.Cypher
-    doctest Neo4jHelper
+    doctest AshNeo4j.Neo4jHelper
   end
 
   describe "Boltx configuration tests" do

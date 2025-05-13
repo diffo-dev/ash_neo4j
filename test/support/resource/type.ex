@@ -7,7 +7,7 @@ defmodule AshNeo4j.Test.Resource.Type do
   neo4j do
     label :Type
     store [:uuid, :array_atom, :array_boolean, :array_integer, :array_string, :array_map, :array_struct, :array_term,
-      :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :float,:function, :integer,
+      :atom, :binary, :boolean, :ci_string, :date, :datetime, :decimal, :duration, :float,:function, :integer,
       :json_string, :keyword, :map, :mapset, :module, :naive_datetime, :regex, :string, :struct, :term,
       :time, :time_usec, :tuple, :url, :utc_datetime_usec]
   end
@@ -40,6 +40,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :date, :date, public?: true
     attribute :datetime, :datetime, public?: true
     attribute :decimal, :decimal, public?: true
+    attribute :duration, :duration, public?: true
     attribute :float, :float, public?: true
     attribute :function, :function, public?: true
     attribute :integer, :integer, public?: true
