@@ -90,9 +90,9 @@ defmodule AshNeo4j.Test do
   setup do
     on_exit(fn ->
       #Neo4jHelper.delete_notes(:Type)
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      #Neo4jHelper.delete_all()
+      #Neo4jHelper.delete_nodes(:Post)
+      #Neo4jHelper.delete_nodes(:Comment)
+      Neo4jHelper.delete_all()
     end)
   end
 
