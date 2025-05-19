@@ -53,7 +53,7 @@ defmodule AshNeo4j.Neo4jHelper do
   end
 
   @doc """
-  Creates a neo4j node with label and properties
+  Merges a neo4j node with label and properties
 
   ## Examples
   ```
@@ -65,6 +65,25 @@ defmodule AshNeo4j.Neo4jHelper do
   def merge_node(label, properties) when is_atom(label) do
     "MERGE " <> Cypher.node(:n, label, properties) <> " RETURN n"
     |> Cypher.run()
+  end
+
+  @doc """
+  Updates neo4j node properties
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.update_node(:Actor, %{name: "Bill Nighy"}, %{born: 1949})
+  iex> result
+  :ok
+  ```
+  """
+  def update_node(label, match_properties, set_properties) when is_atom(label) do
+    IO.inspect(match_properties, label: :update_node_match_properties)
+    IO.inspect(set_properties, label: :update_node_set_properties)
+    "MATCH " <> Cypher.node(:n, label, match_properties) <> " SET n += " <> Cypher.properties(set_properties) <> " RETURN n"
+    |> IO.inspect(label: :update_node_cypher)
+    |> Cypher.run() |> IO.inspect(label: :update_node_cypher_result)
   end
 
   @doc """
@@ -85,6 +104,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
   @doc """
   Tests if two nodes are related with a relationship type
     ## Examples

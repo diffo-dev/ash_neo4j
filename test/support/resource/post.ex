@@ -14,6 +14,14 @@ defmodule AshNeo4j.Test.Resource.Post do
   actions do
     default_accept :*
     defaults [:read, :create]
+    update :update do
+      primary? true
+      require_atomic? false
+      argument :add_comments, {:array, :uuid}
+      accept [:score]
+
+      change manage_relationship(:add_comments, :comments, type: :append_and_remove)
+    end
   end
 
   attributes do

@@ -404,26 +404,41 @@ defmodule AshNeo4j.Test do
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment4"}) |> Ash.create()
       assert comment.title == "comment4"
     end
+  end
 
-    defp create_post_nodes(count) when is_integer(count) do
-      for i <- 1..count do
-        Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
-      end
+  describe "ash update action tests" do
+    test "post can be updated using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post5"}) |> Ash.create()
+      {:ok, updated_post} = post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update() |> Ash.load([:comments]) |> IO.inspect(label: :related?)
+      assert updated_post.score == 1
     end
 
-    defp create_comment_nodes(count) when is_integer(count) do
-      for i <- 1..count do
-        Neo4jHelper.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
-      end
+    test "post and comment node can be related using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post6"}) |> Ash.create()
+      {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment5"}) |> Ash.create()
+      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update() |> Ash.load([:comments]) |> IO.inspect(label: :related?)
+      assert hd(related_post.comments).name == "comment5"
     end
+  end
 
-    defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
-      for post <- 1..posts do
-        Neo4jHelper.create_node(:Post, %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
-        for comment <- 1..comments do
-          Neo4jHelper.create_node(:Comment, %{title: "comment#{post}.#{comment}", uuid: comment_uuid = Ash.UUID.generate()})
-          Neo4jHelper.relate_nodes(:Comment, %{uuid: comment_uuid}, :Post, %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
-        end
+  defp create_post_nodes(count) when is_integer(count) do
+    for i <- 1..count do
+      Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
+    end
+  end
+
+  defp create_comment_nodes(count) when is_integer(count) do
+    for i <- 1..count do
+      Neo4jHelper.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+    end
+  end
+
+  defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
+    for post <- 1..posts do
+      Neo4jHelper.create_node(:Post, %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
+      for comment <- 1..comments do
+        Neo4jHelper.create_node(:Comment, %{title: "comment#{post}.#{comment}", uuid: comment_uuid = Ash.UUID.generate()})
+        Neo4jHelper.relate_nodes(:Comment, %{uuid: comment_uuid}, :Post, %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
       end
     end
   end

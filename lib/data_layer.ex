@@ -14,7 +14,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def can?(_, :read), do: true
   def can?(_, :create), do: true
-  #def can?(_, :update), do: true
+  def can?(_, :update), do: true
   #def can?(_, :upsert), do: true
   #def can?(_, :destroy), do: true
   def can?(_, :sort), do: true
@@ -119,7 +119,6 @@ defmodule AshNeo4j.DataLayer do
           #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
-
   end
 
   @impl true
@@ -129,6 +128,18 @@ defmodule AshNeo4j.DataLayer do
         create_from_records(records, resource, changeset, false)
       {:error, _} ->
         {:error, "create failed"}
+    end
+  end
+
+  @impl true
+  def update(resource, changeset) do
+    IO.inspect(resource, label: :resource)
+    IO.inspect(changeset, label: :update)
+    case run_query(%Query{resource: resource}, resource) do
+      {:ok, records} ->
+        update_from_records(records, resource, changeset, false)
+      {:error, _} ->
+        {:error, "update failed"}
     end
   end
 
@@ -281,14 +292,12 @@ defmodule AshNeo4j.DataLayer do
   defp limit_stream(stream, nil), do: stream
   defp limit_stream(stream, limit), do: Stream.take(stream, limit)
 
-  defp create_from_records(records, resource, changeset, _retry?) do
-    pkey = Ash.Resource.Info.primary_key(resource)
-    pkey_value = Map.take(changeset.attributes, pkey)
-    if (pkey_value == nil) do
-      IO.puts("warning: pkey #{pkey} is nil")
-    end
-    if Enum.find(records, fn record -> Map.take(record, pkey) == pkey_value end) do
-      {:error, "Record is not unique"}
+  defp create_from_records(_records, resource, changeset, _retry?) do
+    # don't use records yet, but expect to for upsert
+    primary_keys = Ash.Resource.Info.primary_key(resource)
+    id_attributes = Map.take(changeset.attributes, primary_keys)
+    if Enum.empty?(id_attributes) do
+      {:error, "no values supplied for primary keys #{primary_keys}"}
     else
       create_from_attributes(resource, changeset.attributes)
     end
@@ -307,5 +316,32 @@ defmodule AshNeo4j.DataLayer do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp update_from_records(records, resource, changeset, _retry?) do
+    IO.inspect(records, label: :update_from_records_records)
+    update_from_attributes(resource, id_properties(resource, changeset.data), changeset.attributes)
+  end
+
+  defp update_from_attributes(resource, id, attributes) when is_atom(resource) and is_map(id) and is_map(attributes) do
+    store = Info.store(resource)
+    stored = Enum.into(store, %{}, fn field -> {field, Map.get(attributes, field)} end)
+    translate = Info.translate(resource)
+    properties = Enum.into(translate, stored, fn {resource_field, node_field} ->
+      {node_field, Map.get(attributes, resource_field)} end)
+    case Info.label(resource) |> Neo4jHelper.update_node(id, properties) do
+      {:ok, %Boltx.Response{results: [ node_map | _ ]}} ->
+        node = Map.get(node_map, "n")
+        {:ok, convert_node_to_resource(resource, node)}
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
+    primary_keys = Ash.Resource.Info.primary_key(resource)
+    translate = Info.translate(resource)
+    translated_keys = Enum.into(primary_keys, [], fn key -> Keyword.get(translate, key, key) end)
+    Map.take(map, translated_keys) |> IO.inspect(label: :id_properties)
   end
 end
