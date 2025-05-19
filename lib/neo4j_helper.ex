@@ -79,15 +79,12 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def update_node(label, match_properties, set_properties) when is_atom(label) do
-    IO.inspect(match_properties, label: :update_node_match_properties)
-    IO.inspect(set_properties, label: :update_node_set_properties)
     "MATCH " <> Cypher.node(:n, label, match_properties) <> " SET n += " <> Cypher.properties(set_properties) <> " RETURN n"
-    |> IO.inspect(label: :update_node_cypher)
-    |> Cypher.run() |> IO.inspect(label: :update_node_cypher_result)
+    |> Cypher.run()
   end
 
   @doc """
-  Relates two nodes with a relationship type
+  Relates two nodes with a relationship type, merging relationship
     ## Examples
   ```
   iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
@@ -99,8 +96,8 @@ defmodule AshNeo4j.Neo4jHelper do
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
     when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and is_atom(edge_label) and is_atom(edge_direction) do
-    "MATCH " <> Cypher.node(:s, source_label, source_properties) <> " MATCH " <> Cypher.node(:d, dest_label, dest_properties) <>
-      " CREATE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d"
+    "MATCH " <> Cypher.node(:s, source_label, source_properties) <> ", " <> Cypher.node(:d, dest_label, dest_properties) <>
+      " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d"
     |> Cypher.run()
   end
 

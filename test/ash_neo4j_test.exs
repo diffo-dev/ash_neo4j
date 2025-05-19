@@ -409,15 +409,15 @@ defmodule AshNeo4j.Test do
   describe "ash update action tests" do
     test "post can be updated using ash" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post5"}) |> Ash.create()
-      {:ok, updated_post} = post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update() |> Ash.load([:comments]) |> IO.inspect(label: :related?)
+      {:ok, updated_post} = post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update() |> Ash.load([:comments])
       assert updated_post.score == 1
     end
 
     test "post and comment node can be related using ash" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post6"}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment5"}) |> Ash.create()
-      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update() |> Ash.load([:comments]) |> IO.inspect(label: :related?)
-      assert hd(related_post.comments).name == "comment5"
+      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
+      assert hd(related_post.comments).title == "comment5"
     end
   end
 
