@@ -479,7 +479,25 @@ defmodule AshNeo4j.Test do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post6"}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment5"}) |> Ash.create()
       {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
+      # the post should have the comment
       assert hd(related_post.comments).title == "comment5"
+      # now read the comment, it should have the post_id
+      related_comment = comment|> Ash.load!([:post_id])
+      assert related_comment.post_id == post.id
+    end
+
+    test "post and comments nodes can be related using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
+      {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
+      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id]) |> Ash.update()
+      # the post should have the comments
+      assert length(related_post.comments) == 2
+      # now read the comments, they should have the post_id
+      related_comment1 = comment1 |> Ash.load!([:post_id])
+      related_comment2 = comment2 |> Ash.load!([:post_id])
+      assert related_comment1.post_id == post.id
+      assert related_comment2.post_id == post.id
     end
   end
 
