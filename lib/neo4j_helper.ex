@@ -5,6 +5,9 @@ defmodule AshNeo4j.Neo4jHelper do
   AshNeo4j DataLayer Neo4j Helper
   """
 
+  @spec create_node(atom(), map()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
   Creates a neo4j node with label and properties
 
@@ -20,6 +23,9 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec delete_all() ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
   Delete all neo4j nodes and relationships
 
@@ -35,21 +41,31 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec delete_nodes(atom()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
   Delete neo4j nodes
 
   ## Examples
   ```
-  iex> {result, _} = AshNeo4j.Neo4jHelper.delete_nodes(:Post)
+  iex> {result, _} = AshNeo4j.Neo4jHelper.delete_nodes(:Actor)
+  iex> result
+  :ok
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.delete_nodes(:Actor, %{name: "Bill Nighy"})
   iex> result
   :ok
   ```
   """
-  def delete_nodes(label) when is_atom(label) do
-    ("MATCH " <> Cypher.node(:n, label) <> " DETACH DELETE n")
+  def delete_nodes(label, properties \\ %{}) when is_atom(label) do
+    ("MATCH " <> Cypher.node(:n, label, properties) <> " DETACH DELETE n")
     |> Cypher.run()
   end
 
+  @spec merge_node(atom(), map()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
   Merges a neo4j node with label and properties
 
@@ -65,6 +81,9 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec update_node(atom(), map(), map()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
   Updates neo4j node properties
 

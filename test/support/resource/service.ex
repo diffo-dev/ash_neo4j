@@ -5,14 +5,15 @@ defmodule AshNeo4j.Test.Resource.Service do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label(:Service)
-    store([:name, :state, :status])
-    translate(id: :uuid)
-    relate([{:services, :MANAGES, :outgoing}, {:resources, :USES, :outgoing}])
+    label :Service
+    store [:name, :state, :status]
+    translate id: :uuid
+    relate [{:services, :MANAGES, :outgoing}, {:resources, :USES, :outgoing}]
   end
 
   actions do
-    defaults create: :*
+    defaults [:create, :destroy]
+    default_accept [:name, :state, :status]
 
     read :read do
       primary? true
