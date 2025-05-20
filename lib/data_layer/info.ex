@@ -55,9 +55,10 @@ defmodule AshNeo4j.DataLayer.Info do
   @doc """
   Returns the source node property name given the source resource and destination attribute name, i.e. post_id returns uuid
   """
-  @spec source_node_property_name(Ash.Resource.t(), atom()) :: atom() | nil
-  def source_node_property_name(source_resource, dest_attribute_name)
-      when is_atom(source_resource) and is_atom(dest_attribute_name) do
+  @spec source_node_property_name(Ash.Resource.t(), atom(), atom()) :: atom() | nil
+  def source_node_property_name(source_resource, dest_resource, dest_attribute_name)
+      when is_atom(source_resource) and is_atom(dest_resource) and is_atom(dest_attribute_name) do
+    # TODO use dest resource to figure out the dest_prefix
     dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
     attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
     Keyword.get(translate(source_resource), attribute_name, attribute_name)

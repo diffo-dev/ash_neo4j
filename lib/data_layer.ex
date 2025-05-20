@@ -364,7 +364,7 @@ defmodule AshNeo4j.DataLayer do
         source_label = Info.label(source_resource)
         source_attribute_name = Map.get(accessing_from, :name)
         dest_attribute_name = hd(Map.keys(changeset.attributes))
-        source_node_property_name = Info.source_node_property_name(source_resource, dest_attribute_name)
+        source_node_property_name = Info.source_node_property_name(source_resource, dest_resource, dest_attribute_name)
         node_relationship = Info.node_relationship(source_resource, source_attribute_name)
 
         case node_relationship do

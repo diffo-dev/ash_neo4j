@@ -4,6 +4,8 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Resource.Service
+  alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
@@ -110,10 +112,12 @@ defmodule AshNeo4j.Test do
 
   setup do
     on_exit(fn ->
-      # Neo4jHelper.delete_notes(:Type)
-      # Neo4jHelper.delete_nodes(:Post)
-      # Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_all()
+      Neo4jHelper.delete_nodes(:Actor)
+      Neo4jHelper.delete_nodes(:Movie)
+      Neo4jHelper.delete_nodes(:Type)
+      Neo4jHelper.delete_nodes(:Post)
+      Neo4jHelper.delete_nodes(:Comment)
+      # Neo4jHelper.delete_all()
     end)
   end
 
@@ -482,7 +486,7 @@ defmodule AshNeo4j.Test do
       # the post should have the comment
       assert hd(related_post.comments).title == "comment5"
       # now read the comment, it should have the post_id
-      related_comment = comment|> Ash.load!([:post_id])
+      related_comment = comment |> Ash.load!([:post_id])
       assert related_comment.post_id == post.id
     end
 
@@ -490,7 +494,10 @@ defmodule AshNeo4j.Test do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
-      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id]) |> Ash.update()
+
+      {:ok, related_post} =
+        post |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id]) |> Ash.update()
+
       # the post should have the comments
       assert length(related_post.comments) == 2
       # now read the comments, they should have the post_id
@@ -498,6 +505,51 @@ defmodule AshNeo4j.Test do
       related_comment2 = comment2 |> Ash.load!([:post_id])
       assert related_comment1.post_id == post.id
       assert related_comment2.post_id == post.id
+    end
+
+    test "service-service-resource-resource relationships using ash" do
+      {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service"}) |> Ash.create()
+      {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service"}) |> Ash.create()
+
+      {:ok, _related_parent_service} =
+        parent_service |> Ash.Changeset.for_update(:update, manage_services: [child_service.id]) |> Ash.update()
+
+      {:ok, parent_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "parent_resource"}) |> Ash.create()
+
+      {:ok, _related_child_service} =
+        child_service |> Ash.Changeset.for_update(:update, use_resources: [parent_resource.id]) |> Ash.update()
+
+      {:ok, child_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "child_resource"}) |> Ash.create()
+
+      {:ok, _related_parent_resource} =
+        parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "parent_service"},
+               :Service,
+               %{name: "child_service"},
+               :MANAGES,
+               :outgoing
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "child_service"},
+               :Resource,
+               %{name: "parent_resource"},
+               :USES,
+               :outgoing
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Resource,
+               %{name: "parent_resource"},
+               :Resource,
+               %{name: "child_resource"},
+               :USES,
+               :outgoing
+             )
     end
   end
 
