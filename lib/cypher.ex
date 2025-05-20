@@ -72,7 +72,8 @@ defmodule AshNeo4j.Cypher do
   "s.name IS NOT NULL"
   ```
   """
-  def expression(variable, left, operator, right) when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
+  def expression(variable, left, operator, right)
+      when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
     if operator == "in" && right == "[]" do
       "#{variable}.#{left} IS NOT NULL"
     else
@@ -112,12 +113,15 @@ defmodule AshNeo4j.Cypher do
   "-[r:KNOWS]-"
   ```
   """
-  def relationship(variable, label, direction \\ nil) when is_atom(variable) and is_atom(label) and is_atom(direction) do
+  def relationship(variable, label, direction \\ nil)
+      when is_atom(variable) and is_atom(label) and is_atom(direction) do
     case direction do
       :outgoing ->
         "-[#{variable}:#{label}]->"
+
       :incoming ->
         "<-[#{variable}:#{label}]-"
+
       _ ->
         "-[#{variable}:#{label}]-"
     end
@@ -152,7 +156,7 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   def run(cypher) when is_bitstring(cypher) do
-    #IO.inspect(cypher, label: :run_cypher)
+    # IO.inspect(cypher, label: :run_cypher)
     Boltx.query(Bolt, cypher)
   end
 end

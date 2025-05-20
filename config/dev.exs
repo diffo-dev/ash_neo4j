@@ -7,7 +7,9 @@ config :boltx, Bolt,
   pool_size: 15,
   max_overflow: 3,
   prefix: :default,
-  name: Bolt
+  name: Bolt,
+  log: true,
+  log_hex: true
 
 config :git_ops,
   mix_project: Mix.Project.get!(),
@@ -38,3 +40,14 @@ config :git_ops,
   # Pass in `true` to use `"README.md"` or a string to customize
   manage_readme_version: "README.md",
   version_tag_prefix: "v"
+
+level =
+  if System.get_env("DEBUG") do
+    :debug
+  else
+    :info
+  end
+
+config :logger, :console,
+  level: level,
+  format: "$date $time [$level] $metadata$message\n"

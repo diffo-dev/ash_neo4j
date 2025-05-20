@@ -1,11 +1,9 @@
 defmodule AshNeo4j.Neo4jHelper do
-
   alias AshNeo4j.Cypher
 
   @moduledoc """
   AshNeo4j DataLayer Neo4j Helper
   """
-
 
   @doc """
   Creates a neo4j node with label and properties
@@ -18,7 +16,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def create_node(label, properties) when is_atom(label) do
-    "CREATE " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    ("CREATE " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
 
@@ -48,7 +46,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def delete_nodes(label) when is_atom(label) do
-    "MATCH " <> Cypher.node(:n, label) <> " DETACH DELETE n"
+    ("MATCH " <> Cypher.node(:n, label) <> " DETACH DELETE n")
     |> Cypher.run()
   end
 
@@ -63,7 +61,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def merge_node(label, properties) when is_atom(label) do
-    "MERGE " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    ("MERGE " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
 
@@ -79,7 +77,8 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def update_node(label, match_properties, set_properties) when is_atom(label) do
-    "MATCH " <> Cypher.node(:n, label, match_properties) <> " SET n += " <> Cypher.properties(set_properties) <> " RETURN n"
+    ("MATCH " <>
+       Cypher.node(:n, label, match_properties) <> " SET n += " <> Cypher.properties(set_properties) <> " RETURN n")
     |> Cypher.run()
   end
 
@@ -95,9 +94,13 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-    when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and is_atom(edge_label) and is_atom(edge_direction) do
-    "MATCH " <> Cypher.node(:s, source_label, source_properties) <> ", " <> Cypher.node(:d, dest_label, dest_properties) <>
-      " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d"
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+             is_atom(edge_label) and is_atom(edge_direction) do
+    ("MATCH " <>
+       Cypher.node(:s, source_label, source_properties) <>
+       ", " <>
+       Cypher.node(:d, dest_label, dest_properties) <>
+       " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d")
     |> Cypher.run()
   end
 
@@ -114,11 +117,18 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-  when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and is_atom(edge_label) and is_atom(edge_direction) do
-    cypher = "MATCH "<> Cypher.node(:s, source_label, source_properties) <> Cypher.relationship(:r, edge_label, edge_direction) <> Cypher.node(:d, dest_label, dest_properties) <> " RETURN s, r, d"
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+             is_atom(edge_label) and is_atom(edge_direction) do
+    cypher =
+      "MATCH " <>
+        Cypher.node(:s, source_label, source_properties) <>
+        Cypher.relationship(:r, edge_label, edge_direction) <>
+        Cypher.node(:d, dest_label, dest_properties) <> " RETURN s, r, d"
+
     case Cypher.run(cypher) do
       {:ok, %{records: records}} ->
         length(records) > 0
+
       {:error, error} ->
         IO.puts("Error running query: #{inspect(error)}")
         :error
@@ -137,7 +147,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    "MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    ("MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
 end

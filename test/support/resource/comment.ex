@@ -5,10 +5,10 @@ defmodule AshNeo4j.Test.Resource.Comment do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :Comment
-    store [:title]
-    translate id: :uuid
-    relate [{:post, :BELONGS_TO, :outgoing}]
+    label(:Comment)
+    store([:title])
+    translate(id: :uuid)
+    relate([{:post, :BELONGS_TO, :outgoing}])
   end
 
   actions do
