@@ -41,7 +41,6 @@ defmodule AshNeo4j.Test do
     struct: %Struct{},
     term: %Struct{},
     time: ~T[07:45:41Z],
-    # needs ash with #2023 PR
     time_usec: ~T[07:45:41.429903Z],
     tuple: {:a, 1, false},
     utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
@@ -96,7 +95,6 @@ defmodule AshNeo4j.Test do
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "time" => "07:45:41",
-    # needs ash with #2023 PR
     "time_usec" => "07:45:41.429903",
     "tuple" => "{:a, 1, false}",
     "utc_datetime_usec" => "2025-05-11T07:45:41.429903Z",
