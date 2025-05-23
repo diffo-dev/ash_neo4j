@@ -21,6 +21,13 @@ defmodule AshNeo4j.MixProject do
       ],
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: &docs/0,
+      dialyzer: [plt_add_apps: [:jason, :poison, :mix], ignore_warnings: ".dialyzer_ignore.exs"],
+      test_coverage: [
+        tool: ExCoveralls,
+        summary: [
+          threshold: 70
+        ]
+      ],
       aliases: aliases(),
       # ex_doc
       name: @name,
@@ -90,10 +97,10 @@ defmodule AshNeo4j.MixProject do
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},
       {:git_ops, "~> 2.7", only: [:dev], runtime: false},
-      {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:credo, ">= 1.7.3", only: [:dev, :test], runtime: false},
+      {:dialyxir, ">= 1.4.3", only: [:dev, :test], runtime: false},
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:excoveralls, "~> 0.13", only: [:dev, :test]},
+      {:excoveralls, "~> 0.18.0", only: [:dev, :test]},
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false}
     ]
   end

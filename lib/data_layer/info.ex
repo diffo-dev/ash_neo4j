@@ -23,29 +23,45 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :relate, [], true)
   end
 
-  @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: list(tuple) | nil
-  def node_relationship(resource, source_attribute) do
+  @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
+  def node_relationship(resource, source_attribute) when is_atom(source_attribute) do
+    List.keyfind(relate(resource), source_attribute, 0)
+  end
+
+  def node_relationship(resource, source_attribute) when is_bitstring(source_attribute) do
     List.keyfind(relate(resource), String.to_atom(source_attribute), 0)
   end
 
-  @doc"""
+  @doc """
   Returns any matching Ash.Resource.Info relationship given relationship and destination node labels
   """
   @spec relationship(Ash.Resource.t(), atom(), atom()) :: struct() | nil
-  def relationship(resource, relationship_label, dest_label) when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
-    relationships = Enum.into(relate(resource), [], fn {relationship_name, edge_label, _edge_direction} ->
-      relationship = Ash.Resource.Info.relationship(resource, relationship_name)
-      relationship_destination_label = Module.split(relationship.destination) |> List.last() |> String.to_atom()
-      if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
-        relationship
-      end
-    end)
-    if length(relationships) == 1 do
-      List.first(relationships)
-    else
-      nil
-    end
-    #|> IO.inspect(label: "Info.relationship result")
+  def relationship(resource, relationship_label, dest_label)
+      when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
+    relationships =
+      Enum.into(relate(resource), [], fn {relationship_name, edge_label, _edge_direction} ->
+        relationship = Ash.Resource.Info.relationship(resource, relationship_name)
+        relationship_destination_label = Module.split(relationship.destination) |> List.last() |> String.to_atom()
+
+        if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
+          relationship
+        end
+      end)
+
+    hd(relationships)
+    # |> IO.inspect(label: "Info.relationship result")
+  end
+
+  @doc """
+  Returns the source node property name given the source resource and destination attribute name, i.e. post_id returns uuid
+  """
+  @spec source_node_property_name(Ash.Resource.t(), atom(), atom()) :: atom() | nil
+  def source_node_property_name(source_resource, dest_resource, dest_attribute_name)
+      when is_atom(source_resource) and is_atom(dest_resource) and is_atom(dest_attribute_name) do
+    # TODO use dest resource to figure out the dest_prefix
+    dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
+    attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
+    Keyword.get(translate(source_resource), attribute_name, attribute_name)
   end
 
   @doc """
@@ -53,7 +69,7 @@ defmodule AshNeo4j.DataLayer.Info do
   The attribute name can be an Ash.Query.Ref or atom
   """
   @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
-  def convert_to_property_name(resource, ash_query_ref) when is_struct(ash_query_ref) do
+  def convert_to_property_name(resource, ash_query_ref) when is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     convert_to_property_name(resource, attribute_name)
   end
@@ -61,6 +77,7 @@ defmodule AshNeo4j.DataLayer.Info do
   @spec convert_to_property_name(Ash.Resource.t(), atom()) :: String.t() | nil
   def convert_to_property_name(resource, attribute_name) when is_atom(attribute_name) do
     translate = translate(resource)
+
     case Keyword.get(translate, attribute_name) do
       nil -> attribute_name
       resource_name -> resource_name

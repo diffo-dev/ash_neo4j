@@ -7,4 +7,17 @@ config :boltx, Bolt,
   pool_size: 15,
   max_overflow: 3,
   prefix: :default,
-  name: Bolt
+  name: Bolt,
+  log: true,
+  log_hex: true
+
+level =
+  if System.get_env("DEBUG") do
+    :debug
+  else
+    :info
+  end
+
+config :logger, :console,
+  level: level,
+  format: "$date $time [$level] $metadata$message\n"

@@ -5,15 +5,24 @@ defmodule AshNeo4j.Test.Resource.Post do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :Post
-    store [:title, :score, :public, :unique]
-    translate id: :uuid
-    relate [{:comments, :BELONGS_TO, :incoming}]
+    label(:Post)
+    store([:title, :score, :public, :unique])
+    translate(id: :uuid)
+    relate([{:comments, :BELONGS_TO, :incoming}])
   end
 
   actions do
     default_accept :*
     defaults [:read, :create]
+
+    update :update do
+      primary? true
+      require_atomic? false
+      argument :add_comments, {:array, :uuid}
+      accept [:score]
+
+      change manage_relationship(:add_comments, :comments, type: :append_and_remove)
+    end
   end
 
   attributes do

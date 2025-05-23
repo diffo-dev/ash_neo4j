@@ -1,9 +1,9 @@
 defmodule AshNeo4j.DataLayer.BoltxHelper do
-
   @moduledoc """
   AshNeo4j DataLayer BoltxHelper functions
   """
 
+  @spec to_elixir_duration(%{optional(:days) => integer(), optional(any()) => any()}) :: Duration.t()
   @doc """
   Converts a Boltx.Types.Duration to an Elixir Duration
 
@@ -25,15 +25,29 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
     end
     |> Map.put(:year, value.years)
     |> Map.put(:month, value.months)
-    |> Map.put(:week, Integer.floor_div(value.days, 7)) # excess days
-    |> Map.put(:day, Integer.mod(value.days, 7)) # remainder days
+    # excess days
+    |> Map.put(:week, Integer.floor_div(value.days, 7))
+    # remainder days
+    |> Map.put(:day, Integer.mod(value.days, 7))
     |> Map.put(:hour, value.hours)
     |> Map.put(:minute, value.minutes)
     |> Map.put(:second, value.seconds)
+    |> Map.reject(fn {_k, v} -> v == nil end)
     |> Duration.new!()
-    #|> IO.inspect(label: :to_elixir_duration_result)
+
+    # |> IO.inspect(label: :to_elixir_duration_result)
   end
 
+  @spec from_elixir_duration(%{
+          optional(:day) => integer(),
+          optional(:hour) => integer(),
+          optional(:minute) => integer(),
+          optional(:month) => integer(),
+          optional(:second) => integer(),
+          optional(:week) => integer(),
+          optional(:year) => integer(),
+          optional(any()) => any()
+        }) :: Boltx.Types.Duration.t()
   @doc """
   Converts an Elixir Duration to a Boltx.Types.Duration
 
@@ -50,15 +64,18 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
     months = value.year * 12 + value.month
     days = value.week * 7 + value.day
     seconds = value.hour * 3600 + value.minute * 60 + value.second
+
     nanoseconds =
       cond do
         value.microsecond == nil ->
           0
+
         true ->
-          { ms, _precision} = value.microsecond
+          {ms, _precision} = value.microsecond
           ms * 1000
       end
+
     Boltx.Types.Duration.create(months, days, seconds, nanoseconds)
-    #|> IO.inspect(label: :from_elixir_duration_result)
+    # |> IO.inspect(label: :from_elixir_duration_result)
   end
 end

@@ -14,16 +14,16 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def can?(_, :read), do: true
   def can?(_, :create), do: true
-  #def can?(_, :update), do: true
-  #def can?(_, :upsert), do: true
-  #def can?(_, :destroy), do: true
+  def can?(_, :update), do: true
+  # def can?(_, :upsert), do: true
+  # def can?(_, :destroy), do: true
   def can?(_, :sort), do: true
   def can?(_, :filter), do: true
   def can?(_, :limit), do: true
   # def can?(_, :bulk_create), do: true
   def can?(_, :offset), do: true
   def can?(_, :boolean_filter), do: true
-  #def can?(_, :transact), do: true
+  # def can?(_, :transact), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, :expression_calculation_sort), do: true
@@ -105,10 +105,11 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
+
       {:ok, nodes} ->
         results =
           convert_nodes_to_resources(query.resource, nodes)
@@ -116,19 +117,31 @@ defmodule AshNeo4j.DataLayer do
           |> sort_stream(query.resource, query.domain, query.sort)
           |> offset_stream(query.offset)
           |> limit_stream(query.limit)
-          #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+
+        # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
-
   end
 
   @impl true
   def create(resource, changeset) do
     case run_query(%Query{resource: resource}, resource) do
       {:ok, records} ->
-        create_from_records(records, resource, changeset, false)
+        create_from_changeset(records, resource, changeset)
+
       {:error, _} ->
         {:error, "create failed"}
+    end
+  end
+
+  @impl true
+  def update(resource, changeset) do
+    case run_query(%Query{resource: resource}, resource) do
+      {:ok, records} ->
+        update_from_changeset(records, resource, changeset)
+
+      {:error, _} ->
+        {:error, "update failed"}
     end
   end
 
@@ -175,7 +188,7 @@ defmodule AshNeo4j.DataLayer do
   def filter_matches(records, nil, _domain), do: records
 
   def filter_matches(records, filter, domain) do
-    #IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
+    # IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     deduplicate(filter.resource, records)
   end
@@ -183,21 +196,24 @@ defmodule AshNeo4j.DataLayer do
   # deduplicates records by primary key
   defp deduplicate(resource, records) when is_atom(resource) and is_list(records) do
     if length(records) > 1 do
-      #IO.inspect(records, label: "AshNeo4j.DataLayer.deduplicate records")
-      primary_keys = Ash.Resource.Info.primary_key(resource) #|> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate keys")
+      # IO.inspect(records, label: "AshNeo4j.DataLayer.deduplicate records")
+      # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate keys")
+      primary_keys = Ash.Resource.Info.primary_key(resource)
+
       case length(primary_keys) do
         1 ->
-          #primary_key = List.first(primary_keys)
+          # primary_key = List.first(primary_keys)
           Enum.into(records, %{}, fn record ->
             composite_key_value = Enum.map_join(primary_keys, "_", fn primary_key -> Map.get(record, primary_key) end)
-            {composite_key_value, record} end)
+            {composite_key_value, record}
+          end)
           |> Map.values()
-          # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate result")
+
+        # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate result")
         _ ->
           # TODO handle composite primary key
           records
       end
-
     else
       records
     end
@@ -207,21 +223,23 @@ defmodule AshNeo4j.DataLayer do
   # the output of each group is a single resource, enriched with attributes linking related nodes
   defp convert_nodes_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
     groups
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(fn related_nodes ->
       source_node = Map.get(related_nodes, "s")
       edge = Map.get(related_nodes, "r")
       dest_node = Map.get(related_nodes, "d")
+
       if edge != nil && dest_node != nil do
         # enrich the source node
         dest_label = String.to_atom(List.first(dest_node.labels))
         relationship_label = String.to_atom(edge.type)
         relationship = Info.relationship(resource, relationship_label, dest_label)
-        if (relationship != nil) do
+
+        if relationship != nil do
           dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
           enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
           convert_node_to_resource(resource, source_node, [enrichment])
-          #|> IO.inspect(label: :enriched_source_resource)
+          # |> IO.inspect(label: :enriched_source_resource)
         else
           IO.puts("unable to enrich source node")
           convert_node_to_resource(resource, source_node)
@@ -229,32 +247,41 @@ defmodule AshNeo4j.DataLayer do
       else
         convert_node_to_resource(resource, source_node)
       end
-      #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
+
+      # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
     end)
   end
 
-  defp convert_node_to_resource(resource, node, enrichments \\ []) when is_atom(resource) and is_map(node) and is_list(enrichments) do
-    #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
-    enriched = Enum.into(enrichments, %{}, fn {field, value} ->
-      {field, value}
-    end) #|> IO.inspect(label: :enriched)
+  defp convert_node_to_resource(resource, node, enrichments \\ [])
+       when is_atom(resource) and is_map(node) and is_list(enrichments) do
+    # IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
+    enriched =
+      Enum.into(enrichments, %{}, fn {field, value} ->
+        {field, value}
+      end)
+
+    # |> IO.inspect(label: :enriched)
     # stored or translated fields will overwrite enrichments
-    stored = Enum.into(Info.store(resource), enriched, fn field ->
-      property_value = Map.get(node.properties, to_string(field))
-      {field, Cast.cast(resource, field, property_value)}
-    end) #|> IO.inspect(label: :stored)
+    stored =
+      Enum.into(Info.store(resource), enriched, fn field ->
+        property_value = Map.get(node.properties, to_string(field))
+        {field, Cast.cast(resource, field, property_value)}
+      end)
+
+    # |> IO.inspect(label: :stored)
     Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
     |> Map.put(:__metadata__, %{})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do
@@ -281,31 +308,96 @@ defmodule AshNeo4j.DataLayer do
   defp limit_stream(stream, nil), do: stream
   defp limit_stream(stream, limit), do: Stream.take(stream, limit)
 
-  defp create_from_records(records, resource, changeset, _retry?) do
-    pkey = Ash.Resource.Info.primary_key(resource)
-    pkey_value = Map.take(changeset.attributes, pkey)
-    if (pkey_value == nil) do
-      IO.puts("warning: pkey #{pkey} is nil")
-    end
-    if Enum.find(records, fn record -> Map.take(record, pkey) == pkey_value end) do
-      {:error, "Record is not unique"}
+  defp create_from_changeset(_records, resource, changeset) do
+    # don't use records yet, but expect to for upsert
+    primary_keys = Ash.Resource.Info.primary_key(resource)
+    id_attributes = Map.take(changeset.attributes, primary_keys)
+
+    if Enum.empty?(id_attributes) do
+      {:error, "no values supplied for primary keys #{primary_keys}"}
     else
       create_from_attributes(resource, changeset.attributes)
     end
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    store = Info.store(resource)
-    stored = Enum.into(store, %{}, fn field-> {field, Map.get(attributes, field)} end)
-    translate = Info.translate(resource)
-    properties = Enum.into(translate, stored, fn {resource_field, node_field} ->
-      {node_field, Map.get(attributes, resource_field)} end)
+    # store = Info.store(resource)
+    # stored = Enum.into(store, %{}, fn field-> {field, Map.get(attributes, field)} end)
+    # translate = Info.translate(resource)
+    # properties = Enum.into(translate, stored, fn {resource_field, node_field} ->
+    #  {node_field, Map.get(attributes, resource_field)} end)
+    properties = properties(resource, attributes)
+
     case Info.label(resource) |> Neo4jHelper.create_node(properties) do
-      {:ok, %Boltx.Response{results: [ node_map | _ ]}} ->
+      {:ok, %Boltx.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         {:ok, convert_node_to_resource(resource, node)}
+
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp update_from_changeset(_records, dest_resource, changeset)
+       when is_atom(dest_resource) and is_struct(changeset, Ash.Changeset) do
+    dest_id = id_properties(dest_resource, changeset.data)
+    properties = properties(dest_resource, changeset.attributes)
+
+    cond do
+      !Enum.empty?(properties) ->
+        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, properties) do
+          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+            node = Map.get(node_map, "n")
+            {:ok, convert_node_to_resource(dest_resource, node)}
+
+          {:error, error} ->
+            {:error, error}
+        end
+
+      true ->
+        accessing_from = Map.get(changeset.context, :accessing_from)
+
+        # relate nodes, for example Comment resource, changeset.attributes: %{post_id: "5d5fcf34-f6cc-461b-9867-5da7b6f6ae44"}
+        # where changeset.context: %{accessing_from: %{name: :comments, source: AshNeo4j.Test.Resource.Post}}
+        dest_label = Info.label(dest_resource)
+        source_resource = Map.get(accessing_from, :source)
+        source_label = Info.label(source_resource)
+        source_attribute_name = Map.get(accessing_from, :name)
+        dest_attribute_name = hd(Map.keys(changeset.attributes))
+        source_node_property_name = Info.source_node_property_name(source_resource, dest_resource, dest_attribute_name)
+        node_relationship = Info.node_relationship(source_resource, source_attribute_name)
+
+        case node_relationship do
+          nil ->
+            {:error, "node relationship interdeterminate"}
+
+          {_relationship_name, edge_label, edge_direction} ->
+            source_id = %{source_node_property_name => Map.get(changeset.attributes, dest_attribute_name)}
+
+            case Neo4jHelper.relate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
+              {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                node = Map.get(node_map, "d")
+                {:ok, convert_node_to_resource(dest_resource, node)}
+
+              {:error, error} ->
+                {:error, error}
+            end
+        end
+    end
+  end
+
+  defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
+    primary_keys = Ash.Resource.Info.primary_key(resource)
+    translate = Info.translate(resource)
+    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translate, key, key), Map.get(map, key)} end)
+  end
+
+  defp properties(resource, map) when is_atom(resource) and is_map(map) do
+    store = Info.store(resource)
+    stored = Map.take(map, store)
+    translate = Info.translate(resource)
+
+    Enum.into(translate, stored, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
+    |> Map.reject(fn {_k, v} -> v == nil end)
   end
 end
