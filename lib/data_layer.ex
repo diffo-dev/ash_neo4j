@@ -105,7 +105,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
@@ -118,31 +118,19 @@ defmodule AshNeo4j.DataLayer do
           |> offset_stream(query.offset)
           |> limit_stream(query.limit)
 
-        # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+        #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
   end
 
   @impl true
   def create(resource, changeset) do
-    case run_query(%Query{resource: resource}, resource) do
-      {:ok, records} ->
-        create_from_changeset(records, resource, changeset)
-
-      {:error, _} ->
-        {:error, "create failed"}
-    end
+    create_from_changeset(nil, resource, changeset)
   end
 
   @impl true
   def update(resource, changeset) do
-    case run_query(%Query{resource: resource}, resource) do
-      {:ok, records} ->
-        update_from_changeset(records, resource, changeset)
-
-      {:error, _} ->
-        {:error, "update failed"}
-    end
+    update_from_changeset(nil, resource, changeset)
   end
 
   @impl true

@@ -597,6 +597,16 @@ defmodule AshNeo4j.Test do
     end
   end
 
+  describe "limit tests" do
+    test "limit is optimised" do
+      for i <- 1..10 do
+        Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
+      end
+      {:ok, result} = Comment |> Ash.Query.limit(3) |> Ash.read()
+      assert length(result) == 3
+    end
+  end
+
   defp create_post_nodes(count) when is_integer(count) do
     for i <- 1..count do
       Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})

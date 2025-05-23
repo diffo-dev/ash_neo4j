@@ -154,8 +154,11 @@ defmodule AshNeo4j.Neo4jHelper do
     end
   end
 
+  @spec read_nodes(atom()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   @doc """
-  Reads nodes from Neo4j, given label and optionally properties
+  Reads nodes from Neo4j, given label, and optionally properties
 
   ## Examples
   ```
@@ -166,7 +169,32 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    ("MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n")
+    "MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    |> Cypher.run()
+  end
+
+
+  @spec read_limited(atom(), nil | integer()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  @doc """
+  Reads limited nodes from Neo4j, given label, limit and optionally properties
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> {:ok, %{records: records}} = AshNeo4j.Neo4jHelper.read_limited(:Actor, 1)
+  iex> length(records)
+  1
+  ```
+  """
+  def read_limited(label, limit, properties \\ %{}) when is_atom(label) and is_map(properties) do
+    case limit do
+      nil ->
+        "MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n"
+      _ ->
+        "MATCH " <> Cypher.node(:n, label) <> " RETURN n LIMIT #{limit}"
+    end
     |> Cypher.run()
   end
 end

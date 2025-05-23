@@ -14,7 +14,7 @@ defmodule AshNeo4j.QueryHelper do
   @spec query_nodes(struct()) :: {:error, any()} | {:ok, any()}
   def query_nodes(ash_query) when is_struct(ash_query) do
     # |> IO.inspect(label: "query_nodes cypher")
-    cypher = cypher(ash_query)
+    cypher = cypher(ash_query) |> limit(ash_query)
 
     case Cypher.run(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
@@ -25,6 +25,13 @@ defmodule AshNeo4j.QueryHelper do
     end
 
     # |> IO.inspect(label: "query_nodes results")
+  end
+
+  defp limit(cypher, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
+    case ash_query.limit do
+      nil -> cypher
+      _ -> cypher <> " LIMIT #{ash_query.limit}"
+    end
   end
 
   defp cypher(ash_query) when is_struct(ash_query) do
