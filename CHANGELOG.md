@@ -16,5 +16,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * create
 
 ### Bug Fixes:
-
 * read arbitrary resource
+
+## [v0.1.2](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.2...v0.1.2) (2025-05-23)
+
+### Features:
+* property types, duration, relate, destroy
+
+
