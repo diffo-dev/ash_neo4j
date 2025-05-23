@@ -5,9 +5,9 @@ defmodule AshNeo4j.Test.Resource.Type do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label(:Type)
+    label :Type
 
-    store([
+    store [
       :uuid,
       :array_atom,
       :array_boolean,
@@ -42,12 +42,12 @@ defmodule AshNeo4j.Test.Resource.Type do
       :tuple,
       :url,
       :utc_datetime_usec
-    ])
+    ]
   end
 
   actions do
     default_accept :*
-    defaults [:read, :create]
+    defaults [:read, :create, :destroy]
   end
 
   attributes do

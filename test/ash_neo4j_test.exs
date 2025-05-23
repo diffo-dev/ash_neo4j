@@ -41,7 +41,6 @@ defmodule AshNeo4j.Test do
     struct: %Struct{},
     term: %Struct{},
     time: ~T[07:45:41Z],
-    # needs ash with #2023 PR
     time_usec: ~T[07:45:41.429903Z],
     tuple: {:a, 1, false},
     utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
@@ -96,7 +95,6 @@ defmodule AshNeo4j.Test do
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "time" => "07:45:41",
-    # needs ash with #2023 PR
     "time_usec" => "07:45:41.429903",
     "tuple" => "{:a, 1, false}",
     "utc_datetime_usec" => "2025-05-11T07:45:41.429903Z",
@@ -112,12 +110,12 @@ defmodule AshNeo4j.Test do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Actor)
-      Neo4jHelper.delete_nodes(:Movie)
-      Neo4jHelper.delete_nodes(:Type)
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      # Neo4jHelper.delete_all()
+      # Neo4jHelper.delete_nodes(:Actor)
+      # Neo4jHelper.delete_nodes(:Movie)
+      # Neo4jHelper.delete_nodes(:Type)
+      # Neo4jHelper.delete_nodes(:Post)
+      # Neo4jHelper.delete_nodes(:Comment)
+      Neo4jHelper.delete_all()
     end)
   end
 
@@ -550,6 +548,38 @@ defmodule AshNeo4j.Test do
                :USES,
                :outgoing
              )
+    end
+  end
+
+  describe "ash destroy action tests" do
+    test "type can be destroyed using ash" do
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
+      :ok = type |> Ash.destroy!()
+    end
+
+    test "related post can be destroyed using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post8"}) |> Ash.create()
+      {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
+
+      {:ok, related_post} =
+        post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
+
+      :ok = related_post |> Ash.destroy()
+
+      {:ok, preserved_comment} = comment |> Ash.load([:post_id])
+      assert Map.get(preserved_comment, :post_id) == nil
+    end
+
+    test "related comment can be destroyed using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post9"}) |> Ash.create()
+      {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment9"}) |> Ash.create()
+
+      {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
+
+      :ok = comment |> Ash.destroy()
+
+      {:ok, preserved_post} = related_post |> Ash.load([:comments])
+      assert preserved_post.comments == []
     end
   end
 

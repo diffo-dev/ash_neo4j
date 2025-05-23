@@ -16,7 +16,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, :create), do: true
   def can?(_, :update), do: true
   # def can?(_, :upsert), do: true
-  # def can?(_, :destroy), do: true
+  def can?(_, :destroy), do: true
   def can?(_, :sort), do: true
   def can?(_, :filter), do: true
   def can?(_, :limit), do: true
@@ -142,6 +142,24 @@ defmodule AshNeo4j.DataLayer do
 
       {:error, _} ->
         {:error, "update failed"}
+    end
+  end
+
+  @impl true
+  def destroy(resource, changeset) do
+    destroy_record(resource, changeset.data)
+  end
+
+  defp destroy_record(resource, record) do
+    label = AshNeo4j.DataLayer.Info.label(resource)
+    id_properties = id_properties(resource, record)
+
+    case Neo4jHelper.delete_nodes(label, id_properties) do
+      {:ok, _} ->
+        :ok
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

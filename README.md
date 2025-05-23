@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.1"},
+    {:ash_neo4j, "~> 0.1.2"},
   ]
 end
 ```
@@ -108,6 +108,27 @@ I've used Neo4j community edition 4.4 (bolt 4.4) and to connect using boltx I ne
 
 We've made some decisions around how Ash/Elixir types are used to persist attributes as Neo4j properties. Where possible we've used 'native' Neo4j types, where this is not possible we've simply quoted to strings. Ash Array support is limited by Neo4j to lists of simple types which must be homogenous.
 
+<style>
+table th:first-of-type {
+    width: 10%;
+}
+table th:nth-of-type(2) {
+    width: 10%;
+}
+table th:nth-of-type(3) {
+    width: 10%;
+}
+table th:nth-of-type(4) {
+    width: 30%;
+}
+table th:nth-of-type(5) {
+    width: 30%;
+}
+table th:nth-of-type(46 {
+    width: 10%;
+}
+</style>
+
 | Ash Type shortname  | Ash Type Module           | Elixir Type Module | Attribute Value Example                                | Neo4j Node Property Value Cypher Example               | Cypher Type    |
 |---------------------|---------------------------|--------------------|--------------------------------------------------------|--------------------------------------------------------|----------------|
 | :atom               | Ash.Type.Atom             | Atom               | :a                                                     | ":a"                                                   | STRING         |
@@ -116,11 +137,11 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :integer            | Ash.Type.Integer          | Integer            | 1                                                      | 1                                                      | INTEGER        |
 | :float              | Ash.Type.Float            | Float              | 1.23456789                                             | 1.23456789                                             | FLOAT          |
 | :string             | Ash.Type.String           | BitString          | "hello"                                                | "hello"                                                | STRING         |
-| :tuple              | Ash.Type.Tuple            | Tuple              | {:a, 1, false}                                         | "{:a, 1, false}"                                       | STRING         |
-| :keyword            | Ash.Type.Keyword          | Keyword            | [{:a, :atom}, {:s, "string"}]                          | ["{:a, :atom}","{:s, string}"]                         | LIST           |
-| :map                | Ash.Type.Map              | Map                | %{c: false, a: "a", b: 1, n: nil}                      | "%{c: false, a: "a", b: 1, n: nil}"                    | STRING         |
+| :tuple              | Ash.Type.Tuple            | Tuple              | \{:a, 1, false\}                                         | "\{:a, 1, false\}"                                       | STRING         |
+| :keyword            | Ash.Type.Keyword          | Keyword            | [\{:a, :atom\}, \{:s, "string"\}]                          | ["\{:a, :atom}\","\{:s, string\}"]                         | LIST           |
+| :map                | Ash.Type.Map              | Map                | %\{c: false, a: "a", b: 1, n: nil\}                      | "%\{c: false, a: "a", b: 1, n: nil\}"                    | STRING         |
 | :mapset             | Ash.Type.MapSet           | MapSet             | MapSet.new([1, false, :two])                           | "MapSet.new([1, false, :two])"                         | STRING         |
-| :struct             | Ash.Type.Struct           | Struct             | %MyApp.Struct{a: :a, s: "Hello"}                       | "%MyApp.Struct{a: :a, s: \"Hello\"}"                   | STRING         |
+| :struct             | Ash.Type.Struct           | Struct             | %MyApp.Struct{a: :a, s: "Hello"}                       | "%MyApp.Struct\{a: :a, s: \"Hello\"\}"                   | STRING         |
 | :uuid               | Ash.Type.UUID             | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                 | "0274972c-161c-4dc9-882f-6851704c2af9                  | STRING         |
 | :url_encoded_binary | Ash.Type.UrlEncodedBinary | BitString          | "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"                       | "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw                        | STRING         |
 | :decimal            | Ash.Type.Decimal          | Decimal            | Decimal.new("4.2")                                     | "Decimal.new(\"4.2\")"                                 | STRING         |
@@ -128,11 +149,11 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :function           | Ash.Type.Function         | Function           | &AshNeo4j.Neo4jHelper.create_node/2                    | "&AshNeo4j.Neo4jHelper.create_node/2"                  | STRING         |
 | :module             | Ash.Type.Module           | Module             | AshNeo4j.DataLayer                                     | ":Elixir.AshNeo4j.DataLayer"                           | STRING         |
 | :regex              | Ash.Type.Regex            | Regex              | ~r/foo/iu                                              | "~r/foo/iu"                                            | STRING         |
-| {:array, :atom}     | -                         | List               | [:a,:b,:c]                                             | [":a",":b",":c"]                                       | LIST           |
-| {:array, :boolean}  | -                         | List               | [true,true,false]                                      | [true,true,false]                                      | LIST           |
-| {:array, :integer}  | -                         | List               | [1,2,3]                                                | [1,2,3]                                                | LIST           |
-| {:array, :map}      | -                         | List               | [%MyApp.Struct{a: :a, s: "Hello"}]                     | ["%MyApp.Struct{a: :a, s: \"Hello\"}"]                 | LIST           |
-| {:array, :term}     | -                         | List               | [%MyApp.Struct{a: :a, s: "Hello"}]                     | ["%MyApp.Struct{a: :a, s: \"Hello\"}"]                 | LIST           |
+| \{:array, :atom\}     | -                         | List               | [:a,:b,:c]                                             | [":a",":b",":c"]                                       | LIST           |
+| \{:array, :boolean\}  | -                         | List               | [true,true,false]                                      | [true,true,false]                                      | LIST           |
+| \{:array, :integer\}  | -                         | List               | [1,2,3]                                                | [1,2,3]                                                | LIST           |
+| \{:array, :map\}      | -                         | List               | [%MyApp.Struct\{a: :a, s: "Hello"\}]                     | ["%MyApp.Struct\{a: :a, s: \"Hello\"\}"]                 | LIST           |
+| \{:array, :term\}     | -                         | List               | [%MyApp.Struct\{a: :a, s: "Hello"\}]                     | ["%MyApp.Struct\{a: :a, s: \"Hello\"\}"]                 | LIST           |
 | :date               | Ash.Type.Date             | Date               | ~D[2025-02-25]                                         | 2025-05-11                                             | DATE           |
 | :datetime           | Ash.Type.DateTime         | DateTime           | ~U[2025-02-25 11:59:00Z]                               | 2025-05-11T07:45:41Z                                   | ZONED_DATETIME |
 | :utc_datetime_usec  | Ash.Type.UtcDateTimeUsec  | DateTime           | ~U[2025-02-25 11:59:00.123456Z]                        | 2025-05-11T07:45:41.429903Z                            | ZONED_DATETIME |
@@ -151,7 +172,7 @@ Generally attributes with nil value are not persisted, rather than created with 
 
 Ash Neo4j is early stage, it is likely that the dsl will evolve and this may break back compatibility. Store is likely to be removed in favour of introspecting resource attributes. The dsl lacks validation and doesn't yet make appropriate use of transform.
 
-Currently ash_neo4j supports Ash read actions, with some limited support for create. Support for create relationships, merge and delete is work in progress.
+Currently ash_neo4j has limited support for Ash create, update, read, destroy actions, and is in 'build' phase.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or issues as appropriate.
 
