@@ -505,6 +505,20 @@ defmodule AshNeo4j.Test do
       assert related_comment2.post_id == post.id
     end
 
+    test "post and comment nodes can be updated and related using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
+      {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
+
+      {:ok, related_post} =
+        post |> Ash.Changeset.new |> Ash.Changeset.change_attribute(:score, 1) |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
+        |> Ash.update()
+      # the post should have the comments
+      assert length(related_post.comments) == 2
+      # the post should also have the updated score
+      assert related_post.score == 1
+    end
+
     test "service-service-resource-resource relationships using ash" do
       {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service"}) |> Ash.create()
       {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service"}) |> Ash.create()
