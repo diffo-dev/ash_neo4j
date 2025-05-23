@@ -17,19 +17,47 @@ defmodule AshNeo4j.Cypher do
   def properties(map) when is_map(map) do
     properties =
       map
-      |> Enum.map_join(", ",
-        fn {k, v} ->
-          case v do
-            nil -> "#{k}: null"
-            _ when is_integer(v) -> "#{k}: #{v}"
-            _ when is_float(v) -> "#{k}: #{v}"
-            _ when is_boolean(v) -> "#{k}: #{v}"
-            _ when is_list(v) -> "#{k}: #{inspect(v)}"
-            _ -> "#{k}: '#{v}'"
-          end
-        end)
+      |> Enum.map_join(", ", &property(&1))
 
     "{#{properties}}"
+  end
+
+  defp property(property) when is_tuple(property) do
+    {k, v} = property
+    "#{k}: " <> value(v, "'")
+  end
+
+  defp value(v, wrap \\ nil) do
+    case v do
+      nil -> "null"
+      _ when is_boolean(v) -> "#{v}"
+      # atom must be after boolean
+      _ when is_atom(v) -> wrap(":#{v}", wrap)
+      _ when is_integer(v) -> "#{v}"
+      _ when is_float(v) -> "#{v}"
+      _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
+      _ when is_function(v) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, Date) -> wrap(Date.to_iso8601(v), wrap)
+      _ when is_struct(v, DateTime) -> wrap(DateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, Decimal) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, NaiveDateTime) -> wrap(NaiveDateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
+      _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
+      _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
+      # map must be after struct
+      _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
+      _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
+      # no specific property value format, requires String.Chars protocol
+      _ -> wrap("#{v}", wrap)
+    end
+  end
+
+  defp wrap(v, nil) when is_nil(nil) do
+    v
+  end
+
+  defp wrap(v, wrap) when is_bitstring(wrap) do
+    wrap <> v <> wrap
   end
 
   @doc """

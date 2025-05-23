@@ -6,6 +6,22 @@ defmodule AshNeo4j.Neo4jHelper do
   AshNeo4j DataLayer Neo4j Helper
   """
 
+
+  @doc """
+  Creates a neo4j node with label and properties
+
+  ## Examples
+  ```
+  iex> {result, _} = AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> result
+  :ok
+  ```
+  """
+  def create_node(label, properties) when is_atom(label) do
+    "CREATE " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    |> Cypher.run()
+  end
+
   @doc """
   Delete all neo4j nodes and relationships
 
@@ -22,17 +38,17 @@ defmodule AshNeo4j.Neo4jHelper do
   end
 
   @doc """
-  Creates a neo4j node with label and properties
+  Delete neo4j nodes
 
   ## Examples
   ```
-  iex> {result, _} = AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.delete_nodes(:Post)
   iex> result
   :ok
   ```
   """
-  def create_node(label, properties) when is_atom(label) do
-    "CREATE " <> Cypher.node(:n, label, properties) <> " RETURN n"
+  def delete_nodes(label) when is_atom(label) do
+    "MATCH " <> Cypher.node(:n, label) <> " DETACH DELETE n"
     |> Cypher.run()
   end
 

@@ -7,6 +7,7 @@ defmodule AshNeo4j.DataLayer do
   alias AshNeo4j.DataLayer.Info
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.DataLayer.Cast
 
   @filter_stream_size 100
 
@@ -236,13 +237,15 @@ defmodule AshNeo4j.DataLayer do
     #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     enriched = Enum.into(enrichments, %{}, fn {field, value} ->
       {field, value}
-    end)
+    end) #|> IO.inspect(label: :enriched)
     # stored or translated fields will overwrite enrichments
     stored = Enum.into(Info.store(resource), enriched, fn field ->
-      {field, Map.get(node.properties, to_string(field))}
-    end)
+      property_value = Map.get(node.properties, to_string(field))
+      {field, Cast.cast(resource, field, property_value)}
+    end) #|> IO.inspect(label: :stored)
     Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
-      {resource_field, Map.get(node.properties, to_string(node_field))}
+      property_value = Map.get(node.properties, to_string(node_field))
+      {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
     #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
@@ -281,6 +284,9 @@ defmodule AshNeo4j.DataLayer do
   defp create_from_records(records, resource, changeset, _retry?) do
     pkey = Ash.Resource.Info.primary_key(resource)
     pkey_value = Map.take(changeset.attributes, pkey)
+    if (pkey_value == nil) do
+      IO.puts("warning: pkey #{pkey} is nil")
+    end
     if Enum.find(records, fn record -> Map.take(record, pkey) == pkey_value end) do
       {:error, "Record is not unique"}
     else
