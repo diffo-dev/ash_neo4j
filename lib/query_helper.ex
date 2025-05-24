@@ -13,8 +13,8 @@ defmodule AshNeo4j.QueryHelper do
   """
   @spec query_nodes(struct()) :: {:error, any()} | {:ok, any()}
   def query_nodes(ash_query) when is_struct(ash_query) do
-    # |> IO.inspect(label: "query_nodes cypher")
-    cypher = cypher(ash_query) |> limit(ash_query)
+    cypher = cypher(ash_query) |> order_by(ash_query) |> limit(ash_query)
+      #|> IO.inspect(label: :query_nodes_cypher)
 
     case Cypher.run(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
@@ -23,14 +23,30 @@ defmodule AshNeo4j.QueryHelper do
       {:error, _} ->
         {:error, "Error running cypher #{cypher}"}
     end
-
-    # |> IO.inspect(label: "query_nodes results")
+    #|> IO.inspect(label: "query_nodes results")
   end
 
   defp limit(cypher, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
     case ash_query.limit do
       nil -> cypher
       _ -> cypher <> " LIMIT #{ash_query.limit}"
+    end
+  end
+
+  defp order_by(cypher, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
+    case ash_query.sort do
+      [] -> cypher
+      _ ->
+        translate = AshNeo4j.DataLayer.Info.translate(ash_query.resource)
+        terms = Enum.map_join(ash_query.sort, ", ",
+          fn {name, order} ->
+            case order do
+               :desc ->  "s.#{Keyword.get(translate, name, name)} DESC"
+               _ -> "s.#{Keyword.get(translate, name, name)} ASC"
+            end
+          end)
+
+        cypher <> " " <> "ORDER BY " <> terms
     end
   end
 
