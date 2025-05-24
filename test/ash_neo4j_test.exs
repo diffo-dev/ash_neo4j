@@ -597,13 +597,45 @@ defmodule AshNeo4j.Test do
     end
   end
 
-  describe "limit tests" do
+  describe "sort and limit tests" do
     test "limit is optimised" do
-      for i <- 1..10 do
+      for i <- 11..15 do
         Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
       end
       {:ok, result} = Comment |> Ash.Query.limit(3) |> Ash.read()
       assert length(result) == 3
+    end
+
+    test "sort is optimised" do
+      for i <- 16..18 do
+        Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
+      end
+      {:ok, result} = Comment |> Ash.Query.sort(title: :desc) |> Ash.read()
+      assert length(result) == 3
+      expected = ["comment18", "comment17", "comment16"]
+      assert Enum.into(result, [], fn comment -> comment.title end) == expected
+    end
+
+    test "sort asc and desc is optimised" do
+      for i <- 1..3 do
+        Post |> Ash.Changeset.for_create(:create, %{title: "post#{i}", score: div(i + 1, 2)}) |> Ash.create()
+      end
+      {:ok, result} = Post |> Ash.Query.sort(score: :desc, title: :asc) |> Ash.read()
+      assert length(result) == 3
+      expected_title = ["post3", "post1", "post2"]
+      expected_score = [2, 1, 1]
+      assert Enum.into(result, [], fn post -> post.title end) == expected_title
+      assert Enum.into(result, [], fn post -> post.score end) == expected_score
+    end
+
+    test "limit and sort together" do
+      for i <- 21..25 do
+        Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
+      end
+      {:ok, result} = Comment |> Ash.Query.sort(title: :desc) |> Ash.Query.limit(3) |> Ash.read()
+      assert length(result) == 3
+      expected = ["comment25", "comment24", "comment23"]
+      assert Enum.into(result, [], fn comment -> comment.title end) == expected
     end
   end
 
