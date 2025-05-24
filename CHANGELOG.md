@@ -10,7 +10,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Features:
 * initial version, read only
 
-## [v0.1.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.1...v0.1.1) (2025-05-05)
+## [v0.1.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.0...v0.1.1) (2025-05-05)
 
 ### Features:
 * create
@@ -18,9 +18,14 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Bug Fixes:
 * read arbitrary resource
 
-## [v0.1.2](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.2...v0.1.2) (2025-05-23)
+## [v0.1.2](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.1...v0.1.2) (2025-05-23)
 
 ### Features:
 * property types, duration, relate, destroy
+
+## [v0.1.3](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.2...v0.1.3) (2025-05-24)
+
+### Features:
+* sort, offset, limit
 
 
