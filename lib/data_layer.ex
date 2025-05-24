@@ -3,7 +3,6 @@ defmodule AshNeo4j.DataLayer do
 
   @behaviour Ash.DataLayer
 
-  alias Ash.Actions.Sort
   alias AshNeo4j.DataLayer.Info
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
@@ -114,9 +113,6 @@ defmodule AshNeo4j.DataLayer do
         results =
           convert_nodes_to_resources(query.resource, nodes)
           |> filter_stream(query.domain, query.filter)
-          |> sort_stream(query.resource, query.domain, query.sort)
-          |> offset_stream(query.offset)
-          |> limit_stream(query.limit)
 
         #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
@@ -290,14 +286,6 @@ defmodule AshNeo4j.DataLayer do
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
-  defp sort_stream(stream, _resource, _domain, sort) when sort in [nil, []] do
-    stream
-  end
-
-  defp sort_stream(stream, resource, domain, sort) do
-    Sort.runtime_sort(stream, sort, domain: domain, resource: resource)
-  end
-
   defp filter_stream(stream, _domain, nil), do: stream
 
   defp filter_stream(stream, domain, filter) do
@@ -307,12 +295,6 @@ defmodule AshNeo4j.DataLayer do
       filter_matches(chunk, filter, domain)
     end)
   end
-
-  defp offset_stream(stream, offset) when offset in [0, nil], do: stream
-  defp offset_stream(stream, offset), do: Stream.drop(stream, offset)
-
-  defp limit_stream(stream, nil), do: stream
-  defp limit_stream(stream, limit), do: Stream.take(stream, limit)
 
   defp create_from_changeset(_records, resource, changeset) do
     # don't use records yet, but expect to for upsert
