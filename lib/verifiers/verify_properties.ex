@@ -11,7 +11,7 @@ defmodule AshNeo4j.Verifiers.VerifyProperties do
     resource = Verifier.get_persisted(dsl, :module)
     store = Verifier.get_option(dsl, [:neo4j], :store, [])
     translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
-    property_names = store ++ Keyword.values(translate) |> IO.inspect(label: :property_names)
+    property_names = store ++ Keyword.values(translate)
     cond do
       property_names == [] ->
         :ok

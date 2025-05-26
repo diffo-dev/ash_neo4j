@@ -2,6 +2,7 @@ defmodule AshNeo4j.DataLayer.Transformer do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
+  alias Spark.Dsl.Verifier
 
   @verifiers [
     AshNeo4j.Verifiers.VerifyLabelCamelCase,
@@ -28,8 +29,8 @@ defmodule AshNeo4j.DataLayer.Transformer do
   end
 
   defp add_translations(dsl) do
-    store = AshNeo4j.DataLayer.Info.store(dsl)
-    translate = AshNeo4j.DataLayer.Info.translate(dsl)
+    store = Verifier.get_option(dsl, [:neo4j], :store, [])
+    translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
     attributes = Enum.into(store, [], fn attribute -> {attribute, attribute} end)
     translation = Keyword.merge(attributes, translate)
     Transformer.set_option(dsl, [:neo4j], :translation, translation)
