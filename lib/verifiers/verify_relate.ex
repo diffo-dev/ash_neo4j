@@ -9,9 +9,9 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    relate = Verifier.get_option(dsl, [:neo4j], :relate, nil)
+    relate = Verifier.get_option(dsl, [:neo4j], :relate, [])
     cond do
-      relate == nil ->
+      relate == [] ->
         :ok
 
         true ->

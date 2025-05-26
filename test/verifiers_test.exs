@@ -72,5 +72,45 @@ defmodule AshNeo4j.Verifiers.Test do
         end
       end
     end
+
+    test "property style - store" do
+      assert_raise Spark.Error.DslError, fn ->
+        defmodule InvalidStoreProperty do
+          @moduledoc false
+          use Ash.Resource,
+            domain: AshNeo4j.Test.Domain,
+            data_layer: AshNeo4j.DataLayer
+          neo4j do
+            label :Resource
+            store [:_name]
+          end
+
+          attributes do
+            uuid_primary_key :id, writable?: true
+            attribute :_name, :string, public?: true
+          end
+        end
+      end
+    end
+
+    test "property style - translate" do
+      assert_raise Spark.Error.DslError, fn ->
+        defmodule InvalidTranslateProperty do
+          @moduledoc false
+          use Ash.Resource,
+            domain: AshNeo4j.Test.Domain,
+            data_layer: AshNeo4j.DataLayer
+          neo4j do
+            label :Resource
+            translate [:name, :_name]
+          end
+
+          attributes do
+            uuid_primary_key :id, writable?: true
+            attribute :name, :string, public?: true
+          end
+        end
+      end
+    end
   end
 end
