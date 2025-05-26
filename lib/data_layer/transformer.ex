@@ -2,7 +2,11 @@ defmodule AshNeo4j.DataLayer.Transformer do
   @moduledoc false
   use Spark.Dsl.Transformer
 
-  @verifiers [AshNeo4j.Verifiers.VerifyLabelCamelCase, AshNeo4j.Verifiers.VerifyIdTranslated]
+  @verifiers [
+    AshNeo4j.Verifiers.VerifyLabelCamelCase,
+    AshNeo4j.Verifiers.VerifyIdTranslated,
+    AshNeo4j.Verifiers.VerifyRelate
+  ]
 
   def transform(dsl) do
     Enum.reduce_while(@verifiers, :ok, fn verifier, _acc ->

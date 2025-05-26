@@ -44,5 +44,33 @@ defmodule AshNeo4j.Verifiers.Test do
         end
       end
     end
+
+    test "edge label style" do
+      assert_raise Spark.Error.DslError, fn ->
+        defmodule InvalidEdgeLabel do
+          @moduledoc false
+          use Ash.Resource,
+            domain: AshNeo4j.Test.Domain,
+            data_layer: AshNeo4j.DataLayer
+          neo4j do
+            label :Resource
+            store [:name]
+            translate id: :uuid
+            relate [{:resources, :uses, :outgoing}]
+          end
+
+          attributes do
+            uuid_primary_key :id, writable?: true
+            attribute :name, :string, public?: true
+            attribute :resource_id, :uuid, public?: true
+          end
+
+          relationships do
+            has_many :resources, InvalidEdgeLabel
+            belongs_to :resource, InvalidEdgeLabel, public?: true
+          end
+        end
+      end
+    end
   end
 end
