@@ -49,18 +49,18 @@ defmodule AshNeo4j.DataLayer do
         doc: "The node label",
         required: true
       ],
-      store: [
-        type: {:list, :atom},
-        doc: "The attributes to be stored as node properties, without translation",
-        required: true
-      ],
-      translate: [
-        type: :keyword_list,
-        doc: "Optional attribute to node property translations"
-      ],
       relate: [
         type: {:list, @node_relationship},
         doc: "Optional list of node relationships, as tuples of {relationship_name, edge_label, edge_direction}"
+      ],
+      skip: [
+        type: {:list, :atom},
+        doc: "Optional list of attributes not to be stored directly as node properties",
+        required: false
+      ],
+      translate: [
+        type: :keyword_list,
+        doc: "Optional list of attribute to node property translations"
       ]
     ]
   }
@@ -110,6 +110,7 @@ defmodule AshNeo4j.DataLayer do
         {:error, error}
 
       {:ok, nodes} ->
+        # IO.inspect(nodes, label: "run_query nodes")
         results =
           convert_nodes_to_resources(query.resource, nodes)
           |> filter_stream(query.domain, query.filter)
@@ -241,7 +242,6 @@ defmodule AshNeo4j.DataLayer do
           dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
           enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
           convert_node_to_resource(resource, source_node, [enrichment])
-          # |> IO.inspect(label: :enriched_source_resource)
         else
           IO.puts("unable to enrich source node")
           convert_node_to_resource(resource, source_node)
@@ -261,21 +261,11 @@ defmodule AshNeo4j.DataLayer do
       Enum.into(enrichments, %{}, fn {field, value} ->
         {field, value}
       end)
-
-    # |> IO.inspect(label: :enriched)
-    # stored or translated fields will overwrite enrichments
-    stored =
-      Enum.into(Info.store(resource), enriched, fn field ->
-        property_value = Map.get(node.properties, to_string(field))
-        {field, Cast.cast(resource, field, property_value)}
-      end)
-
-    # |> IO.inspect(label: :stored)
-    Enum.into(Info.translate(resource), stored, fn {resource_field, node_field} ->
+    Enum.into(Info.translation(resource), enriched, fn {resource_field, node_field} ->
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
@@ -283,7 +273,7 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp filter_stream(stream, _domain, nil), do: stream
@@ -309,11 +299,6 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    # store = Info.store(resource)
-    # stored = Enum.into(store, %{}, fn field-> {field, Map.get(attributes, field)} end)
-    # translate = Info.translate(resource)
-    # properties = Enum.into(translate, stored, fn {resource_field, node_field} ->
-    #  {node_field, Map.get(attributes, resource_field)} end)
     properties = properties(resource, attributes)
 
     case Info.label(resource) |> Neo4jHelper.create_node(properties) do
@@ -376,16 +361,13 @@ defmodule AshNeo4j.DataLayer do
 
   defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
     primary_keys = Ash.Resource.Info.primary_key(resource)
-    translate = Info.translate(resource)
-    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translate, key, key), Map.get(map, key)} end)
+    translation = Info.translation(resource)
+    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translation, key, key), Map.get(map, key)} end)
   end
 
   defp properties(resource, map) when is_atom(resource) and is_map(map) do
-    store = Info.store(resource)
-    stored = Map.take(map, store)
-    translate = Info.translate(resource)
-
-    Enum.into(translate, stored, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
+    Info.translation(resource)
+    |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
     |> Map.reject(fn {_k, v} -> v == nil end)
   end
 end

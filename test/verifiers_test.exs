@@ -12,7 +12,6 @@ defmodule AshNeo4j.Verifiers.Test do
 
           neo4j do
             label :comment
-            store [:title]
             translate id: :uuid
           end
 
@@ -34,7 +33,6 @@ defmodule AshNeo4j.Verifiers.Test do
 
           neo4j do
             label :Comment
-            store [:title]
           end
 
           attributes do
@@ -54,9 +52,8 @@ defmodule AshNeo4j.Verifiers.Test do
             data_layer: AshNeo4j.DataLayer
           neo4j do
             label :Resource
-            store [:name]
-            translate id: :uuid
             relate [{:resources, :uses, :outgoing}]
+            translate id: :uuid
           end
 
           attributes do
@@ -73,7 +70,7 @@ defmodule AshNeo4j.Verifiers.Test do
       end
     end
 
-    test "property style - store" do
+    test "property style - attribute" do
       assert_raise Spark.Error.DslError, fn ->
         defmodule InvalidStoreProperty do
           @moduledoc false
@@ -82,7 +79,6 @@ defmodule AshNeo4j.Verifiers.Test do
             data_layer: AshNeo4j.DataLayer
           neo4j do
             label :Resource
-            store [:_name]
           end
 
           attributes do

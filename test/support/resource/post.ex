@@ -6,9 +6,8 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   neo4j do
     label :Post
-    store [:title, :score, :public, :unique]
-    translate id: :uuid
     relate [{:comments, :BELONGS_TO, :incoming}]
+    translate id: :uuid
   end
 
   actions do

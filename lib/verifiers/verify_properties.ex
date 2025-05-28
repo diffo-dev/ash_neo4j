@@ -9,9 +9,12 @@ defmodule AshNeo4j.Verifiers.VerifyProperties do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    store = Verifier.get_option(dsl, [:neo4j], :store, [])
+    attributes =
+      Verifier.get_entities(dsl, [:attributes])
+      |> Enum.into([], &Map.get(&1, :name))
+      |> Enum.reject(fn name -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
     translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
-    property_names = store ++ Keyword.values(translate)
+    property_names = attributes ++ Keyword.values(translate)
     cond do
       property_names == [] ->
         :ok
@@ -21,7 +24,7 @@ defmodule AshNeo4j.Verifiers.VerifyProperties do
           {:error,
           DslError.exception(
             module: resource,
-            message: "neo4j property names should start with a letter and may contain numbers and underscores, use translate"
+            message: "neo4j: neo4j property names should start with a letter and may contain numbers and underscores"
           )}
         else
           :ok

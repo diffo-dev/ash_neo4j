@@ -15,7 +15,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelCamelCase do
         {:error,
           DslError.exception(
             module: resource,
-            message: "label missing"
+            message: "label: missing"
         )}
 
       Regex.match?(@regex, Atom.to_string(label)) ->
@@ -25,7 +25,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelCamelCase do
         {:error,
           DslError.exception(
             module: resource,
-            message: "label must be CamelCase"
+            message: "label: neo4j label must be CamelCase"
           )}
     end
   end

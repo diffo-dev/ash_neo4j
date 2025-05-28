@@ -20,7 +20,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
             {:error,
             DslError.exception(
               module: resource,
-              message: "edge label must be upper case and may have an underscore"
+              message: "relate: edge label must be upper case and may have an underscore"
             )}
           else
             relationships = Verifier.get_entities(dsl, [:relationships])
@@ -30,7 +30,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
                   {:error,
                   DslError.exception(
                     module: resource,
-                    message: "relate relationship_name must match the name of a relationship"
+                    message: "relate: relationship_name must match the name of a relationship"
                   )}
             else
               :ok
