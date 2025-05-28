@@ -6,9 +6,9 @@ defmodule AshNeo4j.Test.Resource.Resource do
 
   neo4j do
     label :Resource
-    store [:name, :state, :status]
-    translate id: :uuid
     relate [{:resources, :USES, :outgoing}]
+    skip [:service_id, :resource_id]
+    translate id: :uuid
   end
 
   actions do

@@ -1,0 +1,34 @@
+defmodule AshNeo4j.Verifiers.VerifyProperties do
+  @moduledoc "Verifies that Neo4j properties follow conventions"
+  use Spark.Dsl.Verifier
+
+  alias Spark.Dsl.Verifier
+  alias Spark.Error.DslError
+  @regex ~r/^[a-zA-Z][a-zA-Z0-9_]*$/
+
+  @impl true
+  def verify(dsl) do
+    resource = Verifier.get_persisted(dsl, :module)
+    attributes =
+      Verifier.get_entities(dsl, [:attributes])
+      |> Enum.into([], &Map.get(&1, :name))
+      |> Enum.reject(fn name -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
+    translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
+    property_names = attributes ++ Keyword.values(translate)
+    cond do
+      property_names == [] ->
+        :ok
+
+      true ->
+        if !Enum.all?(property_names, &Regex.match?(@regex, Atom.to_string(&1))) do
+          {:error,
+          DslError.exception(
+            module: resource,
+            message: "neo4j: neo4j property names should start with a letter and may contain numbers and underscores"
+          )}
+        else
+          :ok
+        end
+    end
+  end
+end

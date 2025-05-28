@@ -8,9 +8,14 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :label, nil, true)
   end
 
-  @spec store(Ash.Resource.t()) :: list() | nil
-  def store(resource) do
-    Extension.get_opt(resource, [:neo4j], :store, [], true)
+  @spec relate(Ash.Resource.t()) :: list(tuple()) | nil
+  def relate(resource) do
+    Extension.get_opt(resource, [:neo4j], :relate, [], true)
+  end
+
+  @spec skip(Ash.Resource.t()) :: list() | nil
+  def skip(resource) do
+    Extension.get_opt(resource, [:neo4j], :skip, [], true)
   end
 
   @spec translate(Ash.Resource.t()) :: keyword() | nil
@@ -18,9 +23,9 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :translate, [], true)
   end
 
-  @spec relate(Ash.Resource.t()) :: list(tuple()) | nil
-  def relate(resource) do
-    Extension.get_opt(resource, [:neo4j], :relate, [], true)
+  @spec translation(Ash.Resource.t()) :: keyword() | nil
+  def translation(resource) do
+    Extension.get_opt(resource, [:neo4j], :translation, [], true)
   end
 
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
@@ -61,7 +66,8 @@ defmodule AshNeo4j.DataLayer.Info do
     # TODO use dest resource to figure out the dest_prefix
     dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
     attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
-    Keyword.get(translate(source_resource), attribute_name, attribute_name)
+    translation(source_resource)
+    |> Keyword.get(attribute_name, attribute_name)
   end
 
   @doc """
@@ -76,12 +82,8 @@ defmodule AshNeo4j.DataLayer.Info do
 
   @spec convert_to_property_name(Ash.Resource.t(), atom()) :: String.t() | nil
   def convert_to_property_name(resource, attribute_name) when is_atom(attribute_name) do
-    translate = translate(resource)
-
-    case Keyword.get(translate, attribute_name) do
-      nil -> attribute_name
-      resource_name -> resource_name
-    end
+    translation(resource)
+    |> Keyword.get(attribute_name, attribute_name)
     |> to_string()
   end
 end

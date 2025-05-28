@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.3"},
+    {:ash_neo4j, "~> 0.1.4"},
   ]
 end
 ```
@@ -38,9 +38,8 @@ defmodule Comment.Resource do
 
   neo4j do
     label :Comment
-    store [:id, :title]
-    translate id: :uuid
     relate [{:post, :BELONGS_TO, :outgoing}]
+    translate id: :uuid
   end
 
   actions do
@@ -69,12 +68,12 @@ The DSL is used to label the Ash Resource's underlying graph node.
   end
 ```
 
-## Store
+## Relate
 
-The DSL is used to store the Ash Resource's attributes as node properties, without translation.
+The DSL is used to direct any node relationships.
 ```elixir
   neo4j do
-    store [:id, :title, :score, :public, :unique]
+    relate [{:post, :BELONGS_TO, :outgoing}]
   end
 ```
 
@@ -87,14 +86,24 @@ The DSL may be used to translate the Ash Resource's attributes to node propertie
   end
 ```
 
-## Relate
+## Skip
 
-The DSL is used to direct any node relationships.
+The DSL may be used to skip storing attributes as node properties. This is typically used for foreign keys, which not required with relate.
 ```elixir
   neo4j do
-    relate [{:post, :BELONGS_TO, :outgoing}]
+    skip [:other_id]
   end
 ```
+
+## Verifiers
+
+The DSL is verified against misconfiguration and violation of accepted neo4j conventions providing compile time errors:
+
+* label: neo4j label must be CamelCase
+* neo4j: neo4j property names should start with a letter and may contain numbers and underscores
+* relate: relationship_name must match the name of a relationship
+* relate: edge label must be upper case and may have an underscore
+* translate: :id attribute must be translated
 
 ## Installing Neo4j and Configuring Boltx
 

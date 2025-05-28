@@ -86,12 +86,12 @@ defmodule AshNeo4j.QueryHelper do
     case ash_query.sort do
       [] -> cypher
       _ ->
-        translate = AshNeo4j.DataLayer.Info.translate(ash_query.resource)
+        translation = AshNeo4j.DataLayer.Info.translation(ash_query.resource)
         terms = Enum.map_join(ash_query.sort, ", ",
           fn {name, order} ->
             case order do
-               :desc ->  "s.#{Keyword.get(translate, name, name)} DESC"
-               _ -> "s.#{Keyword.get(translate, name, name)} ASC"
+               :desc ->  "s.#{Keyword.get(translation, name, name)} DESC"
+               _ -> "s.#{Keyword.get(translation, name, name)} ASC"
             end
           end)
         cypher <> " " <> "ORDER BY " <> terms
@@ -108,6 +108,7 @@ defmodule AshNeo4j.QueryHelper do
   defp skip(cypher, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
     case ash_query.offset do
       nil -> cypher
+      0 -> cypher
       _ -> cypher <> " SKIP #{ash_query.offset}"
     end
   end
