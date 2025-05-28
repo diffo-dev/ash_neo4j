@@ -28,4 +28,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Features:
 * sort, offset, limit
 
+## [v0.1.4](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.3...v0.1.4) (2025-05-28)
+
+### Features:
+* spark improvements
+
 
