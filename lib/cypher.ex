@@ -3,6 +3,8 @@ defmodule AshNeo4j.Cypher do
   Ash Neo4j cypher functions
   """
 
+  require Logger
+
   @doc """
   Converts a map to a cypher properties string.
   The map is converted to a string in the format `{key1: value1, key2: value2}`.
@@ -157,7 +159,17 @@ defmodule AshNeo4j.Cypher do
   """
   def run(cypher) when is_bitstring(cypher) do
     #IO.inspect(cypher, label: :run_cypher)
-    Boltx.query(Bolt, cypher)
+    Logger.debug("""
+      AshNeo4j: cypher query #{cypher}
+      """)
+    boltx_result = Boltx.query(Bolt, cypher)
     #|> IO.inspect(label: :run_cypher_result)
+    case boltx_result do
+      {:ok, result} ->
+        Logger.debug("""
+        AshNeo4j: cypher query result #{inspect(result.results)}
+        """)
+    end
+    boltx_result
   end
 end

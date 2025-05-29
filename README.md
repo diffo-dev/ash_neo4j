@@ -117,26 +117,6 @@ I've used Neo4j community edition 4.4 (bolt 4.4) and to connect using boltx I ne
 
 We've made some decisions around how Ash/Elixir types are used to persist attributes as Neo4j properties. Where possible we've used 'native' Neo4j types, where this is not possible we've simply quoted to strings. Ash Array support is limited by Neo4j to lists of simple types which must be homogenous.
 
-<style>
-table th:first-of-type {
-    width: 10%;
-}
-table th:nth-of-type(2) {
-    width: 10%;
-}
-table th:nth-of-type(3) {
-    width: 10%;
-}
-table th:nth-of-type(4) {
-    width: 30%;
-}
-table th:nth-of-type(5) {
-    width: 30%;
-}
-table th:nth-of-type(46 {
-    width: 10%;
-}
-</style>
 
 | Ash Type shortname  | Ash Type Module           | Elixir Type Module | Attribute Value Example                                | Neo4j Node Property Value Cypher Example               | Cypher Type    |
 |---------------------|---------------------------|--------------------|--------------------------------------------------------|--------------------------------------------------------|----------------|

@@ -28,7 +28,7 @@ defmodule AshNeo4j.MixProject do
           threshold: 70
         ]
       ],
-      consolidate_protocols: Mix.env() != :test,
+      consolidate_protocols: Mix.env() == :prod,
       aliases: aliases(),
       # ex_doc
       name: @name,
