@@ -164,10 +164,9 @@ defmodule AshNeo4j.Cypher do
       """)
     boltx_result = Boltx.query(Bolt, cypher)
     #|> IO.inspect(label: :run_cypher_result)
-    case boltx_result do
-      {:ok, result} ->
-        Logger.debug("""
-        AshNeo4j: cypher query result #{inspect(result.results)}
+    if elem(boltx_result, 0) == :ok do
+      Logger.debug("""
+        AshNeo4j: cypher resulty #{inspect(elem(boltx_result, 1).results)}
         """)
     end
     boltx_result
