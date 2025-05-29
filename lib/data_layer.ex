@@ -13,8 +13,9 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def can?(_, :read), do: true
   def can?(_, :create), do: true
+  def can?(_, :composite_primary_key), do: true
   def can?(_, :update), do: true
-  # def can?(_, :upsert), do: true
+  def can?(_, :upsert), do: true
   def can?(_, :destroy), do: true
   def can?(_, :sort), do: true
   def can?(_, :filter), do: true
@@ -129,6 +130,19 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def create(resource, changeset) do
     create_from_changeset(nil, resource, changeset)
+  end
+
+  @impl true
+  def upsert(resource, changeset, keys) do
+    IO.inspect(changeset, label: :upsert_changeset)
+    IO.inspect(keys, label: :upsert_keys)
+    id_properties = id_properties(resource, changeset.attributes) |> IO.inspect(label: :id_properties)
+    if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
+      create(resource, changeset)
+    else
+      IO.puts("TODO upsert update")
+      #still might be create or update...
+    end
   end
 
   @impl true

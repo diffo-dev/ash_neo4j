@@ -4,6 +4,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Resource.Upsert
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Struct
@@ -464,6 +465,12 @@ defmodule AshNeo4j.Test do
     test "comment node can be created using ash" do
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment4"}) |> Ash.create()
       assert comment.title == "comment4"
+    end
+
+    test "upsert node can be upserted using ash" do
+      {:ok, upsert} = Upsert |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "one"})
+      |> Ash.create() |> IO.inspect(label: :create_upsert)
+      assert upsert.field == "one"
     end
   end
 
