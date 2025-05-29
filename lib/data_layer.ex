@@ -94,7 +94,13 @@ defmodule AshNeo4j.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: @sections,
-    persisters: [AshNeo4j.DataLayer.Transformer]
+    persisters: [AshNeo4j.DataLayer.Transformer],
+    verifiers: [
+      AshNeo4j.Verifiers.VerifyLabelCamelCase,
+      AshNeo4j.Verifiers.VerifyIdTranslated,
+      AshNeo4j.Verifiers.VerifyRelate,
+      AshNeo4j.Verifiers.VerifyProperties
+    ]
 
   defmodule Query do
     @moduledoc false
