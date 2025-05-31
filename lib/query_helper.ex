@@ -14,7 +14,7 @@ defmodule AshNeo4j.QueryHelper do
   @spec query_nodes(struct()) :: {:error, any()} | {:ok, any()}
   def query_nodes(ash_query) when is_struct(ash_query) do
     cypher = cypher(ash_query) |> order_by(ash_query) |> skip(ash_query) |> limit(ash_query)
-      #|> IO.inspect(label: :query_nodes_cypher)
+    # |> IO.inspect(label: :query_nodes_cypher)
 
     case Cypher.run(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
@@ -23,7 +23,8 @@ defmodule AshNeo4j.QueryHelper do
       {:error, _} ->
         {:error, "Error running cypher #{cypher}"}
     end
-    #|> IO.inspect(label: "query_nodes results")
+
+    # |> IO.inspect(label: "query_nodes results")
   end
 
   defp cypher(ash_query) when is_struct(ash_query) do
@@ -34,66 +35,83 @@ defmodule AshNeo4j.QueryHelper do
     else
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter)
       predicates = Map.get(simple_filter, :predicates, [])
-      # TODO handle multiple predicates
+
       if length(predicates) > 1 do
-        IO.puts("Multiple predicates, only handling first of: #{inspect(predicates)}")
-      end
-
-      predicate = hd(predicates)
-      operator = convert_operator(predicate.operator)
-
-      if operator == nil do
-        IO.puts("Unsupported operator: #{inspect(predicate.operator)}")
-        "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
+        # assuming all about source node
+        "MATCH (s:#{label}) WHERE " <>
+          predicates(ash_query.resource, predicates) <>
+          " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
       else
-        property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-        property_value = convert_value(predicate.right)
-        relationship_name = String.split(property_name, "_") |> List.first()
-        node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-        relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
-        # does the query require a related node to be loaded?
-        if operator == "in" && node_relationship != nil && relationship != nil &&
-             to_string(relationship.source_attribute) == property_name do
-          # IO.inspect(ash_query, label: :ash_query)
-          # filter is about a destination node
-          dest_label = relationship_name |> String.capitalize() |> String.to_atom()
+        # handle a single predicate
+        predicate = hd(predicates)
+        operator = convert_operator(predicate.operator)
 
-          dest_property_name =
-            Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
-
-          "MATCH " <>
-            Cypher.node(:s, label) <>
-            Cypher.relationship(node_relationship) <>
-            Cypher.node(:d, dest_label) <>
-            " WHERE " <> Cypher.expression(:d, dest_property_name, operator, property_value) <> " RETURN s, r, d"
-
-          # |> IO.inspect(label: :load_related_nodes)
+        if operator == nil do
+          IO.puts("Unsupported operator: #{inspect(predicate.operator)}")
+          "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
         else
-          # filter is about source node but we load other nodes
-          # "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} OPTIONAL MATCH (s) -[r]- (d) RETURN s, r, d"
-          "MATCH (s:#{label}) WHERE " <>
-            Cypher.expression(:s, property_name, operator, property_value) <>
-            " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+          property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
+          property_value = convert_value(predicate.right)
+          relationship_name = String.split(property_name, "_") |> List.first()
+          node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
+          relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+          # does the query require a related node to be loaded?
+          if operator == "in" && node_relationship != nil && relationship != nil &&
+               to_string(relationship.source_attribute) == property_name do
+            # IO.inspect(ash_query, label: :ash_query)
+            # filter is about a destination node
+            dest_label = relationship_name |> String.capitalize() |> String.to_atom()
 
-          # |> IO.inspect(label: :load_same_nodes)
-          # end
+            dest_property_name =
+              Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+
+            "MATCH " <>
+              Cypher.node(:s, label) <>
+              Cypher.relationship(node_relationship) <>
+              Cypher.node(:d, dest_label) <>
+              " WHERE " <> Cypher.expression(:d, dest_property_name, operator, property_value) <> " RETURN s, r, d"
+
+            # |> IO.inspect(label: :load_related_nodes)
+          else
+            # filter is about source node but we load other nodes
+            # "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} OPTIONAL MATCH (s) -[r]- (d) RETURN s, r, d"
+            "MATCH (s:#{label}) WHERE " <>
+              Cypher.expression(:s, property_name, operator, property_value) <>
+              " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+          end
         end
       end
     end
   end
 
+  defp predicates(resource, predicates) when is_atom(resource) and is_list(predicates) do
+    Enum.map_join(predicates, " AND ", fn predicate ->
+      operator = convert_operator(predicate.operator)
+      property_name = Info.convert_to_property_name(resource, predicate.left)
+      property_value = convert_value(predicate.right)
+      Cypher.expression(:s, property_name, operator, property_value)
+    end)
+  end
+
   defp order_by(cypher, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
     case ash_query.sort do
-      [] -> cypher
+      nil ->
+        cypher
+
+      [] ->
+        cypher
+
       _ ->
         translation = AshNeo4j.DataLayer.Info.translation(ash_query.resource)
-        terms = Enum.map_join(ash_query.sort, ", ",
-          fn {name, order} ->
+
+        terms =
+          Enum.map_join(ash_query.sort, ", ", fn {name, order} ->
             case order do
-               :desc ->  "s.#{Keyword.get(translation, name, name)} DESC"
-               _ -> "s.#{Keyword.get(translation, name, name)} ASC"
+              :desc -> "s.#{Keyword.get(translation, name, name)} DESC"
+              _ -> "s.#{Keyword.get(translation, name, name)} ASC"
             end
           end)
+
         cypher <> " " <> "ORDER BY " <> terms
     end
   end

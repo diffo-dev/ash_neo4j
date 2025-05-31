@@ -66,6 +66,7 @@ defmodule AshNeo4j.DataLayer.Info do
     # TODO use dest resource to figure out the dest_prefix
     dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
     attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
+
     translation(source_resource)
     |> Keyword.get(attribute_name, attribute_name)
   end

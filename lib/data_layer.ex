@@ -13,8 +13,9 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def can?(_, :read), do: true
   def can?(_, :create), do: true
+  def can?(_, :composite_primary_key), do: true
   def can?(_, :update), do: true
-  # def can?(_, :upsert), do: true
+  def can?(_, :upsert), do: true
   def can?(_, :destroy), do: true
   def can?(_, :sort), do: true
   def can?(_, :filter), do: true
@@ -110,25 +111,72 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
 
+      {:ok, []} ->
+        {:ok, []}
+
       {:ok, nodes} ->
-        # IO.inspect(nodes, label: "run_query nodes")
+        # IO.inspect(nodes, label: "AshNeo4j.DataLayer.run_query nodes")
         results =
           convert_nodes_to_resources(query.resource, nodes)
           |> filter_stream(query.domain, query.filter)
+          |> Enum.to_list()
 
-        #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
         {:ok, results}
     end
+
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true
   def create(resource, changeset) do
     create_from_changeset(nil, resource, changeset)
+  end
+
+  @impl true
+  def upsert(resource, changeset, keys) do
+    id_properties = id_properties(resource, changeset.attributes)
+
+    if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
+      create(resource, changeset)
+    else
+      key_filters =
+        Enum.map(keys, fn key ->
+          {key,
+           Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
+             Map.get(changeset.params, to_string(key))}
+        end)
+
+      query = Ash.Query.do_filter(resource, and: [key_filters])
+
+      resource
+      |> resource_to_query(changeset.domain)
+      |> Map.put(:filter, query.filter)
+      |> Map.put(:tenant, changeset.tenant)
+      |> run_query(resource)
+      |> case do
+        {:ok, []} ->
+          create(resource, changeset)
+
+        {:ok, [result]} ->
+          to_set = Ash.Changeset.set_on_upsert(changeset, keys)
+
+          changeset =
+            changeset
+            |> Map.put(:attributes, %{})
+            |> Map.put(:data, result)
+            |> Ash.Changeset.force_change_attributes(to_set)
+
+          update(resource, changeset)
+
+        {:ok, _} ->
+          {:error, "Multiple records matching keys"}
+      end
+    end
   end
 
   @impl true
@@ -267,11 +315,12 @@ defmodule AshNeo4j.DataLayer do
       Enum.into(enrichments, %{}, fn {field, value} ->
         {field, value}
       end)
+
     Enum.into(Info.translation(resource), enriched, fn {resource_field, node_field} ->
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
@@ -279,7 +328,7 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
 
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp filter_stream(stream, _domain, nil), do: stream

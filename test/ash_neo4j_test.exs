@@ -4,6 +4,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Resource.Upsert
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Struct
@@ -465,6 +466,25 @@ defmodule AshNeo4j.Test do
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment4"}) |> Ash.create()
       assert comment.title == "comment4"
     end
+
+    test "upsert node can be upserted using ash" do
+      {:ok, upsert} =
+        Upsert
+        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "one"})
+        |> Ash.create()
+
+      assert upsert.field == "one"
+
+      {:ok, upsert} =
+        Upsert
+        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "two"})
+        |> Ash.create()
+
+      assert upsert.field == "two"
+      results = Upsert |> Ash.Query.for_read(:read) |> Ash.read!()
+      assert length(results) == 1
+      assert hd(results).field == "two"
+    end
   end
 
   describe "ash update action tests" do
@@ -511,8 +531,12 @@ defmodule AshNeo4j.Test do
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
 
       {:ok, related_post} =
-        post |> Ash.Changeset.new |> Ash.Changeset.change_attribute(:score, 1) |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
+        post
+        |> Ash.Changeset.new()
+        |> Ash.Changeset.change_attribute(:score, 1)
+        |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
         |> Ash.update()
+
       # the post should have the comments
       assert length(related_post.comments) == 2
       # the post should also have the updated score
@@ -602,6 +626,7 @@ defmodule AshNeo4j.Test do
       for i <- 16..18 do
         Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
       end
+
       {:ok, result} = Comment |> Ash.Query.sort(title: :desc) |> Ash.read()
       assert length(result) == 3
       expected = ["comment18", "comment17", "comment16"]
@@ -612,6 +637,7 @@ defmodule AshNeo4j.Test do
       for i <- 1..3 do
         Post |> Ash.Changeset.for_create(:create, %{title: "post#{i}", score: div(i + 1, 2)}) |> Ash.create()
       end
+
       {:ok, result} = Post |> Ash.Query.sort(score: :desc, title: :asc) |> Ash.read()
       expected_title = ["post3", "post1", "post2"]
       expected_score = [2, 1, 1]
@@ -623,6 +649,7 @@ defmodule AshNeo4j.Test do
       for i <- 11..15 do
         Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
       end
+
       {:ok, result} = Comment |> Ash.Query.limit(3) |> Ash.read()
       assert length(result) == 3
     end
@@ -631,6 +658,7 @@ defmodule AshNeo4j.Test do
       for i <- 16..19 do
         Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
       end
+
       {:ok, result} = Comment |> Ash.Query.sort(title: :desc) |> Ash.Query.limit(3) |> Ash.read()
       expected = ["comment19", "comment18", "comment17"]
       assert Enum.into(result, [], fn comment -> comment.title end) == expected
@@ -641,6 +669,7 @@ defmodule AshNeo4j.Test do
     for i <- 20..25 do
       Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
     end
+
     {:ok, result} = Comment |> Ash.Query.sort(title: :asc) |> Ash.Query.offset(2) |> Ash.Query.limit(2) |> Ash.read()
     expected = ["comment22", "comment23"]
     assert Enum.into(result, [], fn comment -> comment.title end) == expected

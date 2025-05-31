@@ -50,6 +50,7 @@ defmodule AshNeo4j.Verifiers.Test do
           use Ash.Resource,
             domain: AshNeo4j.Test.Domain,
             data_layer: AshNeo4j.DataLayer
+
           neo4j do
             label :Resource
             relate [{:resources, :uses, :outgoing}]
@@ -77,6 +78,7 @@ defmodule AshNeo4j.Verifiers.Test do
           use Ash.Resource,
             domain: AshNeo4j.Test.Domain,
             data_layer: AshNeo4j.DataLayer
+
           neo4j do
             label :Resource
           end
@@ -96,6 +98,7 @@ defmodule AshNeo4j.Verifiers.Test do
           use Ash.Resource,
             domain: AshNeo4j.Test.Domain,
             data_layer: AshNeo4j.DataLayer
+
           neo4j do
             label :Resource
             translate [:name, :_name]

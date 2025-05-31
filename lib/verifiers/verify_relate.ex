@@ -10,32 +10,36 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
     relate = Verifier.get_option(dsl, [:neo4j], :relate, [])
+
     cond do
       relate == [] ->
         :ok
 
-        true ->
-          if !Enum.all?(relate, fn {_relationship_name, edge_label, _edge_direction} ->
-              Regex.match?(@regex, Atom.to_string(edge_label)) end) do
+      true ->
+        if !Enum.all?(relate, fn {_relationship_name, edge_label, _edge_direction} ->
+             Regex.match?(@regex, Atom.to_string(edge_label))
+           end) do
+          {:error,
+           DslError.exception(
+             module: resource,
+             message: "relate: edge label must be upper case and may have an underscore"
+           )}
+        else
+          relationships = Verifier.get_entities(dsl, [:relationships])
+          relationship_names = Enum.into(relationships, [], &Map.get(&1, :name))
+
+          if Enum.any?(relate, fn {relationship_name, _edge_label, _edge_direction} ->
+               relationship_name not in relationship_names
+             end) do
             {:error,
-            DslError.exception(
-              module: resource,
-              message: "relate: edge label must be upper case and may have an underscore"
-            )}
+             DslError.exception(
+               module: resource,
+               message: "relate: relationship_name must match the name of a relationship"
+             )}
           else
-            relationships = Verifier.get_entities(dsl, [:relationships])
-            relationship_names = Enum.into(relationships, [], &Map.get(&1, :name))
-            if Enum.any?(relate, fn {relationship_name, _edge_label, _edge_direction} ->
-                relationship_name not in relationship_names end) do
-                  {:error,
-                  DslError.exception(
-                    module: resource,
-                    message: "relate: relationship_name must match the name of a relationship"
-                  )}
-            else
-              :ok
-            end
+            :ok
           end
+        end
     end
   end
 end
