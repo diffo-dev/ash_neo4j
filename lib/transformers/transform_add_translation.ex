@@ -1,4 +1,4 @@
-defmodule AshNeo4j.DataLayer.Transformer do
+defmodule AshNeo4j.Transformers.TransformAddTranslation do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer

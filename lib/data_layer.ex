@@ -37,7 +37,6 @@ defmodule AshNeo4j.DataLayer do
     examples: [
       """
       neo4j do
-        label :Comment
         store [:title]
         translate id: :uuid
         relate [{:post, :BELONGS_TO, :outgoing}]
@@ -47,8 +46,8 @@ defmodule AshNeo4j.DataLayer do
     schema: [
       label: [
         type: :atom,
-        doc: "The node label",
-        required: true
+        doc: "Optional node label",
+        required: false
       ],
       relate: [
         type: {:list, @node_relationship},
@@ -95,12 +94,15 @@ defmodule AshNeo4j.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: @sections,
-    persisters: [AshNeo4j.DataLayer.Transformer],
     verifiers: [
       AshNeo4j.Verifiers.VerifyLabelCamelCase,
       AshNeo4j.Verifiers.VerifyIdTranslated,
       AshNeo4j.Verifiers.VerifyRelate,
       AshNeo4j.Verifiers.VerifyProperties
+    ],
+    transformers: [
+      AshNeo4j.Transformers.TransformEnsureLabelled,
+      AshNeo4j.Transformers.TransformAddTranslation
     ]
 
   defmodule Query do

@@ -9,7 +9,8 @@ defmodule AshNeo4j.Verifiers.VerifyLabelCamelCase do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    label = Verifier.get_option(dsl, [:neo4j], :label, nil)
+    module = String.to_atom(List.last(Module.split(resource)))
+    label = Verifier.get_option(dsl, [:neo4j], :label, module)
 
     cond do
       label == nil ->

@@ -33,4 +33,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Features:
 * spark improvements
 
+## [v0.1.5](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.4...v0.1.5) (2025-05-31)
+
+### Features:
+* logger
+* upsert nodes
+* optional label
+
 

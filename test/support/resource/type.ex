@@ -4,10 +4,6 @@ defmodule AshNeo4j.Test.Resource.Type do
     domain: AshNeo4j.Test.Domain,
     data_layer: AshNeo4j.DataLayer
 
-  neo4j do
-    label :Type
-  end
-
   actions do
     default_accept :*
     defaults [:read, :create, :destroy]
