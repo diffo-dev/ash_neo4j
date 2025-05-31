@@ -5,7 +5,7 @@ defmodule AshNeo4j.Test.Resource.Resource do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :Resource
+    label :InternalResource
     relate [{:resources, :USES, :outgoing}]
     skip([:service_id, :resource_id])
     translate id: :uuid

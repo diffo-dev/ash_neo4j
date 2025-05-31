@@ -5,7 +5,8 @@ defmodule AshNeo4j.DataLayer.Info do
 
   @spec label(Ash.Resource.t()) :: atom() | nil
   def label(resource) do
-    Extension.get_opt(resource, [:neo4j], :label, nil, true)
+    module = String.to_atom(List.last(Module.split(resource)))
+    Extension.get_opt(resource, [:neo4j], :label, module, true)
   end
 
   @spec relate(Ash.Resource.t()) :: list(tuple()) | nil

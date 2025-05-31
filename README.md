@@ -60,7 +60,7 @@ end
 
 ## Label
 
-The DSL is used to label the Ash Resource's underlying graph node.
+The DSL may be used to label the Ash Resource's underlying graph node. If omitted the Ash Resource's short module name will be used.
 
 ```elixir
   neo4j do

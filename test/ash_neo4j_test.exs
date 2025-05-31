@@ -561,27 +561,27 @@ defmodule AshNeo4j.Test do
         parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               :InternalService,
                %{name: "parent_service"},
-               :Service,
+               :InternalService,
                %{name: "child_service"},
                :MANAGES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               :InternalService,
                %{name: "child_service"},
-               :Resource,
+               :InternalResource,
                %{name: "parent_resource"},
                :USES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Resource,
+               :InternalResource,
                %{name: "parent_resource"},
-               :Resource,
+               :InternalResource,
                %{name: "child_resource"},
                :USES,
                :outgoing

@@ -37,7 +37,6 @@ defmodule AshNeo4j.DataLayer do
     examples: [
       """
       neo4j do
-        label :Comment
         store [:title]
         translate id: :uuid
         relate [{:post, :BELONGS_TO, :outgoing}]
@@ -47,8 +46,8 @@ defmodule AshNeo4j.DataLayer do
     schema: [
       label: [
         type: :atom,
-        doc: "The node label",
-        required: true
+        doc: "Optional node label",
+        required: false
       ],
       relate: [
         type: {:list, @node_relationship},
