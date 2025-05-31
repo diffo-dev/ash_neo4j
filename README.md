@@ -159,11 +159,7 @@ Generally attributes with nil value are not persisted, rather than created with 
 
 ## Limitations and Future Work
 
-Ash Neo4j is early stage, it is likely that the dsl will evolve and this may break back compatibility. Store is likely to be removed in favour of introspecting resource attributes. The dsl lacks validation and doesn't yet make appropriate use of transform.
-
-Currently ash_neo4j has limited support for Ash create, update, read, destroy actions, and is in 'build' phase.
-
-Collaboration on ash_neo4j welcome via github, please use discussions and/or issues as appropriate.
+Ash Neo4j is early stage, it is likely that the dsl will evolve and this may break back compatibility. Ash Neo4j is in 'build' phase with initial support for Ash create, update, read, destroy actions. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
 
 ## Acknowledgements
 

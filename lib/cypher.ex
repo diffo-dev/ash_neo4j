@@ -158,17 +158,19 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   def run(cypher) when is_bitstring(cypher) do
-    #IO.inspect(cypher, label: :run_cypher)
+    # IO.inspect(cypher, label: :run_cypher)
     Logger.debug("""
-      AshNeo4j: cypher query #{cypher}
-      """)
+    AshNeo4j: cypher query #{cypher}
+    """)
+
     boltx_result = Boltx.query(Bolt, cypher)
-    #|> IO.inspect(label: :run_cypher_result)
+    # |> IO.inspect(label: :run_cypher_result)
     if elem(boltx_result, 0) == :ok do
       Logger.debug("""
-        AshNeo4j: cypher resulty #{inspect(elem(boltx_result, 1).results)}
-        """)
+      AshNeo4j: cypher result #{inspect(elem(boltx_result, 1).results)}
+      """)
     end
+
     boltx_result
   end
 end

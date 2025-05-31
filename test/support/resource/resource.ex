@@ -7,7 +7,7 @@ defmodule AshNeo4j.Test.Resource.Resource do
   neo4j do
     label :Resource
     relate [{:resources, :USES, :outgoing}]
-    skip [:service_id, :resource_id]
+    skip([:service_id, :resource_id])
     translate id: :uuid
   end
 

@@ -169,10 +169,9 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    "MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n"
+    ("MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
-
 
   @spec read_limited(atom(), nil | integer()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
@@ -192,6 +191,7 @@ defmodule AshNeo4j.Neo4jHelper do
     case limit do
       nil ->
         "MATCH " <> Cypher.node(:n, label, properties) <> " RETURN n"
+
       _ ->
         "MATCH " <> Cypher.node(:n, label) <> " RETURN n LIMIT #{limit}"
     end
