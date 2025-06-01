@@ -79,12 +79,15 @@ The DSL is used to direct any node relationships.
 
 ## Translate
 
-The DSL may be used to translate the Ash Resource's attributes to node properties.
+The DSL may be used to translate the Ash Resource's attributes to node properties. 
 ```elixir
   neo4j do
     translate id: :uuid
   end
 ```
+
+The :id attribute must be translated as it cannot be used as a Neo4j property name.
+Attributes with underscores are translated to camelCase Neo4j properties so don't need to be explicitly listed in translate.
 
 ## Skip
 
@@ -99,8 +102,8 @@ The DSL may be used to skip storing attributes as node properties. This is typic
 
 The DSL is verified against misconfiguration and violation of accepted neo4j conventions providing compile time errors:
 
-* label: neo4j label must be CamelCase
-* neo4j: neo4j property names should start with a letter and may contain numbers and underscores
+* label: neo4j label must be PascalCase
+* neo4j: neo4j property names must be camelCase
 * relate: relationship_name must match the name of a relationship
 * relate: edge label must be upper case and may have an underscore
 * translate: :id attribute must be translated
