@@ -3,7 +3,7 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
   AshNeo4j DataLayer BoltxHelper functions
   """
 
-  @spec to_elixir_duration(%{optional(:days) => integer(), optional(any()) => any()}) :: Duration.t()
+  @spec to_elixir_duration(%{optional(:days) => integer(), optional(any()) => any()} | String.t()) :: Duration.t()
   @doc """
   Converts a Boltx.Types.Duration to an Elixir Duration
 
@@ -14,6 +14,9 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
 
   iex> AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration(Boltx.Types.Duration.create(1, 0, 0, 0))
   %Duration{month: 1}
+
+  iex> AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration("PT1H")
+  %Duration{hour: 1}
   ```
   """
   def to_elixir_duration(value) when is_struct(value, Boltx.Types.Duration) do
@@ -36,6 +39,10 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
     |> Duration.new!()
 
     # |> IO.inspect(label: :to_elixir_duration_result)
+  end
+
+  def to_elixir_duration(value) when is_bitstring(value) do
+    Duration.from_iso8601!(value)
   end
 
   @spec from_elixir_duration(%{
@@ -77,5 +84,21 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
 
     Boltx.Types.Duration.create(months, days, seconds, nanoseconds)
     # |> IO.inspect(label: :from_elixir_duration_result)
+  end
+
+  @doc """
+  Converts a Boltx.Types.Duration to cypher
+
+  ## Examples
+  ```
+  iex> AshNeo4j.DataLayer.BoltxHelper.to_cypher(%Boltx.Types.Duration{hours: 1})
+  iex> "PT1H"
+  ```
+  """
+  def to_cypher(value) when is_struct(value, Boltx.Types.Duration) do
+    case Boltx.Types.Duration.format_param(value) do
+      {:ok, cypher}
+        -> cypher
+    end
   end
 end
