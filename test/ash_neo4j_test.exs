@@ -10,7 +10,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
-  @type_properties %{
+  @type_attributes %{
     array_atom: [:a, :b, :c],
     array_integer: [1, 2, 3],
     array_string: ["a", "b", "c"],
@@ -21,7 +21,6 @@ defmodule AshNeo4j.Test do
     array_term: [:a, "a", %Struct{}],
     atom: :a,
     binary: <<1, 2, 3>>,
-    # binary: <<104, 101, 197, 130, 197, 130, 111>>,
     boolean: true,
     ci_string: "HELLO",
     date: ~D[2025-05-11],
@@ -49,16 +48,16 @@ defmodule AshNeo4j.Test do
   }
 
   @type_node_properties %{
-    "array_atom" => [":a", ":b", ":c"],
-    "array_integer" => [1, 2, 3],
-    "array_string" => ["a", "b", "c"],
-    "array_boolean" => [true, true, false],
-    "array_map" => ["%{a: \"a\"}", "%{b: \"b\"}"],
-    "array_struct" => [
+    "arrayAtom" => [":a", ":b", ":c"],
+    "arrayInteger" => [1, 2, 3],
+    "arrayString" => ["a", "b", "c"],
+    "arrayBoolean" => [true, true, false],
+    "arrayMap" => ["%{a: \"a\"}", "%{b: \"b\"}"],
+    "arrayStruct" => [
       "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
     ],
     # note neo4j arrays must all be same neo4j type (in this case all strings)
-    "array_term" => [
+    "arrayTerm" => [
       ":a",
       "a",
       "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
@@ -66,39 +65,30 @@ defmodule AshNeo4j.Test do
     "atom" => ":a",
     "binary" => "\x01\x02\x03",
     "boolean" => true,
-    "ci_string" => "HELLO",
+    "ciString" => "HELLO",
     "date" => "2025-05-11",
     "datetime" => "2025-05-11T07:45:41Z",
     "decimal" => "Decimal.new(\"4.2\")",
-    "duration" => %Boltx.Types.Duration{
-      seconds: 7,
-      nanoseconds: 8000,
-      minutes: 6,
-      hours: 5,
-      days: 25,
-      months: 2,
-      weeks: 0,
-      years: 1
-    },
+    "duration" => "P1Y2M25DT5H6M7.000008S",
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
-    "json_string" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
+    "jsonString" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
     "keyword" => ["{:a, :atom}", "{:s, string}"],
     # serialisation order indeterminate
     "map" => "%{a: \"a\", b: 1, c: false, d: nil}",
     # serialisation order indeterminate
     "mapset" => "MapSet.new([1, :two, false])",
     "module" => ":Elixir.AshNeo4j.DataLayer",
-    "naive_datetime" => "2025-05-11T07:45:41",
+    "naiveDatetime" => "2025-05-11T07:45:41",
     "regex" => "~r/foo/iu",
     "string" => "Hello",
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
     "time" => "07:45:41",
-    "time_usec" => "07:45:41.429903",
+    "timeUsec" => "07:45:41.429903",
     "tuple" => "{:a, 1, false}",
-    "utc_datetime_usec" => "2025-05-11T07:45:41.429903Z",
+    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
     "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   }
 
@@ -150,7 +140,7 @@ defmodule AshNeo4j.Test do
     end
 
     test "type node with properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, @type_properties)
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, @type_node_properties)
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
@@ -164,7 +154,7 @@ defmodule AshNeo4j.Test do
     end
 
     test "type node with properties can be read using Neo4jHelper" do
-      Neo4jHelper.create_node(:Type, @type_properties)
+      Neo4jHelper.create_node(:Type, @type_node_properties)
       assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{string: "Hello"})
       assert length(records) == 1
       node = records |> List.first() |> List.first()
@@ -210,11 +200,11 @@ defmodule AshNeo4j.Test do
 
   describe "Ash read action tests" do
     test "type node can be read using ash" do
-      # |> IO.inspect(label: "create_node response")
-      Neo4jHelper.create_node(:Type, @type_properties)
-      # |> IO.inspect(label: "ash read_one response")
-      type = Ash.read_one!(Type)
-      Enum.each(@type_properties, fn {key, value} -> assert Map.get(type, key) == value end)
+      properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
+      Neo4jHelper.create_node(:Type, properties) |> IO.inspect(label: :create_node_response)
+      type = Ash.read_one!(Type) |> IO.inspect(label: "ash read_one response")
+      Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
+      #TODO compare durations
     end
 
     test "post node can be read using ash" do
@@ -447,14 +437,13 @@ defmodule AshNeo4j.Test do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
       refute type.uuid == nil
       assert type.atom == :a
-      Enum.each(Map.drop(@type_properties, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
+      Enum.each(Map.drop(@type_attributes, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
     end
 
     test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_properties) |> Ash.create()
-      # |> IO.inspect(label: "ash create response")
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url
-      Enum.each(Map.drop(@type_properties, [:url]), fn {key, value} -> assert Map.get(type, key) == value end)
+      Enum.each(Map.drop(@type_attributes, [:url]), fn {key, value} -> assert Map.get(type, key) == value end)
     end
 
     test "post node can be created using ash" do

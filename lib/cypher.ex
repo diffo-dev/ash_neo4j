@@ -3,6 +3,7 @@ defmodule AshNeo4j.Cypher do
   Ash Neo4j cypher functions
   """
 
+  alias AshNeo4j.DataLayer.BoltxHelper
   require Logger
 
   @doc """
@@ -47,6 +48,7 @@ defmodule AshNeo4j.Cypher do
       _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
       _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
+      _ when is_struct(v, Boltx.Types.Duration) -> wrap(BoltxHelper.to_cypher(v), wrap)
       # map must be after struct
       _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
       _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)

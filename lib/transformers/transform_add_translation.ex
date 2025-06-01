@@ -20,8 +20,13 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
       |> Enum.reject(fn name -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
 
     translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
-    direct = Enum.into(attributes, [], fn attribute -> {attribute, attribute} end)
+    direct = Enum.into(attributes, [], fn attribute -> {attribute, camelCase(attribute)} end)
     translation = Keyword.merge(direct, translate)
     Transformer.set_option(dsl, [:neo4j], :translation, translation)
+  end
+
+  defp camelCase(atom) when is_atom(atom) do
+    splits = String.split(Atom.to_string(atom), "_")
+    hd(splits) <> Enum.map_join(tl(splits), "", fn s -> String.capitalize(s) end) |> String.to_atom()
   end
 end

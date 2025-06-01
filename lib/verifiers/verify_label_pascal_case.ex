@@ -1,10 +1,10 @@
-defmodule AshNeo4j.Verifiers.VerifyLabelCamelCase do
-  @moduledoc "Verifies that the label is camelcase"
+defmodule AshNeo4j.Verifiers.VerifyLabelPascalCase do
+  @moduledoc "Verifies that the label is PascalCase"
   use Spark.Dsl.Verifier
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @regex ~r/^[A-Z][a-zA-Z]*$/
+  @regex ~r/^[A-Z][a-zA-Z0-9]*$/
 
   @impl true
   def verify(dsl) do
@@ -27,7 +27,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelCamelCase do
         {:error,
          DslError.exception(
            module: resource,
-           message: "label: neo4j label must be CamelCase"
+           message: "label: neo4j label must be PascalCase"
          )}
     end
   end

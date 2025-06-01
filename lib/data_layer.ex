@@ -95,10 +95,10 @@ defmodule AshNeo4j.DataLayer do
   use Spark.Dsl.Extension,
     sections: @sections,
     verifiers: [
-      AshNeo4j.Verifiers.VerifyLabelCamelCase,
+      AshNeo4j.Verifiers.VerifyLabelPascalCase,
       AshNeo4j.Verifiers.VerifyIdTranslated,
       AshNeo4j.Verifiers.VerifyRelate,
-      AshNeo4j.Verifiers.VerifyProperties
+      AshNeo4j.Verifiers.VerifyPropertiesCamelCase
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
@@ -131,7 +131,7 @@ defmodule AshNeo4j.DataLayer do
         {:ok, results}
     end
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true
@@ -312,7 +312,7 @@ defmodule AshNeo4j.DataLayer do
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])
        when is_atom(resource) and is_map(node) and is_list(enrichments) do
-    # IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
+    #IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
     enriched =
       Enum.into(enrichments, %{}, fn {field, value} ->
         {field, value}
@@ -322,7 +322,7 @@ defmodule AshNeo4j.DataLayer do
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
@@ -330,7 +330,7 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp filter_stream(stream, _domain, nil), do: stream
