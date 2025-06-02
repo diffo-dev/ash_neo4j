@@ -102,11 +102,12 @@ defmodule AshNeo4j.Test do
 
   setup do
     on_exit(fn ->
-      # Neo4jHelper.delete_nodes(:Actor)
-      # Neo4jHelper.delete_nodes(:Movie)
-      # Neo4jHelper.delete_nodes(:Type)
-      # Neo4jHelper.delete_nodes(:Post)
-      # Neo4jHelper.delete_nodes(:Comment)
+      #Neo4jHelper.delete_nodes(:Actor)
+      #Neo4jHelper.delete_nodes(:Movie)
+      #Neo4jHelper.delete_nodes(:Type)
+      #Neo4jHelper.delete_nodes(:Post)
+      #Neo4jHelper.delete_nodes(:Comment)
+      #Neo4jHelper.delete_nodes(:Upsert)
       Neo4jHelper.delete_all()
     end)
   end
@@ -508,10 +509,9 @@ defmodule AshNeo4j.Test do
         Post
         |> Ash.Changeset.for_create(:create, %{title: "post5", score: 1})
         |> Ash.create()
-        |> IO.inspect(label: :post)
 
       {:ok, updated_post} =
-        post |> Ash.Changeset.for_update(:update, %{score: nil}) |> Ash.update() |> IO.inspect(label: :updated_post)
+        post |> Ash.Changeset.for_update(:update, %{score: nil}) |> Ash.update()
 
       assert updated_post.score == nil
     end
@@ -560,6 +560,45 @@ defmodule AshNeo4j.Test do
       assert length(related_post.comments) == 2
       # the post should also have the updated score
       assert related_post.score == 1
+    end
+
+    test "post and comment nodes can be related and unrelated using ash" do
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
+      {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment9"}) |> Ash.create()
+
+      {:ok, related_post} =
+        post
+        |> Ash.Changeset.new()
+        |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
+        |> Ash.update()
+
+      {:ok, unrelated_post} =
+        related_post
+        |> Ash.Changeset.new()
+        |> Ash.Changeset.for_update(:unrelate, remove_comments: [comment2.id])
+        |> Ash.update()
+
+      # the unrelated post should have only the first comment
+      assert length(unrelated_post.comments) == 1
+
+      assert Neo4jHelper.nodes_relate_how?(
+        :Post,
+        %{title: "post7"},
+        :Comment,
+        %{title: "comment8"},
+        :BELONGS_TO,
+        :incoming
+      )
+
+      refute Neo4jHelper.nodes_relate_how?(
+        :Post,
+        %{title: "post7"},
+        :Comment,
+        %{title: "comment9"},
+        :BELONGS_TO,
+        :incoming
+      )
     end
 
     test "service-service-resource-resource relationships using ash" do

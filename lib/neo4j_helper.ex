@@ -144,6 +144,29 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @doc """
+  Unrelates two nodes with a relationship type
+    ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing)
+  iex> {result, _} = AshNeo4j.Neo4jHelper.unrelate_nodes(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing)
+  iex> result
+  :ok
+  ```
+  """
+  def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+            is_atom(edge_label) and is_atom(edge_direction) do
+    ("MATCH " <>
+      Cypher.node(:s, source_label, source_properties) <>
+      Cypher.relationship(:r, edge_label, edge_direction) <>
+      Cypher.node(:d, dest_label, dest_properties) <>
+      " DELETE r RETURN s, d")
+    |> Cypher.run()
+    end
+
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
   @doc """
   Tests if two nodes are related with a relationship type

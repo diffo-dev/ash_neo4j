@@ -375,18 +375,8 @@ defmodule AshNeo4j.DataLayer do
     remove_properties = remove_properties(dest_resource, changeset.attributes)
 
     cond do
-      !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) ->
-        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
-          {:ok, %Boltx.Response{results: [node_map | _]}} ->
-            node = Map.get(node_map, "n")
-            {:ok, convert_node_to_resource(dest_resource, node)}
-
-          {:error, error} ->
-            {:error, error}
-        end
-
-      true ->
-        accessing_from = Map.get(changeset.context, :accessing_from)
+      accessing_from = Map.get(changeset.context, :accessing_from) ->
+        # update relationship
 
         # relate nodes, for example Comment resource, changeset.attributes: %{post_id: "5d5fcf34-f6cc-461b-9867-5da7b6f6ae44"}
         # where changeset.context: %{accessing_from: %{name: :comments, source: AshNeo4j.Test.Resource.Post}}
@@ -403,16 +393,39 @@ defmodule AshNeo4j.DataLayer do
             {:error, "node relationship interdeterminate"}
 
           {_relationship_name, edge_label, edge_direction} ->
-            source_id = %{source_node_property_name => Map.get(changeset.attributes, dest_attribute_name)}
+            if Map.get(accessing_from, :unrelating?) do
+              # unrelate using source attribute in changeset.data
+              source_id = %{source_node_property_name => Map.get(changeset.data, dest_attribute_name)}
+              case Neo4jHelper.unrelate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
+                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                  node = Map.get(node_map, "d")
+                  {:ok, convert_node_to_resource(dest_resource, node)}
 
-            case Neo4jHelper.relate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
-              {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                node = Map.get(node_map, "d")
-                {:ok, convert_node_to_resource(dest_resource, node)}
+                {:error, error} ->
+                  {:error, error}
+              end
+            else
+              # relate using source attribute value in changeset.attribute
+              source_id = %{source_node_property_name => Map.get(changeset.attributes, dest_attribute_name)}
+              case Neo4jHelper.relate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
+                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                  node = Map.get(node_map, "d")
+                  {:ok, convert_node_to_resource(dest_resource, node)}
 
-              {:error, error} ->
-                {:error, error}
+                {:error, error} ->
+                  {:error, error}
+              end
             end
+        end
+      !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) ->
+        # update properties
+        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
+          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+            node = Map.get(node_map, "n")
+            {:ok, convert_node_to_resource(dest_resource, node)}
+
+          {:error, error} ->
+            {:error, error}
         end
     end
   end
@@ -432,6 +445,7 @@ defmodule AshNeo4j.DataLayer do
   defp remove_properties(resource, map) when is_atom(resource) and is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {key, _} -> Keyword.get(Info.translation(resource), key, key) end)
+    |> Enum.into([], fn {field, _} -> Keyword.get(Info.translation(resource), field, nil) end)
+    |> Enum.reject(fn field -> field == nil end)
   end
 end
