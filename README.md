@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.5"},
+    {:ash_neo4j, "~> 0.1.6"},
   ]
 end
 ```

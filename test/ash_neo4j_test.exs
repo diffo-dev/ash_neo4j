@@ -102,12 +102,12 @@ defmodule AshNeo4j.Test do
 
   setup do
     on_exit(fn ->
-      #Neo4jHelper.delete_nodes(:Actor)
-      #Neo4jHelper.delete_nodes(:Movie)
-      #Neo4jHelper.delete_nodes(:Type)
-      #Neo4jHelper.delete_nodes(:Post)
-      #Neo4jHelper.delete_nodes(:Comment)
-      #Neo4jHelper.delete_nodes(:Upsert)
+      # Neo4jHelper.delete_nodes(:Actor)
+      # Neo4jHelper.delete_nodes(:Movie)
+      # Neo4jHelper.delete_nodes(:Type)
+      # Neo4jHelper.delete_nodes(:Post)
+      # Neo4jHelper.delete_nodes(:Comment)
+      # Neo4jHelper.delete_nodes(:Upsert)
       Neo4jHelper.delete_all()
     end)
   end
@@ -583,22 +583,22 @@ defmodule AshNeo4j.Test do
       assert length(unrelated_post.comments) == 1
 
       assert Neo4jHelper.nodes_relate_how?(
-        :Post,
-        %{title: "post7"},
-        :Comment,
-        %{title: "comment8"},
-        :BELONGS_TO,
-        :incoming
-      )
+               :Post,
+               %{title: "post7"},
+               :Comment,
+               %{title: "comment8"},
+               :BELONGS_TO,
+               :incoming
+             )
 
       refute Neo4jHelper.nodes_relate_how?(
-        :Post,
-        %{title: "post7"},
-        :Comment,
-        %{title: "comment9"},
-        :BELONGS_TO,
-        :incoming
-      )
+               :Post,
+               %{title: "post7"},
+               :Comment,
+               %{title: "comment9"},
+               :BELONGS_TO,
+               :incoming
+             )
     end
 
     test "service-service-resource-resource relationships using ash" do

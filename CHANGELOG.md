@@ -40,4 +40,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * upsert nodes
 * optional label
 
+## [v0.1.6](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.5...v0.1.6) (2025-06-02)
+
+### Features:
+
+* embedded resources
+* nil attributes
+* nil relationship attributes
 
