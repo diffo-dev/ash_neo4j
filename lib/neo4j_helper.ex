@@ -81,7 +81,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec update_node(atom(), map(), map(), map()) ::
+  @spec update_node(atom(), map(), map(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -96,6 +96,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def update_node(label, match_properties, set_properties, remove_properties \\ [])
+
   def update_node(label, match_properties, set_properties, remove_properties)
       when is_atom(label) and length(remove_properties) == 0 do
     ("MATCH " <>
@@ -158,14 +159,14 @@ defmodule AshNeo4j.Neo4jHelper do
   """
   def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
-            is_atom(edge_label) and is_atom(edge_direction) do
+             is_atom(edge_label) and is_atom(edge_direction) do
     ("MATCH " <>
-      Cypher.node(:s, source_label, source_properties) <>
-      Cypher.relationship(:r, edge_label, edge_direction) <>
-      Cypher.node(:d, dest_label, dest_properties) <>
-      " DELETE r RETURN s, d")
+       Cypher.node(:s, source_label, source_properties) <>
+       Cypher.relationship(:r, edge_label, edge_direction) <>
+       Cypher.node(:d, dest_label, dest_properties) <>
+       " DELETE r RETURN s, d")
     |> Cypher.run()
-    end
+  end
 
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
   @doc """

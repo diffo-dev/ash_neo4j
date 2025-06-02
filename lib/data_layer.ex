@@ -396,6 +396,7 @@ defmodule AshNeo4j.DataLayer do
             if Map.get(accessing_from, :unrelating?) do
               # unrelate using source attribute in changeset.data
               source_id = %{source_node_property_name => Map.get(changeset.data, dest_attribute_name)}
+
               case Neo4jHelper.unrelate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
                 {:ok, %Boltx.Response{results: [node_map | _]}} ->
                   node = Map.get(node_map, "d")
@@ -407,6 +408,7 @@ defmodule AshNeo4j.DataLayer do
             else
               # relate using source attribute value in changeset.attribute
               source_id = %{source_node_property_name => Map.get(changeset.attributes, dest_attribute_name)}
+
               case Neo4jHelper.relate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
                 {:ok, %Boltx.Response{results: [node_map | _]}} ->
                   node = Map.get(node_map, "d")
@@ -417,6 +419,7 @@ defmodule AshNeo4j.DataLayer do
               end
             end
         end
+
       !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) ->
         # update properties
         case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
