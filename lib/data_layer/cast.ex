@@ -17,7 +17,7 @@ defmodule AshNeo4j.DataLayer.Cast do
         IO.puts("warning: cannot cast as name #{name} is not an attribute of resource #{resource}")
         value
       else
-        # |> IO.inspect(label: :attribute)
+        # IO.inspect(attribute, label: :attribute)
         case attribute.type do
           Ash.Type.Atom ->
             cast_atom(value)
@@ -100,9 +100,9 @@ defmodule AshNeo4j.DataLayer.Cast do
           {:array, _} ->
             cast_list(value)
 
-          _ ->
-            IO.puts("warning: no specific cast for type #{inspect(attribute.type)}")
-            value
+          _name ->
+            # IO.puts("warning: no specific cast for type #{inspect(name)}")
+            cast(value)
         end
       end
     end
@@ -151,7 +151,11 @@ defmodule AshNeo4j.DataLayer.Cast do
           name ->
             module = Module.concat([name])
             properties = cast_struct_properties(value)
+
             struct(module, properties)
+            |> Map.replace(:__meta__, %Ecto.Schema.Metadata{
+              state: :loaded
+            })
         end
     end
   end

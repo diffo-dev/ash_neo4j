@@ -156,6 +156,10 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Note that :time_usec requires ash ~> 3.5.10 (to be released).
 
+## Structs and String.Chars
+
+Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented.
+
 ## Elixir nil and Neo4j Null
 
 Generally attributes with nil value are not persisted, rather than created with Null value. However values of nil within string quoted 'Elixir' types (keyword, tuple, map and struct) are persisted.

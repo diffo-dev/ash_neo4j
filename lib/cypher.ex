@@ -49,6 +49,9 @@ defmodule AshNeo4j.Cypher do
       _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Boltx.Types.Duration) -> wrap(BoltxHelper.to_cypher(v), wrap)
+      _ when is_struct(v, MapSet) -> wrap("#{inspect(v)}", wrap)
+      # following assumes embedded structs will implement to_string protocol
+      _ when is_struct(v) -> wrap("#{to_string(v)}", wrap)
       # map must be after struct
       _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
       _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
