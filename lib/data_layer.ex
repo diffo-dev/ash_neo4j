@@ -371,11 +371,12 @@ defmodule AshNeo4j.DataLayer do
   defp update_from_changeset(_records, dest_resource, changeset)
        when is_atom(dest_resource) and is_struct(changeset, Ash.Changeset) do
     dest_id = id_properties(dest_resource, changeset.data)
-    properties = properties(dest_resource, changeset.attributes)
+    update_properties = properties(dest_resource, changeset.attributes)
+    remove_properties = remove_properties(dest_resource, changeset.attributes)
 
     cond do
-      !Enum.empty?(properties) ->
-        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, properties) do
+      !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) ->
+        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
           {:ok, %Boltx.Response{results: [node_map | _]}} ->
             node = Map.get(node_map, "n")
             {:ok, convert_node_to_resource(dest_resource, node)}
@@ -426,5 +427,11 @@ defmodule AshNeo4j.DataLayer do
     Info.translation(resource)
     |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
     |> Map.reject(fn {_k, v} -> v == nil end)
+  end
+
+  defp remove_properties(resource, map) when is_atom(resource) and is_map(map) do
+    map
+    |> Map.reject(fn {_k, v} -> v != nil end)
+    |> Enum.into([], fn {key, _} -> Keyword.get(Info.translation(resource), key, key) end)
   end
 end

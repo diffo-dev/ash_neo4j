@@ -498,9 +498,22 @@ defmodule AshNeo4j.Test do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post5"}) |> Ash.create()
 
       {:ok, updated_post} =
-        post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update() |> Ash.load([:comments])
+        post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update()
 
       assert updated_post.score == 1
+    end
+
+    test "post attributes can be updated to nil using ash" do
+      {:ok, post} =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "post5", score: 1})
+        |> Ash.create()
+        |> IO.inspect(label: :post)
+
+      {:ok, updated_post} =
+        post |> Ash.Changeset.for_update(:update, %{score: nil}) |> Ash.update() |> IO.inspect(label: :updated_post)
+
+      assert updated_post.score == nil
     end
 
     test "post and comment node can be related using ash" do

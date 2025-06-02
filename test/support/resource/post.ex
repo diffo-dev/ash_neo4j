@@ -27,7 +27,7 @@ defmodule AshNeo4j.Test.Resource.Post do
   attributes do
     uuid_primary_key :id
     attribute :title, :string, public?: true
-    attribute :score, :integer, public?: true
+    attribute :score, :integer, public?: true, allow_nil?: true
     attribute :public, :boolean, public?: true
     attribute :unique, :string, public?: true
   end

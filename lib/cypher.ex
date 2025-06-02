@@ -9,7 +9,6 @@ defmodule AshNeo4j.Cypher do
   @doc """
   Converts a map to a cypher properties string.
   The map is converted to a string in the format `{key1: value1, key2: value2}`.
-  This is used to create nodes in Neo4j.
 
   ## Examples
   ```
@@ -66,6 +65,21 @@ defmodule AshNeo4j.Cypher do
 
   defp wrap(v, wrap) when is_bitstring(wrap) do
     wrap <> v <> wrap
+  end
+
+  @doc """
+  Converts a list into a remove properties string.
+  The list is converted to a string in the format `n.key1, n.key2`.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.remove_properties(:n, [:born, :bafta_winner])
+  "n.born, n.bafta_winner"
+  ```
+  """
+  def remove_properties(label, list) when is_atom(label) and is_list(list) do
+    list
+    |> Enum.map_join(", ", fn property -> "#{label}.#{property}" end)
   end
 
   @doc """
