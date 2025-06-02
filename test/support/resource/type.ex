@@ -54,6 +54,8 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :map, :map, public?: true
     attribute :mapset, :struct, public?: true
     attribute :module, :module, public?: true
+    attribute :money, AshNeo4j.Test.Resource.Money, public?: true
+    attribute :array_money, {:array, AshNeo4j.Test.Resource.Money}, public?: true
     attribute :naive_datetime, :naive_datetime, public?: true
     attribute :regex, :struct, public?: true
     attribute :string, :string, public?: true

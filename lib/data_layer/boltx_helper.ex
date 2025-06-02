@@ -97,8 +97,8 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
   """
   def to_cypher(value) when is_struct(value, Boltx.Types.Duration) do
     case Boltx.Types.Duration.format_param(value) do
-      {:ok, cypher}
-        -> cypher
+      {:ok, cypher} ->
+        cypher
     end
   end
 end

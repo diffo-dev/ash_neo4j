@@ -27,6 +27,6 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
 
   defp camelCase(atom) when is_atom(atom) do
     splits = String.split(Atom.to_string(atom), "_")
-    hd(splits) <> Enum.map_join(tl(splits), "", fn s -> String.capitalize(s) end) |> String.to_atom()
+    (hd(splits) <> Enum.map_join(tl(splits), "", fn s -> String.capitalize(s) end)) |> String.to_atom()
   end
 end

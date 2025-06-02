@@ -7,6 +7,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Upsert
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
+  alias AshNeo4j.Test.Resource.Money
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
@@ -201,10 +202,10 @@ defmodule AshNeo4j.Test do
   describe "Ash read action tests" do
     test "type node can be read using ash" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node(:Type, properties) |> IO.inspect(label: :create_node_response)
-      type = Ash.read_one!(Type) |> IO.inspect(label: "ash read_one response")
+      Neo4jHelper.create_node(:Type, properties)
+      type = Ash.read_one!(Type)
       Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
-      #TODO compare durations
+      # TODO compare durations
     end
 
     test "post node can be read using ash" do
@@ -444,6 +445,22 @@ defmodule AshNeo4j.Test do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url
       Enum.each(Map.drop(@type_attributes, [:url]), fn {key, value} -> assert Map.get(type, key) == value end)
+    end
+
+    test "type node can be created using ash with embedded resource property" do
+      {:ok, money} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{money: money}) |> Ash.create()
+      assert type.money.amount == 1000
+      assert type.money.currency == :sek
+    end
+
+    test "type node can be created using ash with array embedded resource property" do
+      {:ok, money1} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
+      {:ok, money2} = Money |> Ash.Changeset.for_create(:create, %{amount: 200, currency: :aud}) |> Ash.create()
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{array_money: [money1, money2]}) |> Ash.create()
+      assert length(type.array_money) == 2
+      assert hd(type.array_money).currency == :sek
+      assert hd(tl(type.array_money)).currency == :aud
     end
 
     test "post node can be created using ash" do
