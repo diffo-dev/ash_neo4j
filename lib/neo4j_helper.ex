@@ -81,7 +81,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec update_node(atom(), map(), map()) ::
+  @spec update_node(atom(), map(), map(), map()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -95,9 +95,30 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def update_node(label, match_properties, set_properties) when is_atom(label) do
+  def update_node(label, match_properties, set_properties, remove_properties \\ [])
+  def update_node(label, match_properties, set_properties, remove_properties)
+      when is_atom(label) and length(remove_properties) == 0 do
     ("MATCH " <>
        Cypher.node(:n, label, match_properties) <> " SET n += " <> Cypher.properties(set_properties) <> " RETURN n")
+    |> Cypher.run()
+  end
+
+  def update_node(label, match_properties, set_properties, remove_properties)
+      when is_atom(label) and map_size(set_properties) == 0 do
+    ("MATCH " <>
+       Cypher.node(:n, label, match_properties) <>
+       " REMOVE " <>
+       Cypher.remove_properties(:n, remove_properties) <>
+       " RETURN n")
+    |> Cypher.run()
+  end
+
+  def update_node(label, match_properties, set_properties, remove_properties) when is_atom(label) do
+    ("MATCH " <>
+       Cypher.node(:n, label, match_properties) <>
+       " SET n += " <>
+       Cypher.properties(set_properties) <>
+       " REMOVE " <> Cypher.remove_properties(:n, remove_properties) <> " RETURN n")
     |> Cypher.run()
   end
 
