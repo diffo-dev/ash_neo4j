@@ -22,6 +22,14 @@ defmodule AshNeo4j.Test.Resource.Post do
 
       change manage_relationship(:add_comments, :comments, type: :append_and_remove)
     end
+
+    update :unrelate do
+      require_atomic? false
+      argument :remove_comments, {:array, :uuid}
+      accept [:score]
+
+      change manage_relationship(:remove_comments, :comments, type: :remove)
+    end
   end
 
   attributes do
