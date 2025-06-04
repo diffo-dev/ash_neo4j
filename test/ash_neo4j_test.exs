@@ -1,6 +1,7 @@
 defmodule AshNeo4j.Test do
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.BoltxHelper
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
@@ -97,8 +98,7 @@ defmodule AshNeo4j.Test do
   @url "https://www.diffo.dev/"
 
   setup_all do
-    {result, _} = Boltx.start_link(Application.get_env(:boltx, Bolt))
-    result
+    BoltxHelper.start()
   end
 
   setup do
@@ -114,14 +114,14 @@ defmodule AshNeo4j.Test do
   end
 
   describe "doctests" do
-    doctest AshNeo4j.DataLayer.BoltxHelper
+    doctest AshNeo4j.BoltxHelper
     doctest AshNeo4j.Cypher
     doctest AshNeo4j.Neo4jHelper
   end
 
   describe "Boltx configuration tests" do
     test "neo4j is running" do
-      assert Boltx.query!(Bolt, "return 1 as n") |> Boltx.Response.first() == %{"n" => 1}
+      assert BoltxHelper.is_connected()
     end
   end
 
