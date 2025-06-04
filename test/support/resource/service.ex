@@ -47,7 +47,7 @@ defmodule AshNeo4j.Test.Resource.Service do
   end
 
   relationships do
-    belongs_to :specification, Specification, public?: true
+    belongs_to :specification, AshNeo4j.Test.Resource.Specification, public?: true
     belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
