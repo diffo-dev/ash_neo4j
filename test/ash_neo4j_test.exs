@@ -604,13 +604,18 @@ defmodule AshNeo4j.Test do
 
     test "resource node can be created and related to a specification using ash create" do
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
-      resource = Resource |> Ash.create!(%{name: "esim_0000", specification_id: esim_v1.id})
-        |> IO.inspect(label: :created_resource)
+      resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id})
 
-      loaded_resource = resource |> Ash.load!([:specification_id, :specification])
-        |> IO.inspect(label: :loaded_resource)
+      assert resource.specification_id == esim_v1.id
+      assert resource.specification
+    end
 
-      assert loaded_resource.specification_id == esim_v1.id
+    test "service node can be created and related to a specification using ash create" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+
+      assert service.specification_id == broadband_v1.id
+      assert service.specification
     end
 
     test "service-service-resource-resource relationships using ash" do
