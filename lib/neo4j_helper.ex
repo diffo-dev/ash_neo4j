@@ -160,11 +160,11 @@ defmodule AshNeo4j.Neo4jHelper do
   def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    "MATCH " <>
+    ("MATCH " <>
        Cypher.node(:s, source_label, source_properties) <>
        Cypher.relationship(:r, edge_label, edge_direction) <>
        Cypher.node(:d, dest_label, dest_properties) <>
-       " DELETE r RETURN s, d"
+       " DELETE r RETURN s, d")
     |> Cypher.run()
   end
 
@@ -179,13 +179,17 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  #MATCH (d:Movie {title: "Love Actually"}) CREATE (s:Actor {name: "Keira Knightley"}) -[r:ACTED_IN]->(d) RETURN s, r, d
-  def create_node_with_relationship(label, properties, dest_label, dest_properties, edge_label, edge_direction) when is_atom(label) do
+  # MATCH (d:Movie {title: "Love Actually"}) CREATE (s:Actor {name: "Keira Knightley"}) -[r:ACTED_IN]->(d) RETURN s, r, d
+  def create_node_with_relationship(label, properties, dest_label, dest_properties, edge_label, edge_direction)
+      when is_atom(label) do
     dest_node = Cypher.node(:d, dest_label, dest_properties)
-    "MATCH " <> dest_node <>  " CREATE " <>
-      Cypher.node(:s, label, properties) <>
-      Cypher.relationship(:r, edge_label, edge_direction) <>
-      " (d) RETURN s, r, d"
+
+    ("MATCH " <>
+       dest_node <>
+       " CREATE " <>
+       Cypher.node(:s, label, properties) <>
+       Cypher.relationship(:r, edge_label, edge_direction) <>
+       " (d) RETURN s, r, d")
     |> Cypher.run()
   end
 

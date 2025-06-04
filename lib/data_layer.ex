@@ -284,11 +284,12 @@ defmodule AshNeo4j.DataLayer do
     groups
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
     |> Stream.map(&convert_group_to_resource(resource, &1))
-    |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources result")
+
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources result")
   end
 
   defp convert_group_to_resource(resource, group)
-      when is_atom(resource) and is_map(group) do
+       when is_atom(resource) and is_map(group) do
     # IO.inspect(group, label: "AshNeo4j.DataLayer.convert_group_to_resource group")
     source_node = Map.get(group, "s")
     edge = Map.get(group, "r")
@@ -359,8 +360,8 @@ defmodule AshNeo4j.DataLayer do
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
     properties = properties(resource, attributes)
-    relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id) |> IO.inspect(label: :relationship_attributes)
-    relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes)) |> IO.inspect(label: :relationship_source_attributes)
+    relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id)
+    relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
     case Enum.count(relationship_source_attributes) do
       0 ->
@@ -372,15 +373,23 @@ defmodule AshNeo4j.DataLayer do
           {:error, error} ->
             {:error, error}
         end
+
       1 ->
-        {source_attribute, name} = hd(relationship_attributes) |> IO.inspect(label: :relationship_attribute)
-        relationship = Ash.Resource.Info.relationship(resource, name) |> IO.inspect(label: :relationship)
+        {source_attribute, name} = hd(relationship_attributes)
+        relationship = Ash.Resource.Info.relationship(resource, name)
         dest_resource = relationship.destination
         {^name, edge_label, edge_direction} = Info.node_relationship(resource, name)
         dest_node_property_name = Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
         dest_id = %{dest_node_property_name => Map.get(relationship_source_attributes, source_attribute)}
 
-        case Neo4jHelper.create_node_with_relationship(Info.label(resource), properties, Info.label(dest_resource), dest_id, edge_label, edge_direction) do
+        case Neo4jHelper.create_node_with_relationship(
+               Info.label(resource),
+               properties,
+               Info.label(dest_resource),
+               dest_id,
+               edge_label,
+               edge_direction
+             ) do
           {:ok, %Boltx.Response{results: groups}} ->
             # return the created, enriched node
             {:ok, convert_group_to_resource(resource, hd(groups))}
@@ -388,11 +397,10 @@ defmodule AshNeo4j.DataLayer do
           {:error, error} ->
             {:error, error}
         end
+
       _ ->
         {:error, "AshNeo4j cannot create node with multiple relationships"}
     end
-
-
   end
 
   defp update_from_changeset(_records, dest_resource, changeset)

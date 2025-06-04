@@ -10,10 +10,12 @@ defmodule AshNeo4j.Transformers.TransformAddRelationshipAttributes do
 
   defp add_relationship_attributes(dsl) do
     relationships = Verifier.get_entities(dsl, [:relationships])
-    relationship_attributes = Enum.into(relationships, [],
-      fn relationship ->
+
+    relationship_attributes =
+      Enum.into(relationships, [], fn relationship ->
         {Map.get(relationship, :source_attribute), Map.get(relationship, :name)}
       end)
+
     Transformer.set_option(dsl, [:neo4j], :relationship_attributes, relationship_attributes)
   end
 end
