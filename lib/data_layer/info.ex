@@ -28,6 +28,11 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :translation, [], true)
   end
 
+  @spec relationship_attributes(Ash.Resource.t()) :: keyword() | nil
+  def relationship_attributes(resource) do
+    Extension.get_opt(resource, [:neo4j], :relationship_attributes, [], true)
+  end
+
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
   def node_relationship(resource, source_attribute) when is_atom(source_attribute) do
     List.keyfind(relate(resource), source_attribute, 0)
