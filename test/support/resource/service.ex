@@ -6,17 +6,30 @@ defmodule AshNeo4j.Test.Resource.Service do
 
   neo4j do
     label :InternalService
-    relate [{:services, :MANAGES, :outgoing}, {:resources, :USES, :outgoing}]
+
+    relate [
+      {:specification, :SPECIFIES, :incoming},
+      {:services, :MANAGES, :outgoing},
+      {:resources, :USES, :outgoing}
+    ]
+
     skip([:service_id, :parent_service_id])
     translate id: :uuid
   end
 
   actions do
-    defaults [:create, :destroy]
-    default_accept [:name, :state, :status]
+    defaults [:destroy]
 
     read :read do
       primary? true
+    end
+
+    create :create do
+      primary? true
+      accept [:name]
+      argument :specified_by, :uuid
+
+      change manage_relationship(:specified_by, :specification, type: :append_and_remove)
     end
 
     update :update do
@@ -39,8 +52,9 @@ defmodule AshNeo4j.Test.Resource.Service do
   end
 
   relationships do
+    belongs_to :specification, AshNeo4j.Test.Resource.Specification, public?: true
+    belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
-    belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true
   end
 end

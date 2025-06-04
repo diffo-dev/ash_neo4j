@@ -102,7 +102,8 @@ defmodule AshNeo4j.DataLayer do
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
-      AshNeo4j.Transformers.TransformAddTranslation
+      AshNeo4j.Transformers.TransformAddTranslation,
+      AshNeo4j.Transformers.TransformAddRelationshipAttributes
     ]
 
   defmodule Query do
@@ -121,10 +122,9 @@ defmodule AshNeo4j.DataLayer do
       {:ok, []} ->
         {:ok, []}
 
-      {:ok, nodes} ->
-        # IO.inspect(nodes, label: "AshNeo4j.DataLayer.run_query nodes")
+      {:ok, groups} ->
         results =
-          convert_nodes_to_resources(query.resource, nodes)
+          convert_groups_to_resources(query.resource, groups)
           |> filter_stream(query.domain, query.filter)
           |> Enum.to_list()
 
@@ -280,34 +280,38 @@ defmodule AshNeo4j.DataLayer do
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
-  defp convert_nodes_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
+  defp convert_groups_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
     groups
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources groups")
-    |> Stream.map(fn related_nodes ->
-      source_node = Map.get(related_nodes, "s")
-      edge = Map.get(related_nodes, "r")
-      dest_node = Map.get(related_nodes, "d")
+    |> Stream.map(&convert_group_to_resource(resource, &1))
 
-      if edge != nil && dest_node != nil do
-        # enrich the source node
-        dest_label = String.to_atom(List.first(dest_node.labels))
-        relationship_label = String.to_atom(edge.type)
-        relationship = Info.relationship(resource, relationship_label, dest_label)
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources result")
+  end
 
-        if relationship != nil do
-          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-          enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
-          convert_node_to_resource(resource, source_node, [enrichment])
-        else
-          IO.puts("unable to enrich source node")
-          convert_node_to_resource(resource, source_node)
-        end
+  defp convert_group_to_resource(resource, group)
+       when is_atom(resource) and is_map(group) do
+    # IO.inspect(group, label: "AshNeo4j.DataLayer.convert_group_to_resource group")
+    source_node = Map.get(group, "s")
+    edge = Map.get(group, "r")
+    dest_node = Map.get(group, "d")
+
+    if edge != nil && dest_node != nil do
+      # enrich the source node
+      dest_label = String.to_atom(List.first(dest_node.labels))
+      relationship_label = String.to_atom(edge.type)
+      relationship = Info.relationship(resource, relationship_label, dest_label)
+
+      if relationship != nil do
+        dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+        enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+        convert_node_to_resource(resource, source_node, [enrichment])
       else
+        IO.puts("unable to enrich source node")
         convert_node_to_resource(resource, source_node)
       end
-
-      # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_nodes_to_resources result")
-    end)
+    else
+      convert_node_to_resource(resource, source_node)
+    end
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])
@@ -344,7 +348,6 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_changeset(_records, resource, changeset) do
-    # don't use records yet, but expect to for upsert
     primary_keys = Ash.Resource.Info.primary_key(resource)
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
@@ -357,14 +360,46 @@ defmodule AshNeo4j.DataLayer do
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
     properties = properties(resource, attributes)
+    relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id)
+    relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
-    case Info.label(resource) |> Neo4jHelper.create_node(properties) do
-      {:ok, %Boltx.Response{results: [node_map | _]}} ->
-        node = Map.get(node_map, "n")
-        {:ok, convert_node_to_resource(resource, node)}
+    case Enum.count(relationship_source_attributes) do
+      0 ->
+        case Info.label(resource) |> Neo4jHelper.create_node(properties) do
+          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+            node = Map.get(node_map, "n")
+            {:ok, convert_node_to_resource(resource, node)}
 
-      {:error, error} ->
-        {:error, error}
+          {:error, error} ->
+            {:error, error}
+        end
+
+      1 ->
+        {source_attribute, name} = hd(relationship_attributes)
+        relationship = Ash.Resource.Info.relationship(resource, name)
+        dest_resource = relationship.destination
+        {^name, edge_label, edge_direction} = Info.node_relationship(resource, name)
+        dest_node_property_name = Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
+        dest_id = %{dest_node_property_name => Map.get(relationship_source_attributes, source_attribute)}
+
+        case Neo4jHelper.create_node_with_relationship(
+               Info.label(resource),
+               properties,
+               Info.label(dest_resource),
+               dest_id,
+               edge_label,
+               edge_direction
+             ) do
+          {:ok, %Boltx.Response{results: groups}} ->
+            # return the created, enriched node
+            {:ok, convert_group_to_resource(resource, hd(groups))}
+
+          {:error, error} ->
+            {:error, error}
+        end
+
+      _ ->
+        {:error, "AshNeo4j cannot create node with multiple relationships"}
     end
   end
 

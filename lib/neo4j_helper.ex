@@ -168,6 +168,31 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @doc """
+  Creates source neo4j node with label, properties and relationship to an existing node
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.create_node_with_relationship(:Actor, %{name: "Keira Knightley"}, :Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing)
+  iex> result
+  :ok
+  ```
+  """
+  # MATCH (d:Movie {title: "Love Actually"}) CREATE (s:Actor {name: "Keira Knightley"}) -[r:ACTED_IN]->(d) RETURN s, r, d
+  def create_node_with_relationship(label, properties, dest_label, dest_properties, edge_label, edge_direction)
+      when is_atom(label) do
+    dest_node = Cypher.node(:d, dest_label, dest_properties)
+
+    ("MATCH " <>
+       dest_node <>
+       " CREATE " <>
+       Cypher.node(:s, label, properties) <>
+       Cypher.relationship(:r, edge_label, edge_direction) <>
+       " (d) RETURN s, r, d")
+    |> Cypher.run()
+  end
+
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
   @doc """
   Tests if two nodes are related with a relationship type
