@@ -5,6 +5,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   alias AshNeo4j.Test.Resource.Upsert
+  alias AshNeo4j.Test.Resource.Specification
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Resource.Money
@@ -527,7 +528,7 @@ defmodule AshNeo4j.Test do
       assert related_comment.post_id == post.id
     end
 
-    test "post and comments nodes can be related using ash" do
+    test "post and comments nodes can be related using ash update" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
@@ -544,7 +545,7 @@ defmodule AshNeo4j.Test do
       assert related_comment2.post_id == post.id
     end
 
-    test "post and comment nodes can be updated and related using ash" do
+    test "post and comment nodes can be updated and related using ash update" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
@@ -562,7 +563,7 @@ defmodule AshNeo4j.Test do
       assert related_post.score == 1
     end
 
-    test "post and comment nodes can be related and unrelated using ash" do
+    test "post and comment nodes can be related and unrelated using ash update" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment9"}) |> Ash.create()
@@ -599,6 +600,13 @@ defmodule AshNeo4j.Test do
                :BELONGS_TO,
                :incoming
              )
+    end
+
+    test "resource node can be created and related to a specification using ash create" do
+      esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
+      esim_0000 = Resource |> Ash.create!(%{name: "esim_0000", specification_id: esim_v1.id})
+        |> IO.inspect(label: :esim_0000)
+      assert esim_0000.specification_id == esim_v1.id
     end
 
     test "service-service-resource-resource relationships using ash" do
