@@ -14,7 +14,10 @@ Mix.install(
       prefix: :default,
       name: Bolt,
       log: true,
-      log_hex: true]
+      log_hex: true],
+    logger: [
+      level: :warning
+    ]
   ]
 )
 ```
@@ -61,41 +64,49 @@ Update the configuration below as necessary and evaluate.
 config = [
   uri: "bolt://localhost:7687",
   auth: [username: "neo4j", password: ""],
-  user_agent: "boltxTest/1",
+  user_agent: "ashNeo4jLivebook/1",
   pool_size: 15,
   max_overflow: 3,
   prefix: :default,
   name: Bolt,
-  log: true,
-  log_hex: true
+  log: false,
+  log_hex: false
 ]
 ```
 
 Boltx needs a process in your supervision tree:
 
 ```elixir
-{:ok, pid} = Boltx.start_link(config)
+Boltx.start_link(config)
 ```
 
-As we mentioned earlier boltx version negotiation is likely to require you to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
+As we mentioned earlier depending on what version of neo4j you are running the boltx version negotiation is likely to require you to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
 
 ```elixir
-{:ok, :bolt_versions} = System.fetch_env("BOLT_VERSIONS")
+bolt_versions = System.get_env("BOLT_VERSIONS")
 ```
 
 Now you should be able to verify that Neo4j is running:
 
 ```elixir
-{:ok, result} = Boltx.query!(Bolt, "return 1 as n") |> Boltx.Response.first() == %{"n" => 1}
+Boltx.query!(Bolt, "return 1 as n") |> Boltx.Response.first() == %{"n" => 1}
+```
+
+**OPTIONAL** If you want to clear your database you can evaluate:
+
+```elixir
+AshNeo4j.Neo4jHelper.delete_all()
 ```
 
 ## Why have an Ash Neo4j DataLayer?
 
-The Ash ecosystem already offers a choice of datalayers, including the popular and feature rich [AshPostgres](https://github.com/ash-project/ash_postgres) above the open source [Postgres](https://github.com/postgres/postgres).
+I've been using databases off and on for 30 years, and graph for only about 4 years, but once you start with graph you can't go back. This is because graph is natural and it gets you thinking about your domain entities (Ash resources) and their relationships. Graphistas are annoying as they see graphs everywhere.
 
-I've been using databases off and on for 30 years, and graph for only about 4 years, but once you start with graph you can't go back. This is because graph is natural and it gets you thinking about your domain entities (Ash resources) and their relationships. Graphistas are annoying as they see graphs everywhere...
+The Ash Framework contains some basic datalayers and the ecosystem already offers a choice of datalayer extensions, including the popular and feature rich [AshPostgres](https://github.com/ash-project/ash_postgres) above the open source [Postgres](https://github.com/postgres/postgres).
 
-I started with Ash *despite* the lack of graph datalayers. Indeed Ash does a good job of abstracting SQL databases away and making refactorings easier. However as you refactor you need to migrate database schemas - so it didn't go away, it was just less obvious.
+I hitched my wagon to Ash Framework aware of the lack of graph datalayers, knowing that they could be built using an Ash Extension. Indeed Ash does a good job of abstracting SQL databases away and making refactorings easier, so arguable there is less demand for such a think. However as you refactor you need to migrate database schemas - so it didn't go away, it was just less obvious.
+
+Increasingly our applications need to work with knowledge, and knowledge is best represented using graphs.
 
 So here we both are.
 
@@ -114,57 +125,11 @@ defmodule Domain do
 end
 ```
 
-Then we define an Ash Resource for Service, using the AshNeo4j datalayer:
+We'll start by defining an Ash Resource for a Specification. We intend to have a Specification instance which SPECIFIES either Service or Resource instances:
 
-```elixir
-defmodule Service do
-  use Ash.Resource,
-    domain: Domain,
-    data_layer: AshNeo4j.DataLayer
-
-  neo4j do
-    translate id: :uuid
-  end
-
-  actions do
-    default_accept :*
-    defaults [:read, :update, :destroy, create: :*]
-  end
-
-  attributes do
-    uuid_primary_key :id, writable?: true
-    attribute :name, :string, public?: true
-    attribute :state, :atom, public?: true
-    attribute :status, :atom, public?: true
-  end
-end
-```
+<!-- livebook:{"break_markdown":true} -->
 
 We've included `neo4j do` so that we translate the `:id` attribute to the neo4j node property `uuid`.
-
-<!-- livebook:{"break_markdown":true} -->
-
-Now we create an actual instance with a state of initial.
-
-```elixir
-{:ok, actual} = Service
-  |> Ash.Changeset.for_create(:create, %{name: "My First Service", state: :initial})
-  |> Ash.create()
-```
-
-We can retrieve this service with Ash:
-
-```elixir
-{:ok, service} = Service |> Ash.read_one()
-```
-
-When we open a [neo4j browser](http://localhost:7474/browser/) connect to the database and fetch node data with `MATCH (n:Service) RETURN n LIMIT 25` we should see our Service node.
-
-<!-- livebook:{"break_markdown":true} -->
-
-OK so we've made a node, but we don't just want nodes, we want relationships between nodes!
-
-We'll now define a Specification resource so that in cypher we'll have `(Specification)-[SPECIFIES]->(Service)`.
 
 ```elixir
 defmodule Specification do
@@ -184,40 +149,55 @@ defmodule Specification do
     uuid_primary_key :id, writable?: true
     attribute :href, :string, public?: true
     attribute :name, :string, public?: true
-    attribute :major_version, :integer, public?: true
-    attribute :minor_version, :integer, public?: true
+    attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
+    attribute :major_version, :integer, default: 1, public?: true
+    attribute :minor_version, :integer, default: 0, public?: true
   end
   
 end
 ```
 
-We'll also extend the Service so that it can be parented by a service, and can have child services:
+Now we create some service and resource specification instances:
 
 ```elixir
-defmodule Service do
+broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+nbn_ethernet_v1 = Specification |> Ash.create!(%{name: "nbnEthernet", type: :resource})
+mobile_backup_v2 = Specification |> Ash.create!(%{name: "mobileBackup", major_version: 2, minor_version: 3})
+esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
+specifications = [broadband_v1, mobile_backup_v2, nbn_ethernet_v1, esim_v1]
+
+```
+
+Then we define an Ash Resource for Resource, using the AshNeo4j datalayer:
+
+```elixir
+defmodule Resource do
   use Ash.Resource,
     domain: Domain,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
     relate [
-      {:specification, :SPECIFIES, :incoming}
-      {:services, :MANAGES, :outgoing},
+      {:specification, :SPECIFIES, :incoming},
+      {:service, :ASSIGNED_TO, :outgoing}
     ]
     translate id: :uuid
   end
 
   actions do
     default_accept :*
-    defaults [:read, :destroy, create: :*]
+    defaults [:read, :destroy]
+
+    create :create do
+      primary? true
+      accept [:specification_id, :name]
+    end
 
     update :update do
       primary? true
       require_atomic? false
-      argument :defining_specification, :uuid
-      argument :manage_services, {:array, :uuid}
-      change manage_relationship(:defining_specification, :specification, type: :append_and_remove)
-      change manage_relationship(:manage_services, :services, type: :append_and_remove)
+
+      accept [:state, :status]
     end
   end
 
@@ -229,12 +209,96 @@ defmodule Service do
   end
 
   relationships do
-    has_one :specification, Specification, public?: true
-    has_many :services, Service, public?: true
-    belongs_to :parent_service, Service, public?: true
+    belongs_to :specification, Specification, public?: true
+    belongs_to :service, Service, public?: true
   end
 end
 ```
+
+Now we'll create some resource instances:
+
+```elixir
+esim_0001 = Resource |> Ash.create!(%{name: "esim_0001", specification_id: esim_v1.id})
+```
+
+We also want to define a Service, which is defined by a Specification and can manage child Services and be assigned Resources:
+
+```elixir
+defmodule Service do
+  use Ash.Resource,
+    domain: Domain,
+    data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    relate [
+      {:specification, :SPECIFIES, :incoming},
+      {:services, :MANAGES, :outgoing},
+      {:resources, :ASSIGNED_TO, :incoming}
+    ]
+    translate id: :uuid
+  end
+
+  actions do
+    default_accept :*
+    defaults [:read, :destroy]
+
+    create :create do
+      primary? true
+      accept [:specification_id, :name]
+    end
+
+    update :update do
+      primary? true
+      require_atomic? false
+
+      accept [:state, :status]
+      
+      argument :manage_services, {:array, :uuid}
+      argument :use_resources, {:array, :uuid}
+      
+      change manage_relationship(:manage_services, :services, type: :append_and_remove)
+      change manage_relationship(:use_resources, :resources, type: :append_and_remove)
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id, writable?: true
+    attribute :name, :string, public?: true
+    attribute :state, :atom, public?: true, default: :initial
+    attribute :status, :atom, public?: true
+    attribute :service_id, :uuid, public?: true
+  end
+
+  relationships do
+    belongs_to :specification, Specification, public?: true
+    belongs_to :parent_service, Service
+    has_many :services, Service
+    has_many :resources, Resource
+  end
+end
+```
+
+Now we create a broadband service instance:
+
+```elixir
+{:ok, actual} = Service
+  |> Ash.Changeset.for_create(:create, %{name: "My First Service", specification_id: broadband_v1.id})
+  |> Ash.create()
+```
+
+We can retrieve this service with Ash:
+
+```elixir
+{:ok, service} = Service |> Ash.read_one()
+```
+
+When we open a [neo4j browser](http://localhost:7474/browser/) connect to the database and fetch node data with `MATCH (n:Service) RETURN n LIMIT 25` we should see our Service node.
+
+<!-- livebook:{"break_markdown":true} -->
+
+OK so we've made a node, but we don't just want nodes, we want relationships between nodes!
+
+We'll now define a Specification resource so that in cypher we'll have `(Specification)-[SPECIFIES]->(Service)`.
 
 ## How your Ash Resource is persisted in Neo4j
 
