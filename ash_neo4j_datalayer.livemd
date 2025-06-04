@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install(
-  [{:ash_neo4j, "~> 0.1.6"}],
+  [{:ash_neo4j, "~> 0.1.6"}, {:kino, "~> 0.16.0"}],
   consolidate_protocols: false,
   config: [
     boltx: [
@@ -13,8 +13,8 @@ Mix.install(
       max_overflow: 3,
       prefix: :default,
       name: Bolt,
-      log: true,
-      log_hex: true],
+      log: false,
+      log_hex: false],
     logger: [
       level: :warning
     ]
@@ -321,6 +321,17 @@ In this tutorial you've used the AshNeo4j DataLayer to persist some Ash Resource
 
 If you are already using Ash you may enjoy the simplicity of a schemaless DataLayer natural beauty of graphs.
 
-`(Resource)-[RELATES]->(Resource)`
+AshNeo4j includes an introspection function to render a representation of your Domain's Resources as  as Mermaid, which can help:
 
-What is next is up to you...
+```elixir
+Kino.Mermaid.new("""
+graph TD
+  A@{shape: circle, label: "broadband"}--MANAGES--> B@{shape: circle, label: "mobile_backup"};
+  A --USES---> C@{shape: circle, label: "nbnEthernet_0001"};
+  B --USES---> D@{shape: circle, label: "esim_0001"};
+  E@{shape: circle, label: "broadband_v1"}--SPECIFIES---> A;
+  F@{shape: circle, label: "mobile_backup_v2"}--SPECIFIES---> B
+  G@{shape: circle, label: "nbnEthernet_v1"}--SPECIFIES---> C;
+  H@{shape: circle, label: "esim_v1"}--SPECIFIES---> D
+""")
+```
