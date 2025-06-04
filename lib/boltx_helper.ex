@@ -1,7 +1,29 @@
-defmodule AshNeo4j.DataLayer.BoltxHelper do
+defmodule AshNeo4j.BoltxHelper do
   @moduledoc """
-  AshNeo4j DataLayer BoltxHelper functions
+  AshNeo4j BoltxHelper
   """
+
+  @doc """
+  Starts Boltx, returns :ok or {:error, error}
+  """
+  def start() do
+    case Boltx.start_link(Application.get_env(:boltx, Bolt)) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Checks Boltx connectivity
+  """
+  def is_connected() do
+    try do
+      Boltx.query!(Bolt, "return 1 as n") |> Boltx.Response.first() == %{"n" => 1}
+    catch
+      :exit, _ -> false
+    end
+  end
 
   @spec to_elixir_duration(%{optional(:days) => integer(), optional(any()) => any()} | String.t()) :: Duration.t()
   @doc """
@@ -9,13 +31,13 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
 
   ## Examples
   ```
-  iex> AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration(Boltx.Types.Duration.create(14, 25, 18367, 8000))
+  iex> AshNeo4j.BoltxHelper.to_elixir_duration(Boltx.Types.Duration.create(14, 25, 18367, 8000))
   %Duration{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}}
 
-  iex> AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration(Boltx.Types.Duration.create(1, 0, 0, 0))
+  iex> AshNeo4j.BoltxHelper.to_elixir_duration(Boltx.Types.Duration.create(1, 0, 0, 0))
   %Duration{month: 1}
 
-  iex> AshNeo4j.DataLayer.BoltxHelper.to_elixir_duration("PT1H")
+  iex> AshNeo4j.BoltxHelper.to_elixir_duration("PT1H")
   %Duration{hour: 1}
   ```
   """
@@ -60,10 +82,10 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
 
   ## Examples
   ```
-  iex> AshNeo4j.DataLayer.BoltxHelper.from_elixir_duration(Duration.new!(%{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}}))
+  iex> AshNeo4j.BoltxHelper.from_elixir_duration(Duration.new!(%{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}}))
   %Boltx.Types.Duration{years: 1, months: 2, weeks: 0, days: 25, hours: 5, minutes: 6, seconds: 7, nanoseconds: 8000}
 
-  iex> AshNeo4j.DataLayer.BoltxHelper.from_elixir_duration(Duration.new!(%{month: 1}))
+  iex> AshNeo4j.BoltxHelper.from_elixir_duration(Duration.new!(%{month: 1}))
   %Boltx.Types.Duration{years: 0, months: 1, weeks: 0, days: 0, hours: 0, minutes: 0, seconds: 0, nanoseconds: 0}
   ```
   """
@@ -91,7 +113,7 @@ defmodule AshNeo4j.DataLayer.BoltxHelper do
 
   ## Examples
   ```
-  iex> AshNeo4j.DataLayer.BoltxHelper.to_cypher(%Boltx.Types.Duration{hours: 1})
+  iex> AshNeo4j.BoltxHelper.to_cypher(%Boltx.Types.Duration{hours: 1})
   iex> "PT1H"
   ```
   """

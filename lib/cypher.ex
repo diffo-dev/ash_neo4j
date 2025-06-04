@@ -1,9 +1,9 @@
 defmodule AshNeo4j.Cypher do
   @moduledoc """
-  Ash Neo4j cypher functions
+  AshNeo4j Cypher
   """
 
-  alias AshNeo4j.DataLayer.BoltxHelper
+  alias AshNeo4j.BoltxHelper
   require Logger
 
   @doc """
