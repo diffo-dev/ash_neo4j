@@ -73,10 +73,10 @@ config = [
 ]
 ```
 
-Boltx needs a process in your supervision tree:
+Boltx needs a process in your supervision tree, this will start one with the config if not already running:
 
 ```elixir
-Boltx.start_link(config)
+AshNeo4j.BoltxHelper.start(config)
 ```
 
 As we mentioned earlier depending on what version of neo4j you are running the boltx version negotiation is likely to require you to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
