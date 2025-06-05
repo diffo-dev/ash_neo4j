@@ -4,7 +4,6 @@ defmodule AshNeo4j.BoltxHelper do
   """
 
   @dialyzer {:nowarn_function, start: 1}
-
   @doc """
   Starts Boltx, returns :ok or {:error, error}
   """
