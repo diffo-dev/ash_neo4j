@@ -3,11 +3,19 @@ defmodule AshNeo4j.BoltxHelper do
   AshNeo4j BoltxHelper
   """
 
+  @dialyzer {:nowarn_function, start: 1}
   @doc """
   Starts Boltx, returns :ok or {:error, error}
   """
   def start() do
-    case Boltx.start_link(Application.get_env(:boltx, Bolt)) do
+    start(Application.get_env(:boltx, Bolt))
+  end
+
+  @doc """
+  Starts Boltx with config, returns :ok or {:error, error}
+  """
+  def start(config) do
+    case Boltx.start_link(config) do
       {:ok, _pid} -> :ok
       {:error, {:already_started, _pid}} -> :ok
       {:error, error} -> {:error, error}

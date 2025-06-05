@@ -1,0 +1,378 @@
+# Ash Neo4j DataLayer
+
+```elixir
+Mix.install(
+  [{:ash_neo4j, "~> 0.2"}],
+  consolidate_protocols: false
+)
+```
+
+## Overview
+
+If already familiar with the [Ash Framework](https://ash-hq.org) in this livebook tutorial you will learn:
+
+* Why have an Ash Neo4j DataLayer?
+* Brief Introduction to Neo4j
+* Installing Neo4j and configuring Boltx
+* How to persist your Ash Resources with Neo4j
+* How your Ash Resource and its relationships are stored in Neo4j
+
+## Why have an Ash Neo4j DataLayer?
+
+I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last four years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
+
+Similarly I've found [Ash](https://ash-hq.org) to be an exceptional framework for declarative application development. It has a learning curve, however the Ash way is to use and build abstractions for exceptional maintainability.
+
+The Ash Framework contains some basic datalayers and the ecosystem already offers a choice of datalayer extensions, including the popular and feature rich [AshPostgres](https://github.com/ash-project/ash_postgres) above the open source [Postgres](https://github.com/postgres/postgres).
+
+I hitched my wagon to Ash Framework aware of the lack of graph datalayers, knowing that they could be built using an Ash Extension. Indeed Ash does a good job of abstracting SQL databases away and making refactorings easier, so arguably there is less demand for such a thing. However as you refactor your resources you still need to migrate database schemas - so the complexity doesn't go away, it is just better hidden.
+
+Neo4j is defacto in data science and well entrenched in security, fraud, logistics, network management and recommendation applications. Increasingly our applications need to work with both facts and knowledge and these are best represented using graphs.
+
+So here we both are with Ash and graph. Enjoy the combination.
+
+## Brief Introduction to Neo4j
+
+Neo4j is a leading Graph Based Database. It is schemaless, and your data is modelled naturally using nodes and relationships. Nodes can have properties and be involved in any number of relationships. Relationships are directed and relate exactly two nodes. Relationships are also named and may themselves have properties.
+
+Cypher (also known as Cypher Query Language CQL) is the native language of Neo4j, and was originally modelled after SQL.
+
+We can create an Actor node `CREATE (s:Actor {name: 'Bill Nighy'})` and a Movie node `CREATE (d:Movie {title: 'Love Actually'})`
+
+We can relate them with the cypher `MATCH (s:Actor {name: 'Bill Nighy'}), (d:Movie {title: 'Love Actually'}) MERGE (s) -[r:ACTED_IN]-> (d)`
+
+Cypher is not meant as a graphical language, but has an ASCII art influence and is fairly expressive in that `(s) -[r:ACTED_IN]-> (d)`, which mirrors how these nodes could look related in a browser. Cypher influenced international standard [GQL](https://www.gqlstandards.org) and is being aligned, however to maintain back compatibility with Neo4j 4.x we use Cypher.
+
+We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/docs/bolt/current/bolt/). Ash Neo4j uses [boltx](https://github.com/sagastume/boltx) which is a fork of the inactive [bolt-sips](https://github.com/florinpatrascu/bolt_sips).
+
+## Installing Neo4j and Configuring Boltx
+
+While [Neo4j community edition](https://github.com/neo4j/neo4j) is open source and you can build from source it is likely that you'll use an installation.
+
+Ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running. You can install latest major Neo4j versions from the community tab at [Neo4j Deployment Center](https://neo4j.com/deployment-center/?desktop-gdb), or use the [4.4.27 direct link](https://neo4j.com/download-thanks/?edition=community&release=4.4.27&flavour=rpm)
+
+I've used Neo4j community edition 4.4.27 (bolt 4.4) and to connect using boltx I needed to also set the environment variable ```BOLT_VERSIONS=4.4``` to steer [bolt protocol handshake](https://neo4j.com/docs/bolt/current/bolt/handshake), see also [bolt protocol and neo4j compatibility](https://neo4j.com/docs/bolt/current/bolt-compatibility/).
+
+AshNeo4j doesn't yet have any specific Neo4j 5.x optimisations and *should* be able to run on Neo4j 5.x.
+
+When you install neo4j you'll typically have a default username and password. Take note of this and any other non-standard config.
+
+Update the configuration below as necessary and evaluate.
+
+```elixir
+config = [
+  uri: "bolt://localhost:7687",
+  auth: [username: "neo4j", password: ""],
+  user_agent: "ashNeo4jLivebook/1",
+  pool_size: 15,
+  max_overflow: 3,
+  prefix: :default,
+  name: Bolt,
+  log: false,
+  log_hex: false
+]
+```
+
+Boltx needs a process in your supervision tree, this will start one with the config if not already running:
+
+```elixir
+AshNeo4j.BoltxHelper.start(config)
+```
+
+As we mentioned earlier depending on what version of neo4j you are running the boltx version negotiation is likely to require you to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
+
+```elixir
+bolt_versions = System.get_env("BOLT_VERSIONS")
+```
+
+Now you should be able to verify that Neo4j is running:
+
+```elixir
+AshNeo4j.BoltxHelper.is_connected()
+```
+
+You can get all nodes related to other nodes the following query:
+
+```elixir
+AshNeo4j.Cypher.run("MATCH (n1)-[r]->(n2) RETURN r, n1, n2 LIMIT 25")
+```
+
+It is helpful to have a Neo4j browser open locally, typically:
+
+http://localhost:7474/browser/
+
+Once you connect and issue a query like the one above you'll be able to explore the results interactively.
+
+<!-- livebook:{"break_markdown":true} -->
+
+**OPTIONAL** If you want to clear your database you can evaluate:
+
+```elixir
+AshNeo4j.Neo4jHelper.delete_all()
+```
+
+## How to persist your Ash Resources with Neo4j
+
+First we define a minimal Domain to hold our Ash Resources:
+
+```elixir
+defmodule Domain do
+  @moduledoc false
+  use Ash.Domain
+
+  resources do
+    resource Specification
+    resource Service
+    resource Resource
+  end
+end
+```
+
+We'll start by defining an Ash Resource for a Specification. We intend to have a Specification instance which SPECIFIES either Service or Resource instances:
+
+<!-- livebook:{"break_markdown":true} -->
+
+We've included `neo4j do` so that we translate the `:id` attribute to the neo4j node property `uuid`.
+
+```elixir
+defmodule Specification do
+  use Ash.Resource,
+    domain: Domain,
+    data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    translate id: :uuid
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  attributes do
+    uuid_primary_key :id, writable?: true
+    attribute :href, :string, public?: true
+    attribute :name, :string, public?: true
+    attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
+    attribute :major_version, :integer, default: 1, public?: true
+    attribute :minor_version, :integer, default: 0, public?: true
+  end
+  
+end
+```
+
+Now we create some service and resource specification instances:
+
+```elixir
+broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+nbn_ethernet_v1 = Specification |> Ash.create!(%{name: "nbnEthernet", type: :resource})
+mobile_backup_v2 = Specification |> Ash.create!(%{name: "mobileBackup", major_version: 2, minor_version: 3})
+esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
+specifications = [broadband_v1, mobile_backup_v2, nbn_ethernet_v1, esim_v1]
+
+```
+
+Then we define an Ash Resource for Resource, using the AshNeo4j datalayer:
+
+```elixir
+defmodule Resource do
+  @moduledoc false
+  use Ash.Resource,
+    domain: Domain,
+    data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    relate [
+      {:specification, :SPECIFIES, :incoming},
+      {:resources, :USES, :outgoing}
+    ]
+
+    skip [:service_id, :resource_id]
+    translate id: :uuid
+  end
+
+  actions do
+    defaults [:destroy]
+
+    read :read do
+      primary? true
+    end
+
+    create :create do
+      primary? true
+      accept [:name]
+      argument :specified_by, :uuid
+
+      change manage_relationship(:specified_by, :specification, type: :append_and_remove)
+    end
+
+    update :update do
+      primary? true
+      require_atomic? false
+      accept [:state, :status]
+      argument :use_resources, {:array, :uuid}
+
+      change manage_relationship(:use_resources, :resources, type: :append_and_remove)
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id, writable?: true
+    attribute :name, :string, public?: true
+    attribute :state, :atom, public?: true
+    attribute :status, :atom, public?: true
+    attribute :service_id, :uuid, public?: true
+    attribute :resource_id, :uuid, public?: true
+  end
+
+  relationships do
+    belongs_to :specification, Specification, public?: true
+    belongs_to :service, Service, public?: true
+    belongs_to :resource, Resource, public?: true
+    has_many :resources, Resource
+  end
+end
+```
+
+```elixir
+nbn_ethernet_v1.id
+```
+
+Now we'll create some resource instances, these will be related to the specifications we created earlier:
+
+```elixir
+esim_0001 = Resource |> Ash.create!(%{name: "esim_0001", specified_by: esim_v1.id})
+nbn_ethernet_0001 = Resource |> Ash.create!(%{name: "nbnEthernet_0001", specified_by: nbn_ethernet_v1.id})
+resources = [esim_0001, nbn_ethernet_0001]
+```
+
+We also want to define a Service, which is defined by a Specification and can manage child Services and be assigned Resources:
+
+```elixir
+defmodule Service do
+  @moduledoc false
+  use Ash.Resource,
+    domain: Domain,
+    data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    label :InternalService
+
+    relate [
+      {:specification, :SPECIFIES, :incoming},
+      {:services, :MANAGES, :outgoing},
+      {:resources, :USES, :outgoing}
+    ]
+
+    skip([:service_id, :parent_service_id])
+    translate id: :uuid
+  end
+
+  actions do
+    defaults [:destroy]
+
+    read :read do
+      primary? true
+    end
+
+    create :create do
+      primary? true
+      accept [:name]
+      argument :specified_by, :uuid
+
+      change manage_relationship(:specified_by, :specification, type: :append_and_remove)
+    end
+
+    update :update do
+      primary? true
+      require_atomic? false
+      argument :manage_services, {:array, :uuid}
+      argument :use_resources, {:array, :uuid}
+
+      change manage_relationship(:manage_services, :services, type: :append_and_remove)
+      change manage_relationship(:use_resources, :resources, type: :append_and_remove)
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id, writable?: true
+    attribute :name, :string, public?: true
+    attribute :state, :atom, public?: true
+    attribute :status, :atom, public?: true
+    attribute :service_id, :uuid, public?: true
+  end
+
+  relationships do
+    belongs_to :specification, Specification, public?: true
+    belongs_to :parent_service, Service, public?: true
+    has_many :services, Service
+    has_many :resources, Resource
+  end
+end
+```
+
+Now we create some services instances, also specified_by specifications.
+
+```elixir
+broadband_0001 = Service |> Ash.create!(%{name: "broadband_0001", specified_by: broadband_v1.id})
+mobile_backup_0001 = Service |> Ash.create!(%{name: "mobileBackup_0001", specified_by: mobile_backup_v2.id})
+services = [broadband_0001, mobile_backup_0001]
+```
+
+Now we relate the services and resources with eachother, such that the broadband service USES the nbnEthernet resource, and manages the mobileBackup service which has the esim resource:
+
+```elixir
+mobile_backup_0001 |> Ash.update!(%{use_resources: [esim_0001.id]})
+broadband_0001 |> Ash.update!(%{manage_services: [mobile_backup_0001.id]}) 
+|> Ash.update!(%{use_resources: [nbn_ethernet_0001.id]})
+```
+
+## How your Ash Resources and its relationships are stored in Neo4j
+
+We've made some decisions about how Ash attributes and relationships are stored as Neo4j properties:
+
+* We've used native Neo4j types, including string, integer, float, boolean.
+* We've used native Neo4j arrays, however they are limited to one of the four primitive types above.
+* We've used native Neo4j temporal types, and mapped the Elixir temporal types to these.
+* We've used Neo4j strings for Elixir maps, structs and struct based types, such as MapSet, Decimal, Regex, Module
+* We map atoms to strings, keeping a leading :
+* We enforce Neo4j label, property and relationship [naming conventions](https://neo4j.com/docs/cypher-manual/current/syntax/naming/) strictly at compile time using validators.
+* We only support a single 'static' label per resource.
+* Embedded resources are converted the same way, and stored in strings or Neo4j arrays of strings, rather than using json. It is possible to use :string attributes as json, however you'll need to encode/decode to jsonString yourself.
+
+For embedded resources and other or custom `Ash.Type`, you must implement `String.Chars` protocol.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Now check your Neo4j browser and you should see the full broadband service and resource hierarchy.
+
+Explore the nodes and relationships. We strictly enforce [Neo4j naming conventions](https://neo4j.com/docs/cypher-manual/current/syntax/naming/) at resource compile time such that:
+
+* node labels are PascalCase
+* node properties are camelCase
+* relationships are UPPER_CASE
+
+By default Ash Neo4j simply uses the rightmost `Module.split` of the Ash Resource name as the label. If this doesn't suit you can use `label` to provide an atom that will be inspected to produce the label, such as `label :InternalService`
+
+By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use `translate`. Neo4j reserves `id` so you will commonly have `translate id: :uuid`
+
+Relationships are directed, the meaning should follow left to right, such as (Service) OWNS (Service), although with autonomous cars the reverse is also possible....
+
+We use `relate` to augment details of relevant `relationships`. Earlier on the Service we had
+
+`relate [
+      {:specification, :SPECIFIES, :incoming},
+      {:services, :MANAGES, :outgoing},
+      {:resources, :USES, :outgoing}
+   ]`
+
+We use `skip` to skip attributes that are transient and/or to ensure that foreign keys are not persisted on nodes as properties, rather they replaced by node relationships. Earlier on the Service we had `skip [:service_id, :parent_service_id]`.
+
+Currently Ash Neo4j doesn't support [relationship properties](https://github.com/diffo-dev/ash_neo4j/discussions/4) although we are discussing how to support this.
+
+## What Next?
+
+In this tutorial you've used the AshNeo4j DataLayer to persist some Ash Resources.
+
+If you are already using Ash you may enjoy the simplicity of a schemaless DataLayer natural beauty of graphs.
+
+If you find Ash Neo4j useful please visit and star on [github](https://github.com/diffo-dev/ash_neo4j/). Feel free to join discussions and raise issues to discuss PR's.

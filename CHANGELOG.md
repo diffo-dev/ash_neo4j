@@ -48,3 +48,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * nil attributes
 * nil relationship attributes
 
+## [v0.2.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.6...v0.2.0) (2025-06-05)
+
+### Features:
+
+* improved BoltxHelper
+* create relate
+* livebook
+
