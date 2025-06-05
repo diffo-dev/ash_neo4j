@@ -13,10 +13,17 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.1.6"},
+    {:ash_neo4j, "~> 0.2.0"},
   ]
 end
 ```
+
+## Tutorial
+
+To get started you need a running instance of [Livebook](https://livebook.dev/)
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fdiffo%2Ddev%2Fash%5Fneo4j%2Fblob%2Fdev%2Fash%5Fneo4j%5Fdatalayer.livemd)
+
 
 ## Usage
 
@@ -43,17 +50,17 @@ defmodule Comment.Resource do
   end
 
   actions do
-    default_accept(:*)
-    defaults([:create, :read, :update, :destroy])
+    default_accept :*
+    defaults [:create, :read, :update, :destroy]
   end
 
   attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true)
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
   end
 
   relationships do
-    belongs_to(:post, Post, public?: true)
+    belongs_to :post, Post, public?: true
   end
 end
 ```
@@ -158,21 +165,39 @@ Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :u
 
 ## Structs and String.Chars
 
-Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented.
+Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented using the representation common for Elixir structs. This is straightforward whether or not you own the module. Here is an example for a simple embedded resource:
+
+```elixir
+defmodule Money do
+  use Ash.Resource,
+    data_layer: :embedded
+
+  attributes do
+    attribute :amount, :integer
+    attribute :currency, :atom
+  end
+
+  defimpl String.Chars do
+    def to_string(v) do
+      "%AshNeo4j.Test.Resource.Money{amount: #{v.amount}, currency: :#{v.currency}}"
+    end
+  end
+end
+```
 
 ## Elixir nil and Neo4j Null
 
-Generally attributes with nil value are not persisted, rather than created with Null value. However values of nil within string quoted 'Elixir' types (keyword, tuple, map and struct) are persisted.
+Generally attributes with nil value are not persisted, rather they are simply not created or removed on update to nil. However values of nil within string quoted 'Elixir' types (keyword, tuple, map and struct) are persisted.
 
 ## Limitations and Future Work
 
-Ash Neo4j is early stage, it is likely that the dsl will evolve and this may break back compatibility. Ash Neo4j is in 'build' phase with initial support for Ash create, update, read, destroy actions. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
+Ash Neo4j has initial support for Ash create, update, read, destroy actions. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
 
 ## Acknowledgements
 
 Thanks to the [Ash Core](https://github.com/ash-project) for [ash](https://github.com/ash-project/ash) 🚀, including [ash_csv](https://github.com/vonagam/ash_jason) which was an exemplar.
 
-Thanks to [Sagastume](https://github.com/sagastume) for [boltx](https://github.com/tiagodavi/ex4j) which AFAIK was based on [bolt_sips](https://github.com/florinpatrascu/bolt_sips) by [Florin Patrascu](https://github.com/florinpatrascu).
+Thanks to [Sagastume](https://github.com/sagastume) for [boltx](https://github.com/tiagodavi/ex4j) which was based on [bolt_sips](https://github.com/florinpatrascu/bolt_sips) by [Florin Patrascu](https://github.com/florinpatrascu).
 
 Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) and pioneering work on graph databases.
 
