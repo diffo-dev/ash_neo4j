@@ -10,7 +10,8 @@ defmodule AshNeo4j.Test.Resource.Service do
     relate [
       {:specification, :SPECIFIES, :incoming},
       {:services, :MANAGES, :outgoing},
-      {:resources, :USES, :outgoing}
+      {:resources, :USES, :outgoing},
+      {:event, :FIRED, :outgoing}
     ]
 
     skip([:service_id, :parent_service_id])
@@ -37,9 +38,11 @@ defmodule AshNeo4j.Test.Resource.Service do
       require_atomic? false
       argument :manage_services, {:array, :uuid}
       argument :use_resources, {:array, :uuid}
+      argument :fire_event, :uuid
 
       change manage_relationship(:manage_services, :services, type: :append_and_remove)
       change manage_relationship(:use_resources, :resources, type: :append_and_remove)
+      change manage_relationship(:fire_event, :event, type: :append_and_remove)
     end
   end
 
@@ -56,5 +59,6 @@ defmodule AshNeo4j.Test.Resource.Service do
     belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
+    has_one :event, AshNeo4j.Test.Resource.Event
   end
 end

@@ -10,6 +10,7 @@ defmodule AshNeo4j.Test do
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Resource.Money
+  alias AshNeo4j.Test.Resource.Event
   alias AshNeo4j.Test.Struct
   require Ash.Query
 
@@ -738,16 +739,75 @@ defmodule AshNeo4j.Test do
       expected = ["comment19", "comment18", "comment17"]
       assert Enum.into(result, [], fn comment -> comment.title end) == expected
     end
+
+    test "sort, offset and limit together" do
+      for i <- 20..25 do
+        Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
+      end
+
+      {:ok, result} = Comment |> Ash.Query.sort(title: :asc) |> Ash.Query.offset(2) |> Ash.Query.limit(2) |> Ash.read()
+      expected = ["comment22", "comment23"]
+      assert Enum.into(result, [], fn comment -> comment.title end) == expected
+    end
   end
 
-  test "sort, offset and limit together" do
-    for i <- 20..25 do
-      Comment |> Ash.Changeset.for_create(:create, %{title: "comment#{i}"}) |> Ash.create()
+  describe "has one relationship tests" do
+    test "(InternalService) -[FIRED]-> (Event)" do
+      {:ok, service} = Service |> Ash.create(%{name: "service"})
+      {:ok, event} = Event |> Ash.create(%{type: :create})
+      {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
+      {:ok, refreshed_event} = event |> Ash.load(:service_id)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :InternalService,
+               %{name: "service"},
+               :Event,
+               %{type: :create},
+               :FIRED,
+               :outgoing
+             )
+
+      assert updated_service.event.id == event.id
+      assert refreshed_event.service_id == service.id
     end
 
-    {:ok, result} = Comment |> Ash.Query.sort(title: :asc) |> Ash.Query.offset(2) |> Ash.Query.limit(2) |> Ash.read()
-    expected = ["comment22", "comment23"]
-    assert Enum.into(result, [], fn comment -> comment.title end) == expected
+    test "(InternalResource) -[FIRED]-> (Event)" do
+      {:ok, resource} = Resource |> Ash.create(%{name: "resource"})
+      {:ok, event} = Event |> Ash.create(%{type: :create})
+      {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
+      {:ok, refreshed_event} = event |> Ash.load(:resource_id)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :InternalResource,
+               %{name: "resource"},
+               :Event,
+               %{type: :create},
+               :FIRED,
+               :outgoing
+             )
+
+      assert updated_resource.event.id == event.id
+      assert refreshed_event.resource_id == resource.id
+    end
+
+    test "(Event) -[AFTER]-> (Event)" do
+      {:ok, create_event} = Event |> Ash.create(%{type: :create})
+      {:ok, activate_event} = Event |> Ash.create(%{type: :activate})
+      {:ok, updated_activate_event} = activate_event |> Ash.update(%{earlier_event: create_event.id})
+      {:ok, refreshed_create_event} = create_event |> Ash.load(:event_id)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Event,
+               %{type: :activate},
+               :Event,
+               %{type: :create},
+               :AFTER,
+               :outgoing
+             )
+
+      assert updated_activate_event.event.id == create_event.id
+      refute Map.has_key?(refreshed_create_event, :event_id)
+    end
   end
 
   defp create_post_nodes(count) when is_integer(count) do
