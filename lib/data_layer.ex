@@ -326,7 +326,6 @@ defmodule AshNeo4j.DataLayer do
       property_value = Map.get(node.properties, to_string(node_field))
       {resource_field, Cast.cast(resource, resource_field, property_value)}
     end)
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource translated")
     |> Map.put(:__struct__, resource)
     |> Map.put(:__data_layer__, __MODULE__)
     # TODO metadata should be a struct including neo4j node id?
