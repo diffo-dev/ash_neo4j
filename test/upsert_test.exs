@@ -1,0 +1,38 @@
+defmodule AshNeo4j.Test.Upsert do
+  @moduledoc false
+  use ExUnit.Case
+  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Test.Resource.Upsert
+
+  setup_all do
+    BoltxHelper.start()
+  end
+
+  setup do
+    on_exit(fn ->
+      Neo4jHelper.delete_nodes(:Upsert)
+    end)
+  end
+
+  describe "Ash Upsert tests" do
+    test "upsert node can be upserted using ash" do
+      {:ok, upsert} =
+        Upsert
+        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "one"})
+        |> Ash.create()
+
+      assert upsert.field == "one"
+
+      {:ok, upsert} =
+        Upsert
+        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "two"})
+        |> Ash.create()
+
+      assert upsert.field == "two"
+      results = Upsert |> Ash.Query.for_read(:read) |> Ash.read!()
+      assert length(results) == 1
+      assert hd(results).field == "two"
+    end
+  end
+end

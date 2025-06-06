@@ -1,5 +1,6 @@
-defmodule AshNeo4j.Transformers.Test do
-  use ExUnit.Case, async: false
+defmodule AshNeo4j.Test.Transformers do
+  @moduledoc false
+  use ExUnit.Case
 
   describe "Transformers tests" do
     test "label is defaulted" do
@@ -10,6 +11,11 @@ defmodule AshNeo4j.Transformers.Test do
       translation = AshNeo4j.DataLayer.Info.translation(AshNeo4j.Test.Resource.Comment)
       assert Keyword.get(translation, :id) == :uuid
       assert Keyword.get(translation, :title) == :title
+    end
+
+    test "relationship_attributes are added" do
+      relationship_attributes = AshNeo4j.DataLayer.Info.relationship_attributes(AshNeo4j.Test.Resource.Comment)
+      assert Keyword.get(relationship_attributes, :post_id) == :post
     end
   end
 end
