@@ -1,4 +1,5 @@
-defmodule AshNeo4j.Verifiers.Test do
+defmodule AshNeo4j.Test.Verifiers do
+  @moduledoc false
   use ExUnit.Case, async: false
 
   describe "Verifiers tests" do

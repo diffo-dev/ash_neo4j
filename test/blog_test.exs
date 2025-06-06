@@ -1,102 +1,11 @@
-defmodule AshNeo4j.Test do
+defmodule AshNeo4j.Blog.Test do
+  @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.BoltxHelper
-  alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
-  alias AshNeo4j.Test.Resource.Upsert
-  alias AshNeo4j.Test.Resource.Specification
-  alias AshNeo4j.Test.Resource.Service
-  alias AshNeo4j.Test.Resource.Resource
-  alias AshNeo4j.Test.Resource.Money
-  alias AshNeo4j.Test.Resource.Event
-  alias AshNeo4j.Test.Struct
   require Ash.Query
-
-  @type_attributes %{
-    array_atom: [:a, :b, :c],
-    array_integer: [1, 2, 3],
-    array_string: ["a", "b", "c"],
-    array_boolean: [true, true, false],
-    array_map: [%{a: "a"}, %{b: "b"}],
-    array_struct: [%Struct{}],
-    # note neo4j arrays must all be same neo4j type (in this case all strings)
-    array_term: [:a, "a", %Struct{}],
-    atom: :a,
-    binary: <<1, 2, 3>>,
-    boolean: true,
-    ci_string: "HELLO",
-    date: ~D[2025-05-11],
-    datetime: ~U[2025-05-11 07:45:41Z],
-    decimal: Decimal.new("4.2"),
-    duration: %Duration{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
-    float: 1.23456789,
-    function: &Neo4jHelper.create_node/2,
-    integer: 1,
-    json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
-    keyword: [a: :atom, s: "string"],
-    map: %{a: "a", b: 1, c: false, d: nil},
-    mapset: MapSet.new([1, :two, false]),
-    module: AshNeo4j.DataLayer,
-    naive_datetime: ~N[2025-05-11 07:45:41],
-    regex: ~r/foo/iu,
-    string: "Hello",
-    struct: %Struct{},
-    term: %Struct{},
-    time: ~T[07:45:41Z],
-    time_usec: ~T[07:45:41.429903Z],
-    tuple: {:a, 1, false},
-    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
-    url: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
-  }
-
-  @type_node_properties %{
-    "arrayAtom" => [":a", ":b", ":c"],
-    "arrayInteger" => [1, 2, 3],
-    "arrayString" => ["a", "b", "c"],
-    "arrayBoolean" => [true, true, false],
-    "arrayMap" => ["%{a: \"a\"}", "%{b: \"b\"}"],
-    "arrayStruct" => [
-      "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
-    ],
-    # note neo4j arrays must all be same neo4j type (in this case all strings)
-    "arrayTerm" => [
-      ":a",
-      "a",
-      "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
-    ],
-    "atom" => ":a",
-    "binary" => "\x01\x02\x03",
-    "boolean" => true,
-    "ciString" => "HELLO",
-    "date" => "2025-05-11",
-    "datetime" => "2025-05-11T07:45:41Z",
-    "decimal" => "Decimal.new(\"4.2\")",
-    "duration" => "P1Y2M25DT5H6M7.000008S",
-    "float" => 1.23456789,
-    "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
-    "integer" => 1,
-    "jsonString" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
-    "keyword" => ["{:a, :atom}", "{:s, string}"],
-    # serialisation order indeterminate
-    "map" => "%{a: \"a\", b: 1, c: false, d: nil}",
-    # serialisation order indeterminate
-    "mapset" => "MapSet.new([1, :two, false])",
-    "module" => ":Elixir.AshNeo4j.DataLayer",
-    "naiveDatetime" => "2025-05-11T07:45:41",
-    "regex" => "~r/foo/iu",
-    "string" => "Hello",
-    "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
-    "term" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
-    "time" => "07:45:41",
-    "timeUsec" => "07:45:41.429903",
-    "tuple" => "{:a, 1, false}",
-    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
-    "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
-  }
-
-  @url "https://www.diffo.dev/"
 
   setup_all do
     BoltxHelper.start()
@@ -104,20 +13,9 @@ defmodule AshNeo4j.Test do
 
   setup do
     on_exit(fn ->
-      # Neo4jHelper.delete_nodes(:Actor)
-      # Neo4jHelper.delete_nodes(:Movie)
-      # Neo4jHelper.delete_nodes(:Type)
-      # Neo4jHelper.delete_nodes(:Post)
-      # Neo4jHelper.delete_nodes(:Comment)
-      # Neo4jHelper.delete_nodes(:Upsert)
-      Neo4jHelper.delete_all()
+      Neo4jHelper.delete_nodes(:Post)
+      Neo4jHelper.delete_nodes(:Comment)
     end)
-  end
-
-  describe "doctests" do
-    doctest AshNeo4j.BoltxHelper
-    doctest AshNeo4j.Cypher
-    doctest AshNeo4j.Neo4jHelper
   end
 
   describe "Boltx configuration tests" do
@@ -127,44 +25,6 @@ defmodule AshNeo4j.Test do
   end
 
   describe "Neo4jHelper tests" do
-    test "type node without properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, %{})
-      assert length(records) == 1
-      node = records |> List.first() |> List.first()
-      assert node.labels == ["Type"]
-    end
-
-    test "type node without properties can be read using Neo4jHelper" do
-      Neo4jHelper.create_node(:Type, %{})
-      assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{})
-      assert length(records) == 1
-      node = records |> List.first() |> List.first()
-      assert node.labels == ["Type"]
-      Enum.each(@type_node_properties, fn {key, _value} -> assert Map.get(node.properties, "#{key}") == nil end)
-    end
-
-    test "type node with properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, @type_node_properties)
-      assert length(records) == 1
-      node = records |> List.first() |> List.first()
-      assert node.labels == ["Type"]
-      # map and mapset have indeterminate order so we don't check them exactly
-      refute Map.get(node.properties, "map") == nil
-      refute Map.get(node.properties, "mapset") == nil
-
-      Enum.each(Map.drop(@type_node_properties, ["map", "mapset"]), fn {key, value} ->
-        assert Map.get(node.properties, "#{key}") == value
-      end)
-    end
-
-    test "type node with properties can be read using Neo4jHelper" do
-      Neo4jHelper.create_node(:Type, @type_node_properties)
-      assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{string: "Hello"})
-      assert length(records) == 1
-      node = records |> List.first() |> List.first()
-      assert node.labels == ["Type"]
-    end
-
     test "post node can be read using Neo4jHelper" do
       # setup using Neo4jHelper
       uuid = Ash.UUID.generate()
@@ -203,14 +63,6 @@ defmodule AshNeo4j.Test do
   end
 
   describe "Ash read action tests" do
-    test "type node can be read using ash" do
-      properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node(:Type, properties)
-      type = Ash.read_one!(Type)
-      Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
-      # TODO compare durations
-    end
-
     test "post node can be read using ash" do
       create_post_nodes(2)
       # read using Ash
@@ -437,35 +289,6 @@ defmodule AshNeo4j.Test do
   end
 
   describe "ash create action tests" do
-    test "type node can be created using ash without properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
-      refute type.uuid == nil
-      assert type.atom == :a
-      Enum.each(Map.drop(@type_attributes, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
-    end
-
-    test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
-      assert type.url == @url
-      Enum.each(Map.drop(@type_attributes, [:url]), fn {key, value} -> assert Map.get(type, key) == value end)
-    end
-
-    test "type node can be created using ash with embedded resource property" do
-      {:ok, money} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{money: money}) |> Ash.create()
-      assert type.money.amount == 1000
-      assert type.money.currency == :sek
-    end
-
-    test "type node can be created using ash with array embedded resource property" do
-      {:ok, money1} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
-      {:ok, money2} = Money |> Ash.Changeset.for_create(:create, %{amount: 200, currency: :aud}) |> Ash.create()
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{array_money: [money1, money2]}) |> Ash.create()
-      assert length(type.array_money) == 2
-      assert hd(type.array_money).currency == :sek
-      assert hd(tl(type.array_money)).currency == :aud
-    end
-
     test "post node can be created using ash" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post4"}) |> Ash.create()
       assert post.title == "post4"
@@ -474,25 +297,6 @@ defmodule AshNeo4j.Test do
     test "comment node can be created using ash" do
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment4"}) |> Ash.create()
       assert comment.title == "comment4"
-    end
-
-    test "upsert node can be upserted using ash" do
-      {:ok, upsert} =
-        Upsert
-        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "one"})
-        |> Ash.create()
-
-      assert upsert.field == "one"
-
-      {:ok, upsert} =
-        Upsert
-        |> Ash.Changeset.for_create(:create, %{first_name: "Donald", surname: "Duck", field: "two"})
-        |> Ash.create()
-
-      assert upsert.field == "two"
-      results = Upsert |> Ash.Query.for_read(:read) |> Ash.read!()
-      assert length(results) == 1
-      assert hd(results).field == "two"
     end
   end
 
@@ -602,75 +406,9 @@ defmodule AshNeo4j.Test do
                :incoming
              )
     end
-
-    test "resource node can be created and related to a specification using ash create" do
-      esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
-      resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id})
-
-      assert resource.specification_id == esim_v1.id
-      assert resource.specification
-    end
-
-    test "service node can be created and related to a specification using ash create" do
-      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
-      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
-
-      assert service.specification_id == broadband_v1.id
-      assert service.specification
-    end
-
-    test "service-service-resource-resource relationships using ash" do
-      {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service"}) |> Ash.create()
-      {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service"}) |> Ash.create()
-
-      {:ok, _related_parent_service} =
-        parent_service |> Ash.Changeset.for_update(:update, manage_services: [child_service.id]) |> Ash.update()
-
-      {:ok, parent_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "parent_resource"}) |> Ash.create()
-
-      {:ok, _related_child_service} =
-        child_service |> Ash.Changeset.for_update(:update, use_resources: [parent_resource.id]) |> Ash.update()
-
-      {:ok, child_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "child_resource"}) |> Ash.create()
-
-      {:ok, _related_parent_resource} =
-        parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
-               %{name: "parent_service"},
-               :InternalService,
-               %{name: "child_service"},
-               :MANAGES,
-               :outgoing
-             )
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
-               %{name: "child_service"},
-               :InternalResource,
-               %{name: "parent_resource"},
-               :USES,
-               :outgoing
-             )
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :InternalResource,
-               %{name: "parent_resource"},
-               :InternalResource,
-               %{name: "child_resource"},
-               :USES,
-               :outgoing
-             )
-    end
   end
 
   describe "ash destroy action tests" do
-    test "type can be destroyed using ash" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
-      :ok = type |> Ash.destroy!()
-    end
-
     test "related post can be destroyed using ash" do
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post8"}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
@@ -748,65 +486,6 @@ defmodule AshNeo4j.Test do
       {:ok, result} = Comment |> Ash.Query.sort(title: :asc) |> Ash.Query.offset(2) |> Ash.Query.limit(2) |> Ash.read()
       expected = ["comment22", "comment23"]
       assert Enum.into(result, [], fn comment -> comment.title end) == expected
-    end
-  end
-
-  describe "has one relationship tests" do
-    test "(InternalService) -[FIRED]-> (Event)" do
-      {:ok, service} = Service |> Ash.create(%{name: "service"})
-      {:ok, event} = Event |> Ash.create(%{type: :create})
-      {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
-      {:ok, refreshed_event} = event |> Ash.load(:service_id)
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
-               %{name: "service"},
-               :Event,
-               %{type: :create},
-               :FIRED,
-               :outgoing
-             )
-
-      assert updated_service.event.id == event.id
-      assert refreshed_event.service_id == service.id
-    end
-
-    test "(InternalResource) -[FIRED]-> (Event)" do
-      {:ok, resource} = Resource |> Ash.create(%{name: "resource"})
-      {:ok, event} = Event |> Ash.create(%{type: :create})
-      {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
-      {:ok, refreshed_event} = event |> Ash.load(:resource_id)
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :InternalResource,
-               %{name: "resource"},
-               :Event,
-               %{type: :create},
-               :FIRED,
-               :outgoing
-             )
-
-      assert updated_resource.event.id == event.id
-      assert refreshed_event.resource_id == resource.id
-    end
-
-    test "(Event) -[AFTER]-> (Event)" do
-      {:ok, create_event} = Event |> Ash.create(%{type: :create})
-      {:ok, activate_event} = Event |> Ash.create(%{type: :activate})
-      {:ok, updated_activate_event} = activate_event |> Ash.update(%{earlier_event: create_event.id})
-      {:ok, refreshed_create_event} = create_event |> Ash.load(:event_id)
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :Event,
-               %{type: :activate},
-               :Event,
-               %{type: :create},
-               :AFTER,
-               :outgoing
-             )
-
-      assert updated_activate_event.event.id == create_event.id
-      refute Map.has_key?(refreshed_create_event, :event_id)
     end
   end
 

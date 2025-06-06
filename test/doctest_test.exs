@@ -1,0 +1,24 @@
+defmodule AshNeo4j.Test.Doc do
+  @moduledoc false
+  use ExUnit.Case
+  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Cypher
+
+  setup_all do
+    BoltxHelper.start()
+  end
+
+  setup do
+    on_exit(fn ->
+      Neo4jHelper.delete_nodes(:Actor)
+      Neo4jHelper.delete_nodes(:Movie)
+    end)
+  end
+
+  describe "doctests" do
+    doctest BoltxHelper
+    doctest Neo4jHelper
+    doctest Cypher
+  end
+end
