@@ -114,7 +114,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
@@ -131,7 +131,7 @@ defmodule AshNeo4j.DataLayer do
         {:ok, results}
     end
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true

@@ -15,8 +15,8 @@ defmodule AshNeo4j.Service.Test do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Service)
-      Neo4jHelper.delete_nodes(:Resource)
+      Neo4jHelper.delete_nodes(:InternalService)
+      Neo4jHelper.delete_nodes(:InternalResource)
       Neo4jHelper.delete_nodes(:Specification)
       Neo4jHelper.delete_nodes(:Event)
     end)
