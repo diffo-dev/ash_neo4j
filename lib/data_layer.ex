@@ -115,6 +115,7 @@ defmodule AshNeo4j.DataLayer do
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
     IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
         {:error, error}
@@ -130,7 +131,6 @@ defmodule AshNeo4j.DataLayer do
 
         {:ok, results}
     end
-
     |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
@@ -290,21 +290,41 @@ defmodule AshNeo4j.DataLayer do
 
   defp convert_group_to_resource(resource, group)
        when is_atom(resource) and is_map(group) do
-    # IO.inspect(group, label: "AshNeo4j.DataLayer.convert_group_to_resource group")
+    IO.inspect(group, label: "AshNeo4j.DataLayer.convert_group_to_resource group")
     source_node = Map.get(group, "s")
     edge = Map.get(group, "r")
     dest_node = Map.get(group, "d")
 
     if edge != nil && dest_node != nil do
       # enrich the source node
-      dest_label = String.to_atom(List.first(dest_node.labels))
-      relationship_label = String.to_atom(edge.type)
-      relationship = Info.relationship(resource, relationship_label, dest_label)
+      dest_label = String.to_atom(List.first(dest_node.labels)) |> IO.inspect(label: :dest_label)
+      # what is the destination resource? can we get this from the domain?
+
+      relationship_label = String.to_atom(edge.type) |> IO.inspect(label: :relationship_label)
+
+      relationship = Info.relationship(resource, relationship_label, dest_label) |> IO.inspect(label: :relationship)
 
       if relationship != nil do
-        dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-        enrichment = {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
-        convert_node_to_resource(resource, source_node, [enrichment])
+        reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
+          |> IO.inspect(label: :reverse_node_relationship)
+
+        dest_resource =
+          convert_node_to_resource(relationship.destination, dest_node, []) |> IO.inspect(label: :dest_resource)
+
+        enrichments =
+          cond do
+            reverse_node_relationship != nil ->
+              reverse_relationship = Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
+              cond do
+                relationship.cardinality == :many and reverse_relationship.cardinality == :many ->
+                  [{relationship.name, [dest_resource]}]
+                true ->
+                  [{relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}]
+              end
+            true ->
+              [{relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}]
+          end
+        convert_node_to_resource(resource, source_node, enrichments)
       else
         IO.puts("unable to enrich source node")
         convert_node_to_resource(resource, source_node)

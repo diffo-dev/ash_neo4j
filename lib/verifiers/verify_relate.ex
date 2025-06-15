@@ -37,7 +37,17 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
                message: "relate: relationship_name must match the name of a relationship"
              )}
           else
-            :ok
+            if Enum.any?(relate, fn {_relationship_name, _edge_label, edge_direction} ->
+                 edge_direction not in [:incoming, :outgoing]
+               end) do
+              {:error,
+               DslError.exception(
+                 module: resource,
+                 message: "relate: edge_direction must be :incoming or :outgoing"
+               )}
+            else
+              :ok
+            end
           end
         end
     end

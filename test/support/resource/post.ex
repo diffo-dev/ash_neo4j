@@ -6,11 +6,13 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   neo4j do
     label :Post
+
     relate [
       {:comments, :BELONGS_TO, :incoming},
       {:tags, :TAGS, :incoming}
     ]
-    skip [:tag_id]
+
+    skip([:tag_id])
     translate id: :uuid
   end
 
@@ -49,7 +51,7 @@ defmodule AshNeo4j.Test.Resource.Post do
     attribute :score, :integer, public?: true, allow_nil?: true
     attribute :public, :boolean, public?: true
     attribute :unique, :string, public?: true
-    attribute :tag_id, :string, public?: true
+    attribute :tag_id, :uuid, public?: true
   end
 
   identities do

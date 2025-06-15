@@ -43,18 +43,25 @@ defmodule AshNeo4j.QueryHelper do
           " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
       else
         # handle a single predicate
-        predicate = hd(predicates)
+        predicate = hd(predicates) |> IO.inspect(label: :predicate)
         operator = convert_operator(predicate.operator)
 
         if operator == nil do
           IO.puts("Unsupported operator: #{inspect(predicate.operator)}")
           "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
         else
-          property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-          property_value = convert_value(predicate.right)
-          relationship_name = String.split(property_name, "_") |> List.first()
-          node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-          relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+          property_name =
+            Info.convert_to_property_name(ash_query.resource, predicate.left) |> IO.inspect(label: :property_name)
+
+          property_value = convert_value(predicate.right) |> IO.inspect(label: :property_value)
+          relationship_name = String.split(property_name, "_") |> List.first() |> IO.inspect(label: :relationship_name)
+
+          node_relationship =
+            Info.node_relationship(ash_query.resource, relationship_name) |> IO.inspect(label: :node_relationship)
+
+          relationship =
+            Ash.Resource.Info.relationship(ash_query.resource, relationship_name) |> IO.inspect(label: :relationship)
+
           # does the query require a related node to be loaded?
           if operator == "in" && node_relationship != nil && relationship != nil &&
                to_string(relationship.source_attribute) == property_name do

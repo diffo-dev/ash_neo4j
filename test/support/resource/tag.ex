@@ -8,7 +8,7 @@ defmodule AshNeo4j.Test.Resource.Tag do
     label :Tag
     relate [{:posts, :TAGS, :outgoing}]
     translate id: :uuid
-    skip [:post_id]
+    skip([:post_id])
   end
 
   actions do

@@ -72,6 +72,34 @@ defmodule AshNeo4j.Test.Verifiers do
       end
     end
 
+    test "edge direction" do
+      assert_raise Spark.Error.DslError, fn ->
+        defmodule InvalidEdgeDirection do
+          @moduledoc false
+          use Ash.Resource,
+            domain: AshNeo4j.Test.Domain,
+            data_layer: AshNeo4j.DataLayer
+
+          neo4j do
+            label :Resource
+            relate [{:resources, :USES, :forwards}]
+            translate id: :uuid
+          end
+
+          attributes do
+            uuid_primary_key :id, writable?: true
+            attribute :name, :string, public?: true
+            attribute :resource_id, :uuid, public?: true
+          end
+
+          relationships do
+            has_many :resources, InvalidEdgeDirection
+            belongs_to :resource, InvalidEdgeDirection, public?: true
+          end
+        end
+      end
+    end
+
     test "property style - attribute" do
       assert_raise Spark.Error.DslError, fn ->
         defmodule InvalidStoreProperty do

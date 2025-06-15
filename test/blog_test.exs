@@ -14,9 +14,9 @@ defmodule AshNeo4j.Blog.Test do
 
   setup do
     on_exit(fn ->
-      #Neo4jHelper.delete_nodes(:Post)
+      Neo4jHelper.delete_nodes(:Post)
       Neo4jHelper.delete_nodes(:Comment)
-      #Neo4jHelper.delete_nodes(:Tag)
+      Neo4jHelper.delete_nodes(:Tag)
     end)
   end
 
@@ -499,30 +499,41 @@ defmodule AshNeo4j.Blog.Test do
       {:ok, tag2} = Tag |> Ash.create(%{value: "tag2"})
       posts = [post1, post2]
       tag_ids = [tag1.id, tag2.id]
+      post_ids = [post1.id, post2.id]
 
       # tag posts
-      Enum.into(posts, [],
-        fn post ->
-          {:ok, post} =
-            post
-            |> Ash.Changeset.new()
-            |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
-            |> Ash.update()
+      Enum.into(posts, [], fn post ->
+        {:ok, post} =
           post
-        end)
+          |> Ash.Changeset.new()
+          |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
+          |> Ash.update()
+
+        post
+      end)
       |> IO.inspect(label: :updated_posts)
 
       # check relationships in neo4j
       for post <- posts, tag_id <- tag_ids do
         assert Neo4jHelper.nodes_relate_how?(
-                :Post,
-                %{title: post.title},
-                :Tag,
-                %{uuid: tag_id},
-                :TAGS,
-                :incoming
-              )
+                 :Post,
+                 %{title: post.title},
+                 :Tag,
+                 %{uuid: tag_id},
+                 :TAGS,
+                 :incoming
+               )
       end
+
+      IO.inspect(label: "retrieve posts and check they have tags")
+
+      _result =
+        Post
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.load([:tags])
+        |> Ash.Query.filter_input(id: [eq: post1.id])
+        |> Ash.read!()
+        |> IO.inspect(label: :post1_should_have_tags)
 
       # retrieve posts and check they have tags
       for post <- posts do
@@ -530,19 +541,17 @@ defmodule AshNeo4j.Blog.Test do
           Post
           |> Ash.Query.for_read(:read)
           |> Ash.Query.filter(id: post.id)
-          |> Ash.Query.load([:tags])
-          |> Ash.read_one!() |> IO.inspect(label: :post)
+          |> Ash.read_one!()
+          |> IO.inspect(label: :post_id)
+
         assert length(retrieved_post.tags) == length(tag_ids)
       end
 
       # retrieve tags and check they are related to posts
       for tag_id <- tag_ids do
         tag =
-          Tag
-          |> Ash.Query.for_read(:read)
-          |> Ash.Query.filter(id: tag_id)
-          |> Ash.Query.load([:posts])
-          |> Ash.read_one!() |> IO.inspect(label: :tag)
+          Tag |> Ash.Query.for_read(:read) |> Ash.Query.filter(id: tag_id) |> Ash.read_one!() |> IO.inspect(label: :tag)
+
         assert length(tag.posts) == length(posts)
       end
 
