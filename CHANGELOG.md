@@ -56,3 +56,10 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * create relate
 * livebook
 
+## [v0.2.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.0...v0.2.1) (2025-06-17)
+
+### Features:
+
+* many to many relationship (back to back has_many)
+* has one relationship
+

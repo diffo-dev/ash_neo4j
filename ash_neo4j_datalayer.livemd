@@ -121,9 +121,7 @@ defmodule Domain do
   use Ash.Domain
 
   resources do
-    resource Specification
-    resource Service
-    resource Resource
+    allow_unregistered? true
   end
 end
 ```

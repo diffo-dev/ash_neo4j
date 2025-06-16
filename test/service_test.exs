@@ -15,8 +15,8 @@ defmodule AshNeo4j.Service.Test do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Service)
-      Neo4jHelper.delete_nodes(:Resource)
+      Neo4jHelper.delete_nodes(:InternalService)
+      Neo4jHelper.delete_nodes(:InternalResource)
       Neo4jHelper.delete_nodes(:Specification)
       Neo4jHelper.delete_nodes(:Event)
     end)
@@ -33,16 +33,14 @@ defmodule AshNeo4j.Service.Test do
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
       resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id})
 
-      assert resource.specification_id == esim_v1.id
-      assert resource.specification
+      assert resource.specification.id == esim_v1.id
     end
 
     test "service node can be created and related to a specification using ash create" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
 
-      assert service.specification_id == broadband_v1.id
-      assert service.specification
+      assert service.specification.id == broadband_v1.id
     end
 
     test "service-service-resource-resource relationships using ash" do

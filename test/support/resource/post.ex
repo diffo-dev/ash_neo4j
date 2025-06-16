@@ -6,7 +6,13 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   neo4j do
     label :Post
-    relate [{:comments, :BELONGS_TO, :incoming}]
+
+    relate [
+      {:comments, :BELONGS_TO, :incoming},
+      {:tags, :TAGS, :incoming}
+    ]
+
+    skip([:tag_id])
     translate id: :uuid
   end
 
@@ -30,6 +36,13 @@ defmodule AshNeo4j.Test.Resource.Post do
 
       change manage_relationship(:remove_comments, :comments, type: :remove)
     end
+
+    update :manage_tags do
+      require_atomic? false
+      argument :tags, {:array, :uuid}
+
+      change manage_relationship(:tags, :tags, type: :append_and_remove)
+    end
   end
 
   attributes do
@@ -38,6 +51,7 @@ defmodule AshNeo4j.Test.Resource.Post do
     attribute :score, :integer, public?: true, allow_nil?: true
     attribute :public, :boolean, public?: true
     attribute :unique, :string, public?: true
+    attribute :tag_id, :uuid, public?: true
   end
 
   identities do
@@ -46,5 +60,6 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   relationships do
     has_many :comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true
+    has_many :tags, AshNeo4j.Test.Resource.Tag, destination_attribute: :post_id, public?: true
   end
 end

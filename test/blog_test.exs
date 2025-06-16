@@ -5,6 +5,7 @@ defmodule AshNeo4j.Blog.Test do
   alias AshNeo4j.BoltxHelper
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Resource.Tag
   require Ash.Query
 
   setup_all do
@@ -15,6 +16,7 @@ defmodule AshNeo4j.Blog.Test do
     on_exit(fn ->
       Neo4jHelper.delete_nodes(:Post)
       Neo4jHelper.delete_nodes(:Comment)
+      Neo4jHelper.delete_nodes(:Tag)
     end)
   end
 
@@ -486,6 +488,59 @@ defmodule AshNeo4j.Blog.Test do
       {:ok, result} = Comment |> Ash.Query.sort(title: :asc) |> Ash.Query.offset(2) |> Ash.Query.limit(2) |> Ash.read()
       expected = ["comment22", "comment23"]
       assert Enum.into(result, [], fn comment -> comment.title end) == expected
+    end
+  end
+
+  describe "many-to-many relationship tests" do
+    test "many posts can be tagged with each tag" do
+      {:ok, post1} = Post |> Ash.create(%{title: "post1"})
+      {:ok, post2} = Post |> Ash.create(%{title: "post2"})
+      {:ok, tag1} = Tag |> Ash.create(%{value: "tag1"})
+      {:ok, tag2} = Tag |> Ash.create(%{value: "tag2"})
+      posts = [post1, post2]
+      tag_ids = [tag1.id, tag2.id]
+
+      # tag posts
+      Enum.into(posts, [], fn post ->
+        {:ok, post} =
+          post
+          |> Ash.Changeset.new()
+          |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
+          |> Ash.update()
+
+        post
+      end)
+
+      # check relationships in neo4j
+      for post <- posts, tag_id <- tag_ids do
+        assert Neo4jHelper.nodes_relate_how?(
+                 :Post,
+                 %{title: post.title},
+                 :Tag,
+                 %{uuid: tag_id},
+                 :TAGS,
+                 :incoming
+               )
+      end
+
+      # retrieve posts and check they have tags
+      for post <- posts do
+        retrieved_post =
+          Post
+          |> Ash.Query.for_read(:read)
+          |> Ash.Query.filter(id: post.id)
+          |> Ash.read_one!()
+
+        assert length(retrieved_post.tags) == length(tag_ids)
+      end
+
+      # retrieve tags and check they are related to posts
+      for tag_id <- tag_ids do
+        tag =
+          Tag |> Ash.Query.for_read(:read) |> Ash.Query.filter(id: tag_id) |> Ash.read_one!()
+
+        assert length(tag.posts) == length(posts)
+      end
     end
   end
 

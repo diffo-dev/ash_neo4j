@@ -33,13 +33,29 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :relationship_attributes, [], true)
   end
 
+  @doc """
+  Returns a node_relationship that matches the source attribute name
+  """
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
-  def node_relationship(resource, source_attribute) when is_atom(source_attribute) do
-    List.keyfind(relate(resource), source_attribute, 0)
+  def node_relationship(resource, name) when is_atom(name) do
+    List.keyfind(relate(resource), name, 0)
   end
 
-  def node_relationship(resource, source_attribute) when is_bitstring(source_attribute) do
-    List.keyfind(relate(resource), String.to_atom(source_attribute), 0)
+  def node_relationship(resource, name) when is_bitstring(name) do
+    List.keyfind(relate(resource), String.to_atom(name), 0)
+  end
+
+  @doc """
+  Returns a node_relationship that matches the edge label and direction
+  """
+  @spec node_relationship(Ash.Resource.t(), atom(), atom()) :: tuple() | nil
+  def node_relationship(resource, edge_label, direction) when is_atom(edge_label) do
+    node_relationship = List.keyfind(relate(resource), edge_label, 1)
+
+    case node_relationship do
+      {_name, ^edge_label, ^direction} -> node_relationship
+      _ -> nil
+    end
   end
 
   @doc """
@@ -65,7 +81,18 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns the source node property name given the source resource and destination attribute name, i.e. post_id returns uuid
+  Returns the reverse node relationship given resource and relationship name
+  """
+  @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: list(tuple()) | nil
+  def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
+    with {^name, edge_label, direction} = node_relationship(resource, name) do
+      relationship = Ash.Resource.Info.relationship(resource, name)
+      node_relationship(relationship.destination, edge_label, reverse(direction))
+    end
+  end
+
+  @doc """
+  Returns the source node property name given the source resource, dest_resource and destination attribute name, i.e. post_id returns uuid
   """
   @spec source_node_property_name(Ash.Resource.t(), atom(), atom()) :: atom() | nil
   def source_node_property_name(source_resource, dest_resource, dest_attribute_name)
@@ -83,15 +110,24 @@ defmodule AshNeo4j.DataLayer.Info do
   The attribute name can be an Ash.Query.Ref or atom
   """
   @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
-  def convert_to_property_name(resource, ash_query_ref) when is_struct(ash_query_ref, Ash.Query.Ref) do
+  def convert_to_property_name(resource, ash_query_ref)
+      when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     convert_to_property_name(resource, attribute_name)
   end
 
   @spec convert_to_property_name(Ash.Resource.t(), atom()) :: String.t() | nil
-  def convert_to_property_name(resource, attribute_name) when is_atom(attribute_name) do
+  def convert_to_property_name(resource, attribute_name) when is_atom(resource) and is_atom(attribute_name) do
     translation(resource)
     |> Keyword.get(attribute_name, attribute_name)
     |> to_string()
+  end
+
+  defp reverse(direction) when is_atom(direction) do
+    case direction do
+      :incoming -> :outgoing
+      :outgoing -> :incoming
+      _ -> nil
+    end
   end
 end
