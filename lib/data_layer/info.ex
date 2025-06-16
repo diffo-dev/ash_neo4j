@@ -85,7 +85,7 @@ defmodule AshNeo4j.DataLayer.Info do
   def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
     with {^name, edge_label, direction} = node_relationship(resource, name) do
       relationship = Ash.Resource.Info.relationship(resource, name)
-      reverse_node_relationship = node_relationship(relationship.destination, edge_label, reverse(direction))
+      node_relationship(relationship.destination, edge_label, reverse(direction))
     end
   end
 

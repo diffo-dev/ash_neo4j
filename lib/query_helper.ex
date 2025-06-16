@@ -43,7 +43,7 @@ defmodule AshNeo4j.QueryHelper do
           " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
       else
         # handle a single predicate
-        predicate = hd(predicates) |> IO.inspect(label: :predicate)
+        predicate = hd(predicates)
         operator = convert_operator(predicate.operator)
 
         if operator == nil do
@@ -51,21 +51,20 @@ defmodule AshNeo4j.QueryHelper do
           "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
         else
           property_name =
-            Info.convert_to_property_name(ash_query.resource, predicate.left) |> IO.inspect(label: :property_name)
+            Info.convert_to_property_name(ash_query.resource, predicate.left)
 
-          property_value = convert_value(predicate.right) |> IO.inspect(label: :property_value)
-          relationship_name = String.split(property_name, "_") |> List.first() |> IO.inspect(label: :relationship_name)
+          property_value = convert_value(predicate.right)
+          relationship_name = String.split(property_name, "_") |> List.first()
 
           node_relationship =
-            Info.node_relationship(ash_query.resource, relationship_name) |> IO.inspect(label: :node_relationship)
+            Info.node_relationship(ash_query.resource, relationship_name)
 
           relationship =
-            Ash.Resource.Info.relationship(ash_query.resource, relationship_name) |> IO.inspect(label: :relationship)
+            Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
 
           # does the query require a related node to be loaded?
           if operator == "in" && node_relationship != nil && relationship != nil &&
                to_string(relationship.source_attribute) == property_name do
-            # IO.inspect(ash_query, label: :ash_query)
             # filter is about a destination node
             dest_label = relationship_name |> String.capitalize() |> String.to_atom()
 
@@ -77,8 +76,6 @@ defmodule AshNeo4j.QueryHelper do
               Cypher.relationship(node_relationship) <>
               Cypher.node(:d, dest_label) <>
               " WHERE " <> Cypher.expression(:d, dest_property_name, operator, property_value) <> " RETURN s, r, d"
-
-            # |> IO.inspect(label: :load_related_nodes)
           else
             # filter is about source node but we load other nodes
             # "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} OPTIONAL MATCH (s) -[r]- (d) RETURN s, r, d"
