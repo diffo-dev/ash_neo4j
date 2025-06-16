@@ -507,6 +507,7 @@ defmodule AshNeo4j.Blog.Test do
           |> Ash.Changeset.new()
           |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
           |> Ash.update()
+
         post
       end)
 

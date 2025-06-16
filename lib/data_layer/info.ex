@@ -40,6 +40,7 @@ defmodule AshNeo4j.DataLayer.Info do
   def node_relationship(resource, name) when is_atom(name) do
     List.keyfind(relate(resource), name, 0)
   end
+
   def node_relationship(resource, name) when is_bitstring(name) do
     List.keyfind(relate(resource), String.to_atom(name), 0)
   end
@@ -50,6 +51,7 @@ defmodule AshNeo4j.DataLayer.Info do
   @spec node_relationship(Ash.Resource.t(), atom(), atom()) :: tuple() | nil
   def node_relationship(resource, edge_label, direction) when is_atom(edge_label) do
     node_relationship = List.keyfind(relate(resource), edge_label, 1)
+
     case node_relationship do
       {_name, ^edge_label, ^direction} -> node_relationship
       _ -> nil
@@ -108,7 +110,8 @@ defmodule AshNeo4j.DataLayer.Info do
   The attribute name can be an Ash.Query.Ref or atom
   """
   @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
-  def convert_to_property_name(resource, ash_query_ref) when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
+  def convert_to_property_name(resource, ash_query_ref)
+      when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     convert_to_property_name(resource, attribute_name)
   end
