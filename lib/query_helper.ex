@@ -44,6 +44,7 @@ defmodule AshNeo4j.QueryHelper do
       else
         # handle a single predicate
         predicate = hd(predicates)
+
         case predicate do
           %{operator: predicate_operator} ->
             operator = convert_operator(predicate_operator)
@@ -66,7 +67,7 @@ defmodule AshNeo4j.QueryHelper do
 
               # does the query require a related node to be loaded?
               if operator == "in" && node_relationship != nil && relationship != nil &&
-                  to_string(relationship.source_attribute) == property_name do
+                   to_string(relationship.source_attribute) == property_name do
                 # filter is about a destination node
                 dest_label = relationship_name |> String.capitalize() |> String.to_atom()
 
@@ -81,16 +82,23 @@ defmodule AshNeo4j.QueryHelper do
               else
                 # filter is about source node but we load other nodes
                 # "MATCH (s:#{label}) WHERE s.#{property_name} #{operator} #{property_value} OPTIONAL MATCH (s) -[r]- (d) RETURN s, r, d"
-                "MATCH " <> Cypher.node(:s, label) <> " WHERE " <>
+                "MATCH " <>
+                  Cypher.node(:s, label) <>
+                  " WHERE " <>
                   Cypher.expression(:s, property_name, operator, property_value) <>
                   " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
               end
             end
+
           %{name: :contains} ->
             argument = hd(predicate.arguments)
             property_name = AshNeo4j.DataLayer.Info.convert_to_property_name(ash_query.resource, argument)
             attribute = hd(tl(predicate.arguments))
-            "MATCH " <> Cypher.node(:s, label) <> " WHERE " <> Cypher.expression(:s, property_name, "contains", attribute) <> " RETURN s"
+
+            "MATCH " <>
+              Cypher.node(:s, label) <>
+              " WHERE " <> Cypher.expression(:s, property_name, "contains", attribute) <> " RETURN s"
+
           _ ->
             IO.puts("Unsupported predicate: #{inspect(predicate)}")
             "MATCH " <> Cypher.node(:s, label) <> " RETURN s"

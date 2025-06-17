@@ -14,9 +14,11 @@ defmodule AshNeo4j.Test.Resource.Specification do
     read :get_latest do
       description "gets the specification of the given name with the highest major version"
       get? true
+
       argument :query, :ci_string do
         description "Return only specifications with names including the given value."
       end
+
       prepare build(limit: 1, sort: [major_version: :desc])
       filter expr(contains(name, ^arg(:query)))
     end

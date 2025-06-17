@@ -26,7 +26,7 @@ defmodule AshNeo4j.DataLayer do
   # def can?(_, :transact), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  #def can?(_, :expression_calculation_sort), do: true
+  # def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
 
@@ -379,6 +379,7 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
+  @dialyzer {:nowarn_function, enrichment: 2}
   defp enrichment(resource, {edge, dest_node}) when is_atom(resource) and is_map(edge) and is_map(dest_node) do
     dest_label = String.to_atom(List.first(dest_node.labels))
     relationship_label = String.to_atom(edge.type)
@@ -461,41 +462,52 @@ defmodule AshNeo4j.DataLayer do
 
     case Enum.count(relationship_source_attributes) do
       0 ->
-        case Info.label(resource) |> Neo4jHelper.create_node(properties) do
-          {:ok, %Boltx.Response{results: [node_map | _]}} ->
-            node = Map.get(node_map, "n")
-            {:ok, convert_node_to_resource(resource, node)}
-
-          {:error, error} ->
-            {:error, error}
-        end
+        create_node(resource, properties)
 
       1 ->
         {source_attribute, name} = hd(relationship_attributes)
         relationship = Ash.Resource.Info.relationship(resource, name)
         dest_resource = relationship.destination
-        {^name, edge_label, edge_direction} = Info.node_relationship(resource, name)
-        dest_node_property_name = Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
-        dest_id = %{dest_node_property_name => Map.get(relationship_source_attributes, source_attribute)}
+        node_relationship = Info.node_relationship(resource, name)
 
-        case Neo4jHelper.create_node_with_relationship(
-               Info.label(resource),
-               properties,
-               Info.label(dest_resource),
-               dest_id,
-               edge_label,
-               edge_direction
-             ) do
-          {:ok, %Boltx.Response{results: groups}} ->
-            # return the created, enriched node
-            {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
+        case node_relationship do
+          {^name, edge_label, edge_direction} ->
+            dest_node_property_name = Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
+            dest_id = %{dest_node_property_name => Map.get(relationship_source_attributes, source_attribute)}
 
-          {:error, error} ->
-            {:error, error}
+            case Neo4jHelper.create_node_with_relationship(
+                   Info.label(resource),
+                   properties,
+                   Info.label(dest_resource),
+                   dest_id,
+                   edge_label,
+                   edge_direction
+                 ) do
+              {:ok, %Boltx.Response{results: groups}} ->
+                # return the created, enriched node
+                {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
+
+              {:error, error} ->
+                {:error, error}
+            end
+
+          nil ->
+            create_node(resource, properties)
         end
 
       _ ->
         {:error, "AshNeo4j cannot create node with multiple relationships"}
+    end
+  end
+
+  defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
+    case Info.label(resource) |> Neo4jHelper.create_node(properties) do
+      {:ok, %Boltx.Response{results: [node_map | _]}} ->
+        node = Map.get(node_map, "n")
+        {:ok, convert_node_to_resource(resource, node)}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

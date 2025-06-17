@@ -49,7 +49,8 @@ defmodule AshNeo4j.DataLayer.Info do
   Returns a node_relationship that matches the edge label and direction
   """
   @spec node_relationship(Ash.Resource.t(), atom(), atom()) :: tuple() | nil
-  def node_relationship(resource, edge_label, direction) when is_atom(edge_label) do
+  def node_relationship(resource, edge_label, direction)
+      when is_atom(resource) and is_atom(edge_label) and is_atom(direction) do
     node_relationship = List.keyfind(relate(resource), edge_label, 1)
 
     case node_relationship do
