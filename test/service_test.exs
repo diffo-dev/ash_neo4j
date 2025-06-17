@@ -34,7 +34,7 @@ defmodule AshNeo4j.Service.Test do
       _access_v2 = Specification |> Ash.create!(%{name: "access", major_version: 2})
       _edge_v3 = Specification |> Ash.create!(%{name: "edge", major_version: 3})
 
-      latest_specification = Specification |> Ash.Query.for_read(:get_latest , %{query: "access"}) |> Ash.read_one!()
+      latest_specification = Specification |> Ash.Query.for_read(:get_latest, %{query: "access"}) |> Ash.read_one!()
       assert latest_specification
       assert latest_specification.major_version == 2
       assert latest_specification.name == "access"
