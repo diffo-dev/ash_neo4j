@@ -91,14 +91,19 @@ defmodule AshNeo4j.Cypher do
   "s.name in [Bill Nighy]"
   iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[]")
   "s.name IS NOT NULL"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "access")
+  "s.name CONTAINS 'access'"
   ```
   """
   def expression(variable, left, operator, right)
       when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
-    if operator == "in" && right == "[]" do
-      "#{variable}.#{left} IS NOT NULL"
-    else
-      "#{variable}.#{left} #{operator} #{right}"
+    cond do
+      operator == "in" && right == "[]" ->
+        "#{variable}.#{left} IS NOT NULL"
+      operator == "contains" ->
+        "#{variable}.#{left} CONTAINS '#{right}'"
+      true ->
+        "#{variable}.#{left} #{operator} #{right}"
     end
   end
 
