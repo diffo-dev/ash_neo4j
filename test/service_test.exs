@@ -28,6 +28,19 @@ defmodule AshNeo4j.Service.Test do
     end
   end
 
+  describe "ash read action tests" do
+    test "find the latest specification with a given name" do
+      _access_v1 = Specification |> Ash.create!(%{name: "access", major_version: 1})
+      _access_v2 = Specification |> Ash.create!(%{name: "access", major_version: 2})
+      _edge_v3 = Specification |> Ash.create!(%{name: "edge", major_version: 3})
+
+      latest_specification = Specification |> Ash.Query.for_read(:get_latest , %{query: "access"}) |> Ash.read_one!()
+      assert latest_specification
+      assert latest_specification.major_version == 2
+      assert latest_specification.name == "access"
+    end
+  end
+
   describe "ash update action tests" do
     test "resource node can be created and related to a specification using ash create" do
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})

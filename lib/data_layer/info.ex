@@ -107,7 +107,7 @@ defmodule AshNeo4j.DataLayer.Info do
 
   @doc """
   Converts an attribute name to a node property name string, translating if necessary
-  The attribute name can be an Ash.Query.Ref or atom
+  The attribute name can be an Ash.AAsh.Query.Ref or atom
   """
   @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref)
