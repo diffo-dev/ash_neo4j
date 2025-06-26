@@ -16,39 +16,63 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
         :ok
 
       true ->
-        if !Enum.all?(relate, fn {_relationship_name, edge_label, _edge_direction} ->
-             Regex.match?(@regex, Atom.to_string(edge_label))
-           end) do
-          {:error,
-           DslError.exception(
-             module: resource,
-             message: "relate: edge label must be upper case and may have an underscore"
-           )}
-        else
-          relationships = Verifier.get_entities(dsl, [:relationships])
-          relationship_names = Enum.into(relationships, [], &Map.get(&1, :name))
+        case invalid_edge_labels =
+               Enum.reduce(relate, [], fn {_relationship_name, edge_label, _edge_direction}, acc ->
+                 if Regex.match?(@regex, Atom.to_string(edge_label)) do
+                   acc
+                 else
+                   [to_string(edge_label) | acc]
+                 end
+               end) do
+          [] ->
+            relationships = Verifier.get_entities(dsl, [:relationships])
+            relationship_names = Enum.into(relationships, [], &Map.get(&1, :name))
 
-          if Enum.any?(relate, fn {relationship_name, _edge_label, _edge_direction} ->
-               relationship_name not in relationship_names
-             end) do
+            case mismatched_relationship_names =
+                   Enum.reduce(relate, [], fn {relationship_name, _edge_label, _edge_direction}, acc ->
+                     if relationship_name in relationship_names do
+                       acc
+                     else
+                       [to_string(relationship_name) | acc]
+                     end
+                   end) do
+              [] ->
+                case invalid_edge_directions =
+                       Enum.reduce(relate, [], fn {_relationship_name, _edge_label, edge_direction}, acc ->
+                         if edge_direction in [:incoming, :outgoing] do
+                           acc
+                         else
+                           [to_string(edge_direction) | acc]
+                         end
+                       end) do
+                  [] ->
+                    :ok
+
+                  _ ->
+                    {:error,
+                     DslError.exception(
+                       module: resource,
+                       message:
+                         "relate: edge directions must be :incoming or :outgoing, invalid edge directions: #{invalid_edge_directions}"
+                     )}
+                end
+
+              _ ->
+                {:error,
+                 DslError.exception(
+                   module: resource,
+                   message:
+                     "relate: relationship names must match the name of a relationship, mismatched relationship names: #{mismatched_relationship_names}"
+                 )}
+            end
+
+          _ ->
             {:error,
              DslError.exception(
                module: resource,
-               message: "relate: relationship_name must match the name of a relationship"
+               message:
+                 "relate: edge labels must be upper case and may have an underscore, invalid edge labels: #{invalid_edge_labels}"
              )}
-          else
-            if Enum.any?(relate, fn {_relationship_name, _edge_label, edge_direction} ->
-                 edge_direction not in [:incoming, :outgoing]
-               end) do
-              {:error,
-               DslError.exception(
-                 module: resource,
-                 message: "relate: edge_direction must be :incoming or :outgoing"
-               )}
-            else
-              :ok
-            end
-          end
         end
     end
   end

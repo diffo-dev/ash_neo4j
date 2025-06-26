@@ -1,5 +1,6 @@
 defmodule AshNeo4j.Test.Verifiers do
   @moduledoc false
+
   use ExUnit.Case, async: false
 
   describe "Verifiers tests" do
@@ -45,59 +46,93 @@ defmodule AshNeo4j.Test.Verifiers do
     end
 
     test "edge label style" do
-      assert_raise Spark.Error.DslError, fn ->
-        defmodule InvalidEdgeLabel do
-          @moduledoc false
-          use Ash.Resource,
-            domain: AshNeo4j.Test.Domain,
-            data_layer: AshNeo4j.DataLayer
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: edge labels must be upper case and may have an underscore, invalid edge labels: uses/,
+                   fn ->
+                     defmodule InvalidEdgeLabel do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
 
-          neo4j do
-            label :Resource
-            relate [{:resources, :uses, :outgoing}]
-            translate id: :uuid
-          end
+                       neo4j do
+                         label :Resource
+                         relate [{:resources, :uses, :outgoing}]
+                         translate id: :uuid
+                       end
 
-          attributes do
-            uuid_primary_key :id, writable?: true
-            attribute :name, :string, public?: true
-            attribute :resource_id, :uuid, public?: true
-          end
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                       end
 
-          relationships do
-            has_many :resources, InvalidEdgeLabel
-            belongs_to :resource, InvalidEdgeLabel, public?: true
-          end
-        end
-      end
+                       relationships do
+                         has_many :resources, InvalidEdgeLabel
+                         belongs_to :resource, InvalidEdgeLabel, public?: true
+                       end
+                     end
+                   end
+    end
+
+    test "mismatched relationship names" do
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: relationship names must match the name of a relationship, mismatched relationship names: resourced/,
+                   fn ->
+                     defmodule MismatchedRelationshipNames do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         label :Resource
+                         relate [{:resourced, :USES, :forwards}]
+                         translate id: :uuid
+                       end
+
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                       end
+
+                       relationships do
+                         has_many :resources, MismatchedRelationshipNames
+                         belongs_to :resource, MismatchedRelationshipNames, public?: true
+                       end
+                     end
+                   end
     end
 
     test "edge direction" do
-      assert_raise Spark.Error.DslError, fn ->
-        defmodule InvalidEdgeDirection do
-          @moduledoc false
-          use Ash.Resource,
-            domain: AshNeo4j.Test.Domain,
-            data_layer: AshNeo4j.DataLayer
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: edge directions must be :incoming or :outgoing, invalid edge directions: forwards/,
+                   fn ->
+                     defmodule InvalidEdgeDirection do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
 
-          neo4j do
-            label :Resource
-            relate [{:resources, :USES, :forwards}]
-            translate id: :uuid
-          end
+                       neo4j do
+                         label :Resource
+                         relate [{:resources, :USES, :forwards}]
+                         translate id: :uuid
+                       end
 
-          attributes do
-            uuid_primary_key :id, writable?: true
-            attribute :name, :string, public?: true
-            attribute :resource_id, :uuid, public?: true
-          end
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                       end
 
-          relationships do
-            has_many :resources, InvalidEdgeDirection
-            belongs_to :resource, InvalidEdgeDirection, public?: true
-          end
-        end
-      end
+                       relationships do
+                         has_many :resources, InvalidEdgeDirection
+                         belongs_to :resource, InvalidEdgeDirection, public?: true
+                       end
+                     end
+                   end
     end
 
     test "property style - attribute" do
