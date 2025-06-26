@@ -63,3 +63,10 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * many to many relationship (back to back has_many)
 * has one relationship
 
+## [v0.2.2](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.1...v0.2.2) (2025-06-26)
+
+### Maintenance:
+
+* refactored tests
+* fixed Ash.Error.Unknown when filtering using contains
+* fixed Ash.Error.Unknown in datalayer when relate not defined

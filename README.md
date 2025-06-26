@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.1"},
+    {:ash_neo4j, "~> 0.2.2"},
   ]
 end
 ```
@@ -121,7 +121,7 @@ ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed a
 
 Your Ash application needs to configure, start and supervise [boltx](https://github.com/sagastume/boltx), see [boltx documentation](https://hexdocs.pm/boltx/). Make sure to configure any required authorisation.
 
-I've used Neo4j community edition 4.4 (bolt 4.4) and to connect using boltx I needed to also set the environment variable ```BOLT_VERSIONS=4.4``` to steer [bolt protocol handshake] (https://neo4j.com/docs/bolt/current/bolt/handshake).
+I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (boltx limits to bolt 5.4) and any version in between *should* work. To connect to Neo4j 4.4 using boltx I needed to also set the environment variable ```BOLT_VERSIONS="4.4"``` to steer [bolt protocol handshake] (https://neo4j.com/docs/bolt/current/bolt/handshake).  I've raised [negotiate range](https://github.com/sagastume/boltx/pull/125) on boltx to improve version negotiation so that this won't be necessary.
 
 ## Elixir, Ash and Neo4j Types
 
@@ -191,7 +191,7 @@ Generally attributes with nil value are not persisted, rather they are simply no
 
 ## Limitations and Future Work
 
-Ash Neo4j has initial support for Ash create, update, read, destroy actions. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
+Ash Neo4j has initial support for Ash create, update, read, destroy actions. Calculations and aggregates are not yet supported. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
 
 ## Acknowledgements
 
