@@ -9,6 +9,8 @@ defmodule AshNeo4j.Test.Resource.Resource do
 
     relate [
       {:specification, :SPECIFIES, :incoming},
+      {:service, :USES, :incoming},
+      {:resource, :USES, :incoming},
       {:resources, :USES, :outgoing},
       {:event, :FIRED, :outgoing}
     ]

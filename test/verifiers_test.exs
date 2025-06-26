@@ -69,7 +69,6 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        relationships do
                          has_many :resources, InvalidEdgeLabel
-                         belongs_to :resource, InvalidEdgeLabel, public?: true
                        end
                      end
                    end
@@ -99,7 +98,6 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        relationships do
                          has_many :resources, MismatchedRelationshipNames
-                         belongs_to :resource, MismatchedRelationshipNames, public?: true
                        end
                      end
                    end
@@ -129,7 +127,36 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        relationships do
                          has_many :resources, InvalidEdgeDirection
-                         belongs_to :resource, InvalidEdgeDirection, public?: true
+                       end
+                     end
+                   end
+    end
+
+    test "mismatched relationships" do
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: relate must have an entry for each relationship/,
+                   fn ->
+                     defmodule MismatchedRelationships do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         label :Resource
+                         relate [{:resources, :USES, :forwards}]
+                         translate id: :uuid
+                       end
+
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                       end
+
+                       relationships do
+                         has_many :resources, MismatchedRelationships
+                         belongs_to :resource, MismatchedRelationships, public?: true
                        end
                      end
                    end
