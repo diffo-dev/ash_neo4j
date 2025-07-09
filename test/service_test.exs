@@ -38,6 +38,8 @@ defmodule AshNeo4j.Service.Test do
       assert latest_specification
       assert latest_specification.major_version == 2
       assert latest_specification.name == "access"
+      {:ok, refreshed_latest_specification} = latest_specification |> Ash.load(:version)
+      assert refreshed_latest_specification.version == "v2.0"
     end
   end
 

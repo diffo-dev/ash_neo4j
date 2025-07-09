@@ -62,7 +62,7 @@ Update the configuration below as necessary and evaluate.
 ```elixir
 config = [
   uri: "bolt://localhost:7687",
-  auth: [username: "neo4j", password: ""],
+  auth: [username: "neo4j", password: "password"],
   user_agent: "ashNeo4jLivebook/1",
   pool_size: 15,
   max_overflow: 3,
@@ -229,10 +229,6 @@ defmodule Resource do
     has_many :resources, Resource
   end
 end
-```
-
-```elixir
-nbn_ethernet_v1.id
 ```
 
 Now we'll create some resource instances, these will be related to the specifications we created earlier:

@@ -9,7 +9,13 @@ defmodule AshNeo4j.Test.Resource.Specification do
   end
 
   actions do
-    defaults [:read, :destroy, create: :*, update: :*]
+    defaults [:read, :destroy, update: :*]
+
+    create :create do
+      primary? true
+      accept [:name, :type, :href, :major_version, :minor_version]
+      load [:version]
+    end
 
     read :get_latest do
       description "gets the specification of the given name with the highest major version"
@@ -31,5 +37,9 @@ defmodule AshNeo4j.Test.Resource.Specification do
     attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
     attribute :major_version, :integer, default: 1, public?: true
     attribute :minor_version, :integer, default: 0, public?: true
+  end
+
+  calculations do
+    calculate :version, :string, expr("v" <> major_version <> "." <> minor_version)
   end
 end

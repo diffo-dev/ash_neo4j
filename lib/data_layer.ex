@@ -26,7 +26,8 @@ defmodule AshNeo4j.DataLayer do
   # def can?(_, :transact), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  # def can?(_, :expression_calculation_sort), do: true
+  def can?(_, :expression_calculation), do: true
+  #def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
 
@@ -81,6 +82,11 @@ defmodule AshNeo4j.DataLayer do
     {:ok, %{query | sort: sort}}
   end
 
+  @impl true
+  def add_calculation(query, calculation, _expression, _resource) do
+    {:ok, Map.put(query, :calculations, [calculation | query.calculations])} |> IO.inspect(label: :add_calculation_result)
+  end
+
   @doc false
   def store_opt(attributes) do
     if Enum.all?(attributes, &is_atom/1) do
@@ -108,13 +114,13 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain]
+    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, calculations: []]
   end
 
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
 
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
@@ -125,19 +131,26 @@ defmodule AshNeo4j.DataLayer do
 
       {:ok, groups} ->
         results =
-          convert_groups_to_resources(query.resource, groups)
+          convert_groups_to_resources(query, groups)
           |> filter_stream(query.domain, query.filter)
           |> Enum.to_list()
 
         {:ok, results}
     end
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true
   def create(resource, changeset) do
-    create_from_changeset(nil, resource, changeset)
+    primary_keys = Ash.Resource.Info.primary_key(resource)
+    id_attributes = Map.take(changeset.attributes, primary_keys)
+
+    if Enum.empty?(id_attributes) do
+      {:error, "no values supplied for primary keys #{primary_keys}"}
+    else
+      create_from_attributes(resource, changeset.attributes)
+    end
   end
 
   @impl true
@@ -335,26 +348,27 @@ defmodule AshNeo4j.DataLayer do
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
-  defp convert_groups_to_resources(resource, groups) when is_atom(resource) and is_list(groups) do
+  defp convert_groups_to_resources(query, groups) when is_struct(query, Query) and is_list(groups) do
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources groups")
     consolidate_groups(groups)
-    |> Stream.map(&convert_to_resource(resource, &1))
+    |> Stream.map(&convert_to_resource(query, &1))
 
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources result")
   end
 
-  defp convert_to_resource(resource, consolidated_group)
-       when is_atom(resource) and is_tuple(consolidated_group) do
+  defp convert_to_resource(query, consolidated_group)
+       when is_struct(query, Query) and is_tuple(consolidated_group) do
     # IO.inspect(consolidated_group, label: "AshNeo4j.DataLayer.convert_to_resource consolidated_group")
     source_node = elem(consolidated_group, 0)
     related = elem(consolidated_group, 1)
 
     enrichments =
-      Enum.into(related, [], &enrichment(resource, &1))
+      Enum.into(related, [], &enrichment(query.resource, &1))
       |> Enum.filter(& &1)
       |> consolidate_enrichments()
 
-    convert_node_to_resource(resource, source_node, enrichments)
+    convert_node_to_resource(query.resource, source_node, enrichments)
+    |> add_calculations(query)
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -430,8 +444,17 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:__metadata__, %{node_id: node.id})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+  end
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+  defp add_calculations(resource_instance, query) when is_struct(resource_instance) and is_struct(query, Query) do
+    opts = [resource: query.resource, record: resource_instance]
+    query.calculations
+    |> Enum.reduce(resource_instance,
+      fn calculation, acc ->
+        expression = Keyword.get(calculation.opts, :expr, %Ash.NotLoaded{})
+        Map.put(acc, calculation.name, Ash.Expr.eval!(expression, opts))
+      end)
   end
 
   defp filter_stream(stream, _domain, nil), do: stream
@@ -442,17 +465,6 @@ defmodule AshNeo4j.DataLayer do
     |> Stream.flat_map(fn chunk ->
       filter_matches(chunk, filter, domain)
     end)
-  end
-
-  defp create_from_changeset(_records, resource, changeset) do
-    primary_keys = Ash.Resource.Info.primary_key(resource)
-    id_attributes = Map.take(changeset.attributes, primary_keys)
-
-    if Enum.empty?(id_attributes) do
-      {:error, "no values supplied for primary keys #{primary_keys}"}
-    else
-      create_from_attributes(resource, changeset.attributes)
-    end
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
