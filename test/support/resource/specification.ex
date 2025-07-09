@@ -25,7 +25,7 @@ defmodule AshNeo4j.Test.Resource.Specification do
         description "Return only specifications with names including the given value."
       end
 
-      prepare build(limit: 1, sort: [version: :desc])
+      prepare build(limit: 1, sort: [major_version: :desc])
       filter expr(contains(name, ^arg(:query)))
     end
   end
