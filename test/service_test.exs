@@ -158,8 +158,11 @@ defmodule AshNeo4j.Service.Test do
                :outgoing
              )
 
+
       assert updated_activate_event.event.id == create_event.id
-      refute Map.has_key?(refreshed_create_event, :event_id)
+      refute is_struct(updated_activate_event.event, Ash.NotLoaded)
+      refute refreshed_create_event.event_id
+      assert is_struct(refreshed_create_event.event, Ash.NotLoaded)
     end
   end
 end

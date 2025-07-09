@@ -431,16 +431,19 @@ defmodule AshNeo4j.DataLayer do
   defp convert_node_to_resource(resource, node, enrichments \\ [])
        when is_atom(resource) and is_map(node) and is_list(enrichments) do
     # IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
+
     enriched =
       Enum.into(enrichments, %{}, fn {field, value} ->
         {field, value}
       end)
 
-    Enum.into(Info.translation(resource), enriched, fn {resource_field, node_field} ->
-      property_value = Map.get(node.properties, to_string(node_field))
-      {resource_field, Cast.cast(resource, resource_field, property_value)}
-    end)
-    |> Map.put(:__struct__, resource)
+    fields =
+      Enum.into(Info.translation(resource), enriched, fn {resource_field, node_field} ->
+        property_value = Map.get(node.properties, to_string(node_field))
+        {resource_field, Cast.cast(resource, resource_field, property_value)}
+      end)
+
+    struct(resource, fields)
     |> Map.put(:__data_layer__, __MODULE__)
     |> Map.put(:__metadata__, %{node_id: node.id})
     |> Map.put(:aggregates, %{})
