@@ -27,7 +27,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, :expression_calculation), do: true
-  #def can?(_, :expression_calculation_sort), do: true
+  # def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
 
@@ -84,7 +84,8 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def add_calculation(query, calculation, _expression, _resource) do
-    {:ok, Map.put(query, :calculations, [calculation | query.calculations])} |> IO.inspect(label: :add_calculation_result)
+    {:ok, Map.put(query, :calculations, [calculation | query.calculations])}
+    |> IO.inspect(label: :add_calculation_result)
   end
 
   @doc false
@@ -120,7 +121,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
 
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
@@ -138,7 +139,7 @@ defmodule AshNeo4j.DataLayer do
         {:ok, results}
     end
 
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true
@@ -368,7 +369,7 @@ defmodule AshNeo4j.DataLayer do
       |> consolidate_enrichments()
 
     convert_node_to_resource(query.resource, source_node, enrichments)
-    |> add_calculations(query)
+    |> evaluate_calculations(query)
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -444,17 +445,22 @@ defmodule AshNeo4j.DataLayer do
     |> Map.put(:__metadata__, %{node_id: node.id})
     |> Map.put(:aggregates, %{})
     |> Map.put(:calculations, %{})
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
+
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
-  defp add_calculations(resource_instance, query) when is_struct(resource_instance) and is_struct(query, Query) do
-    opts = [resource: query.resource, record: resource_instance]
+  defp evaluate_calculations(resource_instance, query) when is_struct(resource_instance) and is_struct(query, Query) do
     query.calculations
-    |> Enum.reduce(resource_instance,
+    |> Enum.reverse()
+    |> Enum.reduce(
+      resource_instance,
       fn calculation, acc ->
+        # allow calculations to chain previous results
         expression = Keyword.get(calculation.opts, :expr, %Ash.NotLoaded{})
+        opts = [resource: query.resource, record: acc]
         Map.put(acc, calculation.name, Ash.Expr.eval!(expression, opts))
-      end)
+      end
+    )
   end
 
   defp filter_stream(stream, _domain, nil), do: stream
