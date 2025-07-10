@@ -70,3 +70,11 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * refactored tests
 * fixed Ash.Error.Unknown when filtering using contains
 * fixed Ash.Error.Unknown in datalayer when relate not defined
+
+## [v0.2.3](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.2...v0.2.3) (2025-07-10)
+
+### Features:
+
+* unloaded attributes are Ash.NotLoaded
+* improved metadata
+* expression calculations

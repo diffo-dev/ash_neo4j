@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.2"},
+    {:ash_neo4j, "~> 0.2.3"},
   ]
 end
 ```
@@ -191,7 +191,7 @@ Generally attributes with nil value are not persisted, rather they are simply no
 
 ## Limitations and Future Work
 
-Ash Neo4j has initial support for Ash create, update, read, destroy actions. Calculations and aggregates are not yet supported. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
+Ash Neo4j has initial support for Ash create, update, read, destroy actions. Calculations are supported but not evaluated in Neo4j itself. Aggregates are not yet supported. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
 
 ## Acknowledgements
 
