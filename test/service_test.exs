@@ -43,6 +43,19 @@ defmodule AshNeo4j.Service.Test do
     end
   end
 
+  describe "ash create action tests" do
+    test "resource node can be created with multiple relationships" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+      esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
+      resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
+
+      assert resource.specification.id == esim_v1.id
+
+      assert resource.service_id == service.id
+    end
+  end
+
   describe "ash update action tests" do
     test "resource node can be created and related to a specification using ash create" do
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
