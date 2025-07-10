@@ -75,6 +75,8 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ### Features:
 
+* expression calculations
 * unloaded attributes are Ash.NotLoaded
 * improved metadata
-* expression calculations
+* improved relate error messages
+* improved relate verification
