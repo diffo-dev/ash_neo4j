@@ -158,7 +158,6 @@ defmodule AshNeo4j.Service.Test do
                :outgoing
              )
 
-
       assert updated_activate_event.event.id == create_event.id
       refute is_struct(updated_activate_event.event, Ash.NotLoaded)
       refute refreshed_create_event.event_id
