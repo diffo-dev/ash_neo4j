@@ -85,7 +85,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def add_calculation(query, calculation, _expression, _resource) do
     {:ok, Map.put(query, :calculations, [calculation | query.calculations])}
-    |> IO.inspect(label: :add_calculation_result)
+    # |> IO.inspect(label: :add_calculation_result)
   end
 
   @doc false
