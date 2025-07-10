@@ -423,7 +423,7 @@ defmodule AshNeo4j.DataLayer do
           {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
       end
     else
-      IO.puts("warning: unable to enrich source node with edge #{edge.label} and destination node #{dest_node.labels}")
+      IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
       nil
     end
   end
