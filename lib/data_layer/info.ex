@@ -78,7 +78,10 @@ defmodule AshNeo4j.DataLayer.Info do
         end
       end)
 
-    hd(relationships)
+    case relationships do
+      [] -> nil
+      _ -> hd(relationships)
+    end
   end
 
   @doc """
