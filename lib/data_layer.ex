@@ -443,11 +443,9 @@ defmodule AshNeo4j.DataLayer do
         {resource_field, Cast.cast(resource, resource_field, property_value)}
       end)
 
-    struct(resource, fields)
-    |> Map.put(:__data_layer__, __MODULE__)
-    |> Map.put(:__metadata__, %{node_id: node.id})
-    |> Map.put(:aggregates, %{})
-    |> Map.put(:calculations, %{})
+    struct!(resource, fields)
+    |> Ash.Resource.set_metadata(%{node_id: node.id, data_layer: __MODULE__, labels: node.labels})
+    |> Ash.Resource.set_meta(struct(Ecto.Schema.Metadata, state: :loaded))
 
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
