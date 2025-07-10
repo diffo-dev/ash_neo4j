@@ -6,6 +6,9 @@ defmodule AshNeo4j.Test.Resource.Specification do
 
   neo4j do
     translate id: :uuid
+    relate [
+      {:instances, :SPECIFIES, :outgoing}
+    ]
   end
 
   actions do
@@ -39,7 +42,22 @@ defmodule AshNeo4j.Test.Resource.Specification do
     attribute :minor_version, :integer, default: 0, public?: true
   end
 
+  relationships do
+    has_many :instances, Diffo.Provider.Instance do
+      description "the instances specified by this specification"
+      destination_attribute :specification_id
+      public? true
+    end
+  end
+
   calculations do
     calculate :version, :string, expr("v" <> major_version <> "." <> minor_version)
+  end
+
+  preparations do
+    prepare build(
+              load: [:version],
+              sort: [name: :asc, major_version: :desc]
+            )
   end
 end
