@@ -150,6 +150,18 @@ defmodule AshNeo4j.Test.Type do
       Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
       # TODO compare durations
     end
+
+    test "type node has metadata on read" do
+      properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
+      Neo4jHelper.create_node(:Type, properties)
+      type = Ash.read_one!(Type)
+      assert is_struct(type.__meta__, Ecto.Schema.Metadata)
+      assert type.__meta__.state == :loaded
+      assert type.__metadata__
+      assert type.__metadata__.data_layer == AshNeo4j.DataLayer
+      assert type.__metadata__.labels == ["Type"]
+      assert is_integer(type.__metadata__.node_id)
+    end
   end
 
   describe "Ash Create Type tests" do
@@ -180,6 +192,16 @@ defmodule AshNeo4j.Test.Type do
       assert length(type.array_money) == 2
       assert hd(type.array_money).currency == :sek
       assert hd(tl(type.array_money)).currency == :aud
+    end
+
+    test "type node has metadata on create" do
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()
+      assert is_struct(type.__meta__, Ecto.Schema.Metadata)
+      assert type.__meta__.state == :loaded
+      assert type.__metadata__
+      assert type.__metadata__.data_layer == AshNeo4j.DataLayer
+      assert type.__metadata__.labels == ["Type"]
+      assert is_integer(type.__metadata__.node_id)
     end
   end
 
