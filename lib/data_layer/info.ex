@@ -37,11 +37,11 @@ defmodule AshNeo4j.DataLayer.Info do
   Returns a node_relationship that matches the source attribute name
   """
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
-  def node_relationship(resource, name) when is_atom(name) do
+  def node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
     List.keyfind(relate(resource), name, 0)
   end
 
-  def node_relationship(resource, name) when is_bitstring(name) do
+  def node_relationship(resource, name) when is_atom(resource) and is_bitstring(name) do
     List.keyfind(relate(resource), String.to_atom(name), 0)
   end
 
@@ -89,9 +89,15 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: list(tuple()) | nil
   def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
-    with {^name, edge_label, direction} = node_relationship(resource, name) do
-      relationship = Ash.Resource.Info.relationship(resource, name)
-      node_relationship(relationship.destination, edge_label, reverse(direction))
+    node_relationship = node_relationship(resource, name)
+
+    case node_relationship do
+      {^name, edge_label, direction} ->
+        relationship = Ash.Resource.Info.relationship(resource, name)
+        node_relationship(relationship.destination, edge_label, reverse(direction))
+
+      nil ->
+        nil
     end
   end
 

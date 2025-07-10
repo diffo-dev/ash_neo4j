@@ -394,33 +394,29 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  @dialyzer {:nowarn_function, enrichment: 2}
   defp enrichment(resource, {edge, dest_node}) when is_atom(resource) and is_map(edge) and is_map(dest_node) do
     dest_label = String.to_atom(List.first(dest_node.labels))
     relationship_label = String.to_atom(edge.type)
     relationship = Info.relationship(resource, relationship_label, dest_label)
 
     if relationship != nil do
-      reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
-
       dest_resource =
         convert_node_to_resource(relationship.destination, dest_node, [])
 
-      cond do
-        reverse_node_relationship != nil ->
-          reverse_relationship =
-            Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
+      reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
+      if (reverse_node_relationship != nil) do
+        reverse_relationship =
+          Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
 
-          cond do
-            relationship.cardinality == :many and reverse_relationship.cardinality == :many ->
-              {relationship.name, [dest_resource]}
+        cond do
+          relationship.cardinality == :many and reverse_relationship.cardinality == :many ->
+            {relationship.name, [dest_resource]}
 
-            true ->
-              {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
-          end
-
-        true ->
-          {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+          true ->
+            {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+        end
+      else
+        {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
       end
     else
       IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
