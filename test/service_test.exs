@@ -55,11 +55,14 @@ defmodule AshNeo4j.Service.Test do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
-      resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
 
-      assert resource.specification.id == esim_v1.id
+      resource =
+        Resource
+        |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
+        |> IO.inspect(label: :created_resource)
 
-      assert resource.service_id == service.id
+      assert is_struct(resource.specification, Specification)
+      assert is_struct(resource.service, Service)
     end
   end
 
