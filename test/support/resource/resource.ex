@@ -30,8 +30,10 @@ defmodule AshNeo4j.Test.Resource.Resource do
       primary? true
       accept [:name]
       argument :specified_by, :uuid
+      argument :used_by_service, :uuid
 
       change manage_relationship(:specified_by, :specification, type: :append_and_remove)
+      change manage_relationship(:used_by_service, :service, type: :append_and_remove)
     end
 
     update :update do

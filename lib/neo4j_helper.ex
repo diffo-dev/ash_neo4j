@@ -18,7 +18,7 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def create_node(label, properties) when is_atom(label) do
+  def create_node(label, properties) when is_atom(label) and is_map(properties) do
     ("CREATE " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
@@ -191,6 +191,73 @@ defmodule AshNeo4j.Neo4jHelper do
        Cypher.relationship(:r, edge_label, edge_direction) <>
        " (d) RETURN s, r, d")
     |> Cypher.run()
+  end
+
+  @doc """
+  Creates source neo4j node with label, properties and relationships to existing nodes
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Bend it Like Beckham"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.create_node_with_relationships(:Actor, %{name: "Bill Nighy"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}])
+  iex> result
+  :ok
+  iex> {result, _} = AshNeo4j.Neo4jHelper.create_node_with_relationships(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}, {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing}])
+  iex> result
+  :ok
+  ```
+  """
+  # MATCH (d1:Movie {title: "Love Actually"}), (d2:Movie {title: "Bend it Like Beckham"}) CREATE (s:Actor {name: "Keira Knightley"}) -[r1:ACTED_IN]->(d1) MERGE (s) -[r2:ACTED_IN]->(d2) RETURN s, r1, d1, r2, d2
+  def create_node_with_relationships(label, properties, relationships)
+      when is_atom(label) and is_map(properties) and is_list(relationships) do
+    case length(relationships) do
+      0 ->
+        create_node(label, properties)
+
+      1 ->
+        {dest_label, dest_properties, edge_label, edge_direction} = hd(relationships)
+        create_node_with_relationship(label, properties, dest_label, dest_properties, edge_label, edge_direction)
+
+      _ ->
+        match =
+          Enum.reduce(relationships, [], fn relationship, acc ->
+            {dest_label, dest_properties, _edge_label, _edge_direction} = relationship
+            i = length(acc)
+            node = String.to_atom("d#{i}")
+            [Cypher.node(node, dest_label, dest_properties) | acc]
+          end)
+          |> Enum.join(", ")
+
+        {_dest_label, _dest_properties, edge_label, edge_direction} = hd(relationships)
+
+        create = Cypher.node(:s, label, properties) <> Cypher.relationship(:r0, edge_label, edge_direction) <> "(d0)"
+
+        merge =
+          Enum.reduce(tl(relationships), [], fn relationship, acc ->
+            {_dest_label, _dest_properties, edge_label, edge_direction} = relationship
+            i = length(acc) + 1
+            edge = String.to_atom("r#{i}")
+            ["(s)" <> Cypher.relationship(edge, edge_label, edge_direction) <> "(d#{i})" | acc]
+          end)
+          |> Enum.join(", ")
+
+        ret =
+          Enum.reduce(relationships, [], fn _relationship, acc ->
+            i = length(acc)
+            ["r#{i}, d#{i}" | acc]
+          end)
+          |> Enum.join(", ")
+
+        ("MATCH " <>
+           match <>
+           " CREATE " <>
+           create <>
+           " MERGE " <>
+           merge <>
+           " RETURN s, " <> ret)
+        |> Cypher.run()
+    end
   end
 
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true

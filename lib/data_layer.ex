@@ -404,7 +404,8 @@ defmodule AshNeo4j.DataLayer do
         convert_node_to_resource(relationship.destination, dest_node, [])
 
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
-      if (reverse_node_relationship != nil) do
+
+      if reverse_node_relationship != nil do
         reverse_relationship =
           Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
 
@@ -479,39 +480,46 @@ defmodule AshNeo4j.DataLayer do
       0 ->
         create_node(resource, properties)
 
-      1 ->
-        {source_attribute, name} = hd(relationship_attributes)
-        relationship = Ash.Resource.Info.relationship(resource, name)
-        dest_resource = relationship.destination
-        node_relationship = Info.node_relationship(resource, name)
-
-        case node_relationship do
-          {^name, edge_label, edge_direction} ->
-            dest_node_property_name = Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
-            dest_id = %{dest_node_property_name => Map.get(relationship_source_attributes, source_attribute)}
-
-            case Neo4jHelper.create_node_with_relationship(
-                   Info.label(resource),
-                   properties,
-                   Info.label(dest_resource),
-                   dest_id,
-                   edge_label,
-                   edge_direction
-                 ) do
-              {:ok, %Boltx.Response{results: groups}} ->
-                # return the created, enriched node
-                {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
-
-              {:error, error} ->
-                {:error, error}
-            end
-
-          nil ->
-            create_node(resource, properties)
-        end
-
       _ ->
-        {:error, "AshNeo4j cannot create node with multiple relationships"}
+        # accumulate relationships
+        relationships =
+          relationship_attributes
+          |> Enum.reduce(
+            [],
+            fn {source_attribute, name}, acc ->
+              relationship = Ash.Resource.Info.relationship(resource, name)
+              dest_resource = relationship.destination
+              node_relationship = Info.node_relationship(resource, name)
+
+              case node_relationship do
+                {^name, edge_label, edge_direction} ->
+                  dest_node_property_name =
+                    Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
+
+                  dest_id_value = Map.get(relationship_source_attributes, source_attribute)
+
+                  if dest_id_value == nil do
+                    acc
+                  else
+                    dest_id = %{dest_node_property_name => dest_id_value}
+                    [{Info.label(dest_resource), dest_id, edge_label, edge_direction} | acc]
+                  end
+
+                nil ->
+                  acc
+              end
+            end
+          )
+
+        # create_node_with_relationships
+        case Neo4jHelper.create_node_with_relationships(Info.label(resource), properties, relationships) do
+          {:ok, %Boltx.Response{results: groups}} ->
+            # return the created node (TODO enrich with destination resources)
+            {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
+
+          {:error, error} ->
+            {:error, error}
+        end
     end
   end
 
