@@ -44,6 +44,13 @@ defmodule AshNeo4j.Service.Test do
   end
 
   describe "ash create action tests" do
+    test "service node can be created with a single relationship" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+
+      assert service.specification.id == broadband_v1.id
+    end
+
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
