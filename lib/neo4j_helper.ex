@@ -214,12 +214,14 @@ defmodule AshNeo4j.Neo4jHelper do
     case length(relationships) do
       0 ->
         create_node(label, properties)
+
       1 ->
         {dest_label, dest_properties, edge_label, edge_direction} = hd(relationships)
         create_node_with_relationship(label, properties, dest_label, dest_properties, edge_label, edge_direction)
+
       _ ->
-        match = Enum.reduce(relationships, [],
-          fn relationship, acc ->
+        match =
+          Enum.reduce(relationships, [], fn relationship, acc ->
             {dest_label, dest_properties, _edge_label, _edge_direction} = relationship
             i = length(acc)
             node = String.to_atom("d#{i}")
@@ -231,8 +233,8 @@ defmodule AshNeo4j.Neo4jHelper do
 
         create = Cypher.node(:s, label, properties) <> Cypher.relationship(:r0, edge_label, edge_direction) <> "(d0)"
 
-        merge = Enum.reduce(tl(relationships), [],
-          fn relationship, acc ->
+        merge =
+          Enum.reduce(tl(relationships), [], fn relationship, acc ->
             {_dest_label, _dest_properties, edge_label, edge_direction} = relationship
             i = length(acc) + 1
             edge = String.to_atom("r#{i}")
@@ -240,19 +242,22 @@ defmodule AshNeo4j.Neo4jHelper do
           end)
           |> Enum.join(", ")
 
-        ret = Enum.reduce(relationships, [],
-          fn _relationship, acc ->
+        ret =
+          Enum.reduce(relationships, [], fn _relationship, acc ->
             i = length(acc)
-            ["r#{i}, d#{i}" | acc ]
+            ["r#{i}, d#{i}" | acc]
           end)
           |> Enum.join(", ")
 
-        ("MATCH " <> match <>
-          " CREATE " <> create <>
-          " MERGE " <> merge <>
-          " RETURN s, " <> ret)
+        ("MATCH " <>
+           match <>
+           " CREATE " <>
+           create <>
+           " MERGE " <>
+           merge <>
+           " RETURN s, " <> ret)
         |> Cypher.run()
-      end
+    end
   end
 
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
