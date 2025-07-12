@@ -31,7 +31,8 @@ defmodule AshNeo4j.QueryHelper do
     label = Info.label(ash_query.resource)
 
     if ash_query.filter == nil do
-      "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
+      # there is no filter, but we want related nodes to simulate foreign keys
+      "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
     else
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter)
       predicates = Map.get(simple_filter, :predicates, [])
@@ -51,7 +52,7 @@ defmodule AshNeo4j.QueryHelper do
 
             if operator == nil do
               IO.puts("Unsupported operator: #{inspect(predicate.operator)}")
-              "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
+              "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
             else
               property_name =
                 Info.convert_to_property_name(ash_query.resource, predicate.left)
@@ -97,11 +98,11 @@ defmodule AshNeo4j.QueryHelper do
 
             "MATCH " <>
               Cypher.node(:s, label) <>
-              " WHERE " <> Cypher.expression(:s, property_name, "contains", attribute) <> " RETURN s"
+              " WHERE " <> Cypher.expression(:s, property_name, "contains", attribute) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
 
           _ ->
             IO.puts("Unsupported predicate: #{inspect(predicate)}")
-            "MATCH " <> Cypher.node(:s, label) <> " RETURN s"
+            "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
         end
       end
     end
