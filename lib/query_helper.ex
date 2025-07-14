@@ -18,7 +18,7 @@ defmodule AshNeo4j.QueryHelper do
       |> order_by(ash_query)
       |> skip(ash_query)
       |> limit(ash_query)
-      |> IO.inspect(label: :query_nodes_cypher)
+      #|> IO.inspect(label: :query_nodes_cypher)
 
     case Cypher.run(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
@@ -27,11 +27,11 @@ defmodule AshNeo4j.QueryHelper do
       {:error, _} ->
         {:error, "Error running cypher #{cypher}"}
     end
-    |> IO.inspect(label: "query_nodes results")
+    #|> IO.inspect(label: "query_nodes results")
   end
 
   defp cypher(ash_query) when is_struct(ash_query) do
-    IO.inspect(ash_query, label: :cypher_ash_query)
+    #IO.inspect(ash_query, label: :cypher_ash_query)
 
     label = Info.label(ash_query.resource)
 
@@ -62,10 +62,8 @@ defmodule AshNeo4j.QueryHelper do
             acc
           end
         end)
-        |> IO.inspect(label: :relationship_predicates)
 
       property_predicates = predicates -- relationship_predicates
-        |> IO.inspect(label: :property_predicates)
 
       cond do
         Enum.empty?(relationship_predicates) ->
@@ -81,7 +79,7 @@ defmodule AshNeo4j.QueryHelper do
           relationship_name = String.split(property_name, "_") |> List.first()
           node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
           relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
-          dest_label = relationship_name |> String.capitalize() |> String.to_atom()
+          dest_label = Info.label(relationship.destination)
           dest_property_name = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
           "MATCH " <>
