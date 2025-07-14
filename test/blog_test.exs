@@ -288,6 +288,27 @@ defmodule AshNeo4j.Blog.Test do
 
       assert length(results) == 2
     end
+
+    test "optimised is_nil predicate can be applied" do
+      create_post_nodes(3)
+
+      results =
+        Post
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(is_nil(unique))
+        |> Ash.read!()
+
+      assert length(results) == 3
+
+      results =
+        Post
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(is_nil(score))
+        |> Ash.read!()
+
+      assert length(results) == 0
+    end
+
   end
 
   describe "ash create action tests" do

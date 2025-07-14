@@ -101,6 +101,9 @@ defmodule AshNeo4j.Cypher do
       operator == "in" && right == "[]" ->
         "#{variable}.#{left} IS NOT NULL"
 
+      operator == "is_nil" && right == true ->
+        "#{variable}.#{left} IS NULL"
+
       operator == "contains" ->
         "#{variable}.#{left} CONTAINS '#{right}'"
 

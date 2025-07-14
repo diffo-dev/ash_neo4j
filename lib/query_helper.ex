@@ -162,7 +162,11 @@ defmodule AshNeo4j.QueryHelper do
   defp convert_operator(:<), do: "<"
   defp convert_operator(:>), do: ">"
   defp convert_operator(:>=), do: ">="
-  defp convert_operator(_), do: nil
+  defp convert_operator(:is_nil), do: "is_nil"
+  defp convert_operator(operator) do
+    IO.puts("warning operator #{operator} not handled")
+    nil
+  end
 
   defp convert_value(value) when is_binary(value), do: "'#{value}'"
 
