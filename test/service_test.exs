@@ -59,7 +59,6 @@ defmodule AshNeo4j.Service.Test do
       resource =
         Resource
         |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
-        |> IO.inspect(label: :created_resource)
 
       assert is_struct(resource.specification, Specification)
       assert is_struct(resource.service, Service)

@@ -308,7 +308,6 @@ defmodule AshNeo4j.Blog.Test do
 
       assert length(results) == 0
     end
-
   end
 
   describe "ash create action tests" do
