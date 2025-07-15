@@ -9,8 +9,8 @@ defmodule AshNeo4j.Test.Resource.Event do
 
     relate [
       {:event, :AFTER, :outgoing},
-      {:service, :FIRED, :outgoing},
-      {:resource, :FIRED, :outgoing}
+      {:service, :FIRED, :incoming},
+      {:resource, :FIRED, :incoming}
     ]
 
     translate id: :uuid
