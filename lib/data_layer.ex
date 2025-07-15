@@ -121,7 +121,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    # IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
 
     case QueryHelper.query_nodes(query) do
       {:error, error} ->
@@ -139,7 +139,7 @@ defmodule AshNeo4j.DataLayer do
         {:ok, results}
     end
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
   end
 
   @impl true
@@ -365,8 +365,9 @@ defmodule AshNeo4j.DataLayer do
 
     enrichments =
       Enum.into(related, [], &enrichment(query.resource, &1))
-      |> Enum.filter(& &1)
+      #|> Enum.filter(& &1) #drop falsy values
       |> consolidate_enrichments()
+      #|> IO.inspect(label: :enrichments)
 
     convert_node_to_resource(query.resource, source_node, enrichments)
     |> evaluate_calculations(query)
@@ -374,55 +375,76 @@ defmodule AshNeo4j.DataLayer do
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
     Enum.reduce(enrichments, [], fn enrichment, acc ->
-      {name, value} = enrichment
-
-      cond do
-        [] == acc ->
-          [enrichment]
-
-        [head | tail] = acc ->
+      case enrichment do
+        {name, value} ->
           cond do
-            name == elem(head, 0) and is_list(value) and is_list(elem(head, 1)) ->
-              # merge name list values
-              merged_value = [hd(value) | elem(head, 1)]
-              [{name, merged_value} | tail]
+            [] == acc ->
+              [enrichment]
 
-            true ->
-              [enrichment | acc]
+            [head | tail] = acc ->
+              cond do
+                name == elem(head, 0) and is_list(value) and is_list(elem(head, 1)) ->
+                  # merge name list values
+                  merged_value = [hd(value) | elem(head, 1)]
+                  [{name, merged_value} | tail]
+
+                true ->
+                  [enrichment | acc]
+              end
           end
+        nil ->
+          acc
       end
     end)
   end
 
   defp enrichment(resource, {edge, dest_node}) when is_atom(resource) and is_map(edge) and is_map(dest_node) do
+    #IO.inspect(resource, label: :enrichment_resource)
+    #IO.inspect(edge, label: :enrichment_edge)
+    #IO.inspect(dest_node, label: :enrichment_dest_node)
     dest_label = String.to_atom(List.first(dest_node.labels))
     relationship_label = String.to_atom(edge.type)
     relationship = Info.relationship(resource, relationship_label, dest_label)
 
     if relationship != nil do
-      dest_resource =
-        convert_node_to_resource(relationship.destination, dest_node, [])
-
+      #IO.inspect(relationship, label: :enrichment_relationship)
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
+
+
 
       if reverse_node_relationship != nil do
         reverse_relationship =
           Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
+          #|> IO.inspect(label: :enrichment_reverse_relationship)
 
         cond do
-          relationship.cardinality == :many and reverse_relationship.cardinality == :many ->
+          relationship.cardinality == :many ->
+            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
             {relationship.name, [dest_resource]}
 
+          relationship.cardinality == :one && relationship.type == :belongs_to  ->
+            destination_property = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+            #|> IO.inspect(label: :enrichment_destination_property)
+            {relationship.source_attribute, Map.get(dest_node.properties, destination_property)}
+
+          reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one ->
+            source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
+            #|> IO.inspect(label: :enrichment_source_property)
+            {relationship.destination_attribute, Map.get(dest_node.properties, source_property)}
+
           true ->
-            {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+            IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
+            nil
         end
       else
-        {relationship.source_attribute, Map.get(dest_resource, relationship.destination_attribute)}
+        IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
+        nil
       end
     else
       IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
       nil
     end
+    #|> IO.inspect(label: :enrichment)
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])
