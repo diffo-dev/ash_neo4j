@@ -1,0 +1,27 @@
+defmodule AshNeo4j.StateMachine.Test do
+  @moduledoc false
+  use ExUnit.Case, async: false
+  alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.Test.Resource.StateMachine
+  require Ash.Query
+
+  setup_all do
+    BoltxHelper.start()
+  end
+
+  setup do
+    on_exit(fn ->
+      Neo4jHelper.delete_nodes(:StateMachine)
+    end)
+  end
+
+  describe "StateMachine tests" do
+    test "state machine attributes are persisted" do
+      state_machine = StateMachine |> Ash.create!(%{})
+      assert state_machine.operational_state == :initial
+      {:ok, updated_state_machine} = state_machine |> Ash.Changeset.for_update(:start) |> Ash.update()
+      assert updated_state_machine.operational_state == :started
+    end
+  end
+end
