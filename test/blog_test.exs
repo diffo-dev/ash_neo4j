@@ -74,7 +74,10 @@ defmodule AshNeo4j.Blog.Test do
       result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "post2"]) |> Ash.read!()
       # |> IO.inspect(label: :post_node)
       assert length(result) == 1
-      assert result |> Enum.at(0) |> Map.get(:title) == "post2"
+      post = hd(result)
+      assert is_struct(post, Post)
+      assert post.title == "post2"
+      assert is_struct(post.comments, Ash.NotLoaded)
     end
 
     test "comment node can be read using ash" do
@@ -84,47 +87,52 @@ defmodule AshNeo4j.Blog.Test do
       assert length(resources) == 2
       # read using Ash with filter
       result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "comment2"]) |> Ash.read!()
-      # |> IO.inspect(label: :comment_node)
+      #|> IO.inspect(label: :comment_node)
       assert length(result) == 1
-      assert result |> Enum.at(0) |> Map.get(:title) == "comment2"
+      comment = hd(result)
+      assert is_struct(comment, Comment)
+      assert comment.title == "comment2"
+      refute comment.post_id
+      assert is_struct(comment.post, Ash.NotLoaded)
     end
 
     test "post comment relationship can be read using ash - post with single comment" do
       create_posts_with_comments(1, 1)
 
       # read Post using Ash, loading related comments
-      result =
+      post =
         Post
         |> Ash.Query.for_read(:read)
-        |> Ash.Query.load([:comments])
         |> Ash.Query.filter_input(title: [eq: "post1"])
+        |> Ash.Query.load([:comments])
         |> Ash.read_one!()
-
-      # |> IO.inspect(label: "ash read post1 loading comments")
-      assert length(result.comments) == 1
+        #|> IO.inspect(label: "ash read post1 loading comments")
+      assert is_struct(post, Post)
+      assert length(post.comments) == 1
+      assert is_struct(hd(post.comments), Comment)
     end
 
     test "post comment relationship can be read using ash - post with two comments" do
       create_posts_with_comments(1, 2)
 
       # read Post using Ash, loading related comments
-      result =
+      post =
         Post
         |> Ash.Query.for_read(:read)
         |> Ash.Query.load([:comments])
         |> Ash.Query.filter_input(title: [eq: "post1"])
-        |> Ash.read!()
-
-      # |> IO.inspect(label: "ash read post1 loading comments")
-      [post | _] = result
+        |> Ash.read_one!()
+        #|> IO.inspect(label: "ash read_one post1 loading comments")
+      assert is_struct(post, Post)
       assert length(post.comments) == 2
+      Enum.each(post.comments, &assert(is_struct(&1, Comment)))
     end
 
     test "comment post relationship can be read using ash" do
       create_posts_with_comments(1, 2)
 
       # read Comments using Ash, loading related Post
-      result =
+      comment =
         Comment
         |> Ash.Query.for_read(:read)
         |> Ash.Query.load([:post])
@@ -132,8 +140,10 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.read_one!()
 
       # |> IO.inspect(label: "ash read comment1.1 loading post")
-      assert result.title == "comment1.1"
-      assert result.post.title == "post1"
+      assert is_struct(comment, Comment)
+      assert comment.title == "comment1.1"
+      assert is_struct(comment.post, Post)
+      assert comment.post.title == "post1"
     end
 
     test "filters/sorts can be applied" do
