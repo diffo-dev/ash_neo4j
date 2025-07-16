@@ -4,9 +4,15 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
   alias Spark.Dsl.Transformer
   alias Spark.Dsl.Verifier
 
+  @impl true
   def transform(dsl) do
     {:ok, add_translation(dsl)}
   end
+
+  @impl true
+  def after?(AshStateMachine.Transformers.AddState), do: true
+  def after?(Ash.Resource.Transformers.DefaultAccept), do: true
+  def after?(_), do: false
 
   defp add_translation(dsl) do
     source_attributes =
