@@ -131,7 +131,16 @@ defmodule AshNeo4j.Service.Test do
       {:ok, service} = Service |> Ash.create(%{name: "service"})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
-      {:ok, refreshed_event} = event |> Ash.load(:service_id)
+      assert is_struct(updated_service, Service)
+      assert updated_service.event.id == event.id
+      assert is_struct(updated_service.event, Event)
+
+      {:ok, refreshed_event} = event |> Ash.reload()
+      assert is_struct(refreshed_event, Event)
+      assert refreshed_event.service_id == service.id
+      refute refreshed_event.resource_id
+      assert is_struct(refreshed_event.service, Ash.NotLoaded)
+      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalService,
@@ -141,16 +150,22 @@ defmodule AshNeo4j.Service.Test do
                :FIRED,
                :outgoing
              )
-
-      assert updated_service.event.id == event.id
-      assert refreshed_event.service_id == service.id
     end
 
     test "(InternalResource) -[FIRED]-> (Event)" do
       {:ok, resource} = Resource |> Ash.create(%{name: "resource"})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
-      {:ok, refreshed_event} = event |> Ash.load(:resource_id)
+      assert is_struct(updated_resource, Resource)
+      assert updated_resource.event.id == event.id
+      assert is_struct(updated_resource.event, Event)
+
+      {:ok, refreshed_event} = event |> Ash.reload()
+      assert is_struct(refreshed_event, Event)
+      refute refreshed_event.service_id
+      assert refreshed_event.resource_id == resource.id
+      assert is_struct(refreshed_event.service, Ash.NotLoaded)
+      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
@@ -160,16 +175,22 @@ defmodule AshNeo4j.Service.Test do
                :FIRED,
                :outgoing
              )
-
-      assert updated_resource.event.id == event.id
-      assert refreshed_event.resource_id == resource.id
     end
 
     test "(Event) -[AFTER]-> (Event)" do
       {:ok, create_event} = Event |> Ash.create(%{type: :create})
+      refute create_event.event_id
+      assert is_struct(create_event.previous_event, Ash.NotLoaded)
       {:ok, activate_event} = Event |> Ash.create(%{type: :activate})
-      {:ok, updated_activate_event} = activate_event |> Ash.update(%{earlier_event: create_event.id})
-      {:ok, refreshed_create_event} = create_event |> Ash.load(:event_id)
+      {:ok, updated_activate_event} = activate_event |> Ash.update(%{previous_event: create_event.id})
+      assert is_struct(updated_activate_event, Event)
+      refute updated_activate_event.event_id
+      assert is_struct(updated_activate_event.previous_event, Event)
+
+      {:ok, refreshed_create_event} = create_event |> Ash.reload()
+      assert is_struct(refreshed_create_event, Event)
+      refute refreshed_create_event.event_id
+      assert is_struct(refreshed_create_event.previous_event, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :Event,
@@ -180,10 +201,6 @@ defmodule AshNeo4j.Service.Test do
                :outgoing
              )
 
-      assert updated_activate_event.event.id == create_event.id
-      refute is_struct(updated_activate_event.event, Ash.NotLoaded)
-      refute refreshed_create_event.event_id
-      assert is_struct(refreshed_create_event.event, Ash.NotLoaded)
     end
   end
 end
