@@ -80,3 +80,16 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * improved metadata
 * improved relate error messages
 * improved relate verification
+
+## [v0.2.4](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.3...v0.2.4) (2025-07-16)
+
+### Features:
+
+* support AshStateMachine
+* improved enrichment
+* query on relationship attribute
+* create with multiple relationships
+
+### Maintenance
+
+* fixed Ash.Error.Unknown no function matching clause in AshNeo4j.Cypher.expression/4
