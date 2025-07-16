@@ -8,9 +8,9 @@ defmodule AshNeo4j.Test.Resource.Event do
     label :Event
 
     relate [
-      {:event, :AFTER, :outgoing},
-      {:service, :FIRED, :outgoing},
-      {:resource, :FIRED, :outgoing}
+      {:previous_event, :AFTER, :outgoing},
+      {:service, :FIRED, :incoming},
+      {:resource, :FIRED, :incoming}
     ]
 
     translate id: :uuid
@@ -32,8 +32,8 @@ defmodule AshNeo4j.Test.Resource.Event do
     update :update do
       primary? true
 
-      argument :earlier_event, :uuid
-      change manage_relationship(:earlier_event, :event, type: :append_and_remove)
+      argument :previous_event, :uuid
+      change manage_relationship(:previous_event, :previous_event, type: :append_and_remove)
     end
   end
 
@@ -46,7 +46,7 @@ defmodule AshNeo4j.Test.Resource.Event do
   end
 
   relationships do
-    has_one :event, AshNeo4j.Test.Resource.Event, public?: true
+    has_one :previous_event, AshNeo4j.Test.Resource.Event, public?: true
     belongs_to :service, AshNeo4j.Test.Resource.Service, public?: true
     belongs_to :resource, AshNeo4j.Test.Resource.Resource, public?: true
   end

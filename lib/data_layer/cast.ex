@@ -17,7 +17,7 @@ defmodule AshNeo4j.DataLayer.Cast do
         IO.puts("warning: cannot cast as name #{name} is not an attribute of resource #{resource}")
         value
       else
-        # IO.inspect(attribute, label: :attribute)
+        #IO.inspect(attribute.type, label: :cast_attribute_type)
         case attribute.type do
           Ash.Type.Atom ->
             cast_atom(value)
@@ -170,10 +170,20 @@ defmodule AshNeo4j.DataLayer.Cast do
 
   defp cast_property(property) when is_binary(property) do
     trimmed = String.trim(property)
-    splits = String.split(trimmed, ":")
-    key = hd(splits)
-    value = Enum.map_join(tl(splits), ":", &String.trim(&1))
-    {String.to_atom(key), cast(value)}
+    cond do
+      String.contains?(trimmed, "=>") ->
+        # "\"aEnd\"" => 1
+        unquoted = String.replace(trimmed, "\"", "")
+        splits = String.split(unquoted, "=>")
+        key = String.trim(hd(splits))
+        value = String.trim(hd(tl(splits)))
+        { cast(key), cast(value) }
+      true ->
+        splits = String.split(trimmed, ":")
+        key = hd(splits)
+        value = Enum.map_join(tl(splits), ":", &String.trim(&1))
+        {String.to_atom(key), cast(value)}
+    end
   end
 
   defp cast_datetime(value) when is_bitstring(value) do
@@ -264,6 +274,15 @@ defmodule AshNeo4j.DataLayer.Cast do
             end
         end
     end
+  end
+
+  defp cast(list) when is_list(list) do
+    cast_list(list)
+  end
+
+  defp cast(map) when is_map(map) do
+    IO.inspect(map, label: :cast_map)
+    cast_map(map)
   end
 
   defp cast_string(nil) when is_nil(nil) do
