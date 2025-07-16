@@ -410,8 +410,6 @@ defmodule AshNeo4j.DataLayer do
       #IO.inspect(relationship, label: :enrichment_relationship)
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
 
-
-
       if reverse_node_relationship != nil do
         reverse_relationship =
           Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
@@ -433,15 +431,15 @@ defmodule AshNeo4j.DataLayer do
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)}
 
           true ->
-            IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
+            IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, unsupported")
             nil
         end
       else
-        IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
+        IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no reverse relationship")
         nil
       end
     else
-      IO.puts("warning: unable to enrich source node with edge #{edge.type} and destination node #{dest_node.labels}")
+      IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no relationship")
       nil
     end
     #|> IO.inspect(label: :enrichment)
