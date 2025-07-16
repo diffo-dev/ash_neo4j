@@ -4,6 +4,7 @@ defmodule AshNeo4j.Transformers.TransformAddRelationshipAttributes do
   alias Spark.Dsl.Transformer
   alias Spark.Dsl.Verifier
 
+  @impl true
   def transform(dsl) do
     {:ok, add_relationship_attributes(dsl)}
   end

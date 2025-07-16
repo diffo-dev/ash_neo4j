@@ -33,11 +33,11 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
   attributes do
     uuid_primary_key :id, writable?: true
 
-    attribute :operational_state, :atom do
-      allow_nil? false
-      default :initial
-      public? true
-      constraints one_of: [:initial, :started, :stopped]
-    end
+    #attribute :operational_state, :atom do
+    #  allow_nil? false
+    #  default :initial
+    #  public? true
+    #  constraints one_of: [:initial, :started, :stopped]
+    #end
   end
 end

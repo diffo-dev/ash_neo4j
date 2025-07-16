@@ -4,6 +4,7 @@ defmodule AshNeo4j.Transformers.TransformEnsureLabelled do
   alias Spark.Dsl.Transformer
   alias Spark.Dsl.Verifier
 
+  @impl true
   def transform(dsl) do
     {:ok, ensure_labelled(dsl)}
   end
