@@ -295,45 +295,47 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  # consolidates list of groups in row form [ %{s, r, d} ] to [{s, [{r, d}]}]
+  # consolidates list of groups in row form [ %{s, r, d} ] to values in form [{s, [{r, d}]}]
+  # also handles [%{s, r1, d1, r0, d0}] to values in form [{s, [{r1, d1}, {r0, d0}}]
   defp consolidate_groups(groups) when is_list(groups) do
     Enum.reduce(groups, [], fn group, acc ->
       s = Map.get(group, "s")
-      r = Map.get(group, "r")
-      d = Map.get(group, "d")
+      tuple_count = Integer.floor_div(Enum.count(group), 2)
+
+      tuples = Enum.reduce(0..(tuple_count - 1)//1, [],
+        fn tuple, acc ->
+          r = Map.get(group, "r#{tuple}") || Map.get(group, "r")
+          d = Map.get(group, "d#{tuple}") || Map.get(group, "d")
+          cond do
+            r != nil && d != nil ->
+              [{r, d} | acc]
+            true ->
+              acc
+          end
+        end)
 
       cond do
         [] == acc ->
           # new source node
-          cond do
-            # new source unrelated
-            r == nil -> [{s, []}]
-            # new source node related
-            true -> [{s, [{r, d}]}]
-          end
+          [{s, tuples}]
 
         [previous | tail] = acc ->
           cond do
             Map.get(s, :id) == elem(previous, 0).id ->
               # same node
               cond do
-                r == nil ->
+                tuples == [] ->
                   # same node with no relationship
                   acc
 
                 true ->
                   # same node with new relationship
-                  related = elem(previous, 1)
-                  [{s, [{r, d} | related]} | tail]
+                  [{s, tuples ++ elem(previous, 1)} | tail]
               end
 
-            r == nil ->
-              # new unrelated node
-              [{s, []} | acc]
-
             true ->
-              # new related node
-              [{s, [{r, d}]} | acc]
+              # new node
+              [{s, tuples} | acc]
           end
       end
     end)
@@ -412,35 +414,33 @@ defmodule AshNeo4j.DataLayer do
     if relationship != nil do
       #IO.inspect(relationship, label: :enrichment_relationship)
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
-
-      if reverse_node_relationship != nil do
-        reverse_relationship =
-          Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
-          #|> IO.inspect(label: :enrichment_reverse_relationship)
-
+      reverse_relationship =
         cond do
-          relationship.cardinality == :many ->
-            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            [{relationship.name, [dest_resource]} | acc]
-
-          relationship.cardinality == :one && relationship.type == :belongs_to  ->
-            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            destination_property = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
-            [{relationship.name, dest_resource}, {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc]
-
-          reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one ->
-            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
-            #|> IO.inspect(label: :enrichment_source_property)
-            [{reverse_relationship.name, dest_resource}, {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc]
-
+          reverse_node_relationship == nil ->
+            nil
           true ->
-            IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, unsupported")
-            acc
+            Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
         end
-      else
-        IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no reverse relationship")
-        acc
+
+      cond do
+        relationship.cardinality == :many ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          [{relationship.name, [dest_resource]} | acc]
+
+        relationship.cardinality == :one && relationship.type == :belongs_to  ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          destination_property = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+          [{relationship.name, dest_resource}, {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc]
+
+        reverse_relationship != nil && (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
+          #|> IO.inspect(label: :enrichment_source_property)
+          [{reverse_relationship.name, dest_resource}, {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc]
+
+        true ->
+          IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, unsupported")
+          acc
       end
     else
       IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no relationship")
@@ -538,9 +538,17 @@ defmodule AshNeo4j.DataLayer do
         # create_node_with_relationships
         case Neo4jHelper.create_node_with_relationships(Info.label(resource), properties, relationships) do
           {:ok, %Boltx.Response{results: groups}} ->
-            # return the created node (TODO enrich with destination resources)
-            {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
-
+            consolidated_groups = consolidate_groups(groups)
+            # return the enriched created resource
+            cond do
+              length(consolidated_groups) == 1 ->
+                query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
+                resource = convert_to_resource(query, hd(consolidated_groups))
+                # |> IO.inspect(label: :enriched_resource)
+                {:ok, resource}
+              true ->
+                {:error, "expected groups to consolidate to a single group (resource)"}
+            end
           {:error, error} ->
             {:error, error}
         end
