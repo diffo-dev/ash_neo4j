@@ -74,16 +74,19 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def filter(query, filter, _resource) do
+    #TODO check filter involves node properties
     {:ok, %{query | filter: filter}}
   end
 
   @impl true
   def sort(query, sort, _resource) do
+    #TODO check sort involves node properties
     {:ok, %{query | sort: sort}}
   end
 
   @impl true
   def add_calculation(query, calculation, _expression, _resource) do
+    #TODO check calculation involves node properties, can be from related nodes if loaded
     {:ok, Map.put(query, :calculations, [calculation | query.calculations])}
     # |> IO.inspect(label: :add_calculation_result)
   end
@@ -259,9 +262,8 @@ defmodule AshNeo4j.DataLayer do
     Process.get({:neo4j_in_transaction, Info.label(resource)}, false) == true
   end
 
-  def filter_matches(records, nil, _domain), do: records
-
-  def filter_matches(records, filter, domain) do
+  defp filter_matches(records, nil, _domain), do: records
+  defp filter_matches(records, filter, domain) do
     # IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     deduplicate(filter.resource, records)
@@ -359,18 +361,19 @@ defmodule AshNeo4j.DataLayer do
 
   defp convert_to_resource(query, consolidated_group)
        when is_struct(query, Query) and is_tuple(consolidated_group) do
-    # IO.inspect(consolidated_group, label: "AshNeo4j.DataLayer.convert_to_resource consolidated_group")
+    #IO.inspect(consolidated_group, label: "AshNeo4j.DataLayer.convert_to_resource consolidated_group")
     source_node = elem(consolidated_group, 0)
     related = elem(consolidated_group, 1)
 
     enrichments =
-      Enum.into(related, [], &enrichment(query.resource, &1))
-      #|> Enum.filter(& &1) #drop falsy values
+      Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
+      #|> IO.inspect(label: :enrichments_pre_consolidation)
       |> consolidate_enrichments()
       #|> IO.inspect(label: :enrichments)
 
     convert_node_to_resource(query.resource, source_node, enrichments)
     |> evaluate_calculations(query)
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -398,7 +401,7 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  defp enrichment(resource, {edge, dest_node}) when is_atom(resource) and is_map(edge) and is_map(dest_node) do
+  defp enrichments(resource, acc, {edge, dest_node}) when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
     #IO.inspect(resource, label: :enrichment_resource)
     #IO.inspect(edge, label: :enrichment_edge)
     #IO.inspect(dest_node, label: :enrichment_dest_node)
@@ -418,31 +421,32 @@ defmodule AshNeo4j.DataLayer do
         cond do
           relationship.cardinality == :many ->
             dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            {relationship.name, [dest_resource]}
+            [{relationship.name, [dest_resource]} | acc]
 
           relationship.cardinality == :one && relationship.type == :belongs_to  ->
+            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
             destination_property = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
-            #|> IO.inspect(label: :enrichment_destination_property)
-            {relationship.source_attribute, Map.get(dest_node.properties, destination_property)}
+            [{relationship.name, dest_resource}, {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc]
 
           reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one ->
+            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
             source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
             #|> IO.inspect(label: :enrichment_source_property)
-            {relationship.destination_attribute, Map.get(dest_node.properties, source_property)}
+            [{reverse_relationship.name, dest_resource}, {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc]
 
           true ->
             IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, unsupported")
-            nil
+            acc
         end
       else
         IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no reverse relationship")
-        nil
+        acc
       end
     else
       IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no relationship")
-      nil
+      acc
     end
-    #|> IO.inspect(label: :enrichment)
+    #|> IO.inspect(label: :enrichments)
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])

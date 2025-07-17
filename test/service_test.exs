@@ -139,7 +139,7 @@ defmodule AshNeo4j.Service.Test do
       assert is_struct(refreshed_event, Event)
       assert refreshed_event.service_id == service.id
       refute refreshed_event.resource_id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
+      assert is_struct(refreshed_event.service, Service)
       assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
@@ -165,7 +165,7 @@ defmodule AshNeo4j.Service.Test do
       refute refreshed_event.service_id
       assert refreshed_event.resource_id == resource.id
       assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
+      assert is_struct(refreshed_event.resource, Resource)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
