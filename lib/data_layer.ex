@@ -3,6 +3,7 @@ defmodule AshNeo4j.DataLayer do
 
   @behaviour Ash.DataLayer
 
+  require Logger
   alias AshNeo4j.DataLayer.Info
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
@@ -124,84 +125,120 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
   def run_query(query, _resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+    Logger.debug("""
+    AshNeo4j: run query #{inspect(query)}
+    """)
 
-    case QueryHelper.query_nodes(query) do
-      {:error, error} ->
-        {:error, error}
+    result =
+      case QueryHelper.query_nodes(query) do
+        {:error, error} ->
+          {:error, error}
 
-      {:ok, []} ->
-        {:ok, []}
+        {:ok, []} ->
+          {:ok, []}
 
-      {:ok, groups} ->
-        results =
-          convert_groups_to_resources(query, groups)
-          |> filter_stream(query.domain, query.filter)
-          |> Enum.to_list()
+        {:ok, groups} ->
+          results =
+            convert_groups_to_resources(query, groups)
+            |> filter_stream(query.domain, query.filter)
+            |> Enum.to_list()
 
-        {:ok, results}
-    end
+          {:ok, results}
+      end
 
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    Logger.debug("""
+    AshNeo4j: run query result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def create(resource, changeset) do
+    Logger.debug("""
+    AshNeo4j: create #{inspect(changeset)}
+    """)
     primary_keys = Ash.Resource.Info.primary_key(resource)
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
-    if Enum.empty?(id_attributes) do
-      {:error, "no values supplied for primary keys #{primary_keys}"}
-    else
-      create_from_attributes(resource, changeset.attributes)
-    end
+    result =
+      if Enum.empty?(id_attributes) do
+        {:error, "no values supplied for primary keys #{primary_keys}"}
+      else
+        create_from_attributes(resource, changeset.attributes)
+      end
+
+    Logger.debug("""
+    AshNeo4j: create result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def upsert(resource, changeset, keys) do
+    Logger.debug("""
+    AshNeo4j: upsert #{inspect(changeset)} #{inspect(keys)}
+    """)
     id_properties = id_properties(resource, changeset.attributes)
 
-    if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
-      create(resource, changeset)
-    else
-      key_filters =
-        Enum.map(keys, fn key ->
-          {key,
-           Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
-             Map.get(changeset.params, to_string(key))}
-        end)
+    result =
+      if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
+        create(resource, changeset)
+      else
+        key_filters =
+          Enum.map(keys, fn key ->
+            {key,
+            Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
+              Map.get(changeset.params, to_string(key))}
+          end)
 
-      query = Ash.Query.do_filter(resource, and: [key_filters])
+        query = Ash.Query.do_filter(resource, and: [key_filters])
 
-      resource
-      |> resource_to_query(changeset.domain)
-      |> Map.put(:filter, query.filter)
-      |> Map.put(:tenant, changeset.tenant)
-      |> run_query(resource)
-      |> case do
-        {:ok, []} ->
-          create(resource, changeset)
+        resource
+        |> resource_to_query(changeset.domain)
+        |> Map.put(:filter, query.filter)
+        |> Map.put(:tenant, changeset.tenant)
+        |> run_query(resource)
+        |> case do
+          {:ok, []} ->
+            create(resource, changeset)
 
-        {:ok, [result]} ->
-          to_set = Ash.Changeset.set_on_upsert(changeset, keys)
+          {:ok, [result]} ->
+            to_set = Ash.Changeset.set_on_upsert(changeset, keys)
 
-          changeset =
-            changeset
-            |> Map.put(:attributes, %{})
-            |> Map.put(:data, result)
-            |> Ash.Changeset.force_change_attributes(to_set)
+            changeset =
+              changeset
+              |> Map.put(:attributes, %{})
+              |> Map.put(:data, result)
+              |> Ash.Changeset.force_change_attributes(to_set)
 
-          update(resource, changeset)
+            update(resource, changeset)
 
-        {:ok, _} ->
-          {:error, "Multiple records matching keys"}
+          {:ok, _} ->
+            {:error, "Multiple records matching keys"}
+        end
       end
-    end
+
+    Logger.debug("""
+    AshNeo4j: upsert result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def update(resource, changeset) do
-    update_from_changeset(nil, resource, changeset)
+    Logger.debug("""
+    AshNeo4j: update #{inspect(changeset)}}
+    """)
+    result = update_from_changeset(nil, resource, changeset)
+
+    Logger.debug("""
+    AshNeo4j: update result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true

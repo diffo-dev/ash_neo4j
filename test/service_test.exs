@@ -51,7 +51,6 @@ defmodule AshNeo4j.Service.Test do
       assert service.specification.id == broadband_v1.id
     end
 
-    @tag debug: true
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
@@ -60,7 +59,7 @@ defmodule AshNeo4j.Service.Test do
       resource =
         Resource
         |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
-        |> IO.inspect(label: :resource)
+        # |> IO.inspect(label: :resource)
 
       assert is_struct(resource.specification, Specification)
       assert is_struct(resource.service, Service)
