@@ -59,9 +59,54 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def delete_nodes(label, properties \\ %{}) when is_atom(label) do
+  def delete_nodes(label, properties \\ %{})
+      when is_atom(label) and is_map(properties) do
     ("MATCH " <> Cypher.node(:n, label, properties) <> " DETACH DELETE n")
     |> Cypher.run()
+  end
+
+  @doc """
+  Delete neo4j nodes
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Bend it Like Beckham"})
+  iex> AshNeo4j.Neo4jHelper.create_node_with_relationships(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}, {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing}])
+  iex> {result, _} = AshNeo4j.Neo4jHelper.safe_delete_nodes(:Actor, %{name: "Keira Knightley"}, [{:ACTED_IN, :outgoing, :Movie}, {:LIVES_AT, :outgoing, :Place}])
+  iex> result
+  :error
+  iex> AshNeo4j.Neo4jHelper.safe_delete_nodes(:Actor, %{name: "Keira Knightley"}, [{:LIVES_AT, :outgoing, :Place}])
+  :ok
+  ```
+  """
+  def safe_delete_nodes(label, properties, relationships)
+      when is_atom(label) and length(relationships) != 0 do
+    node_relationships =
+      Enum.map_join(relationships, " AND NOT ", fn {edge_label, edge_direction, dest_label} ->
+        case edge_direction do
+          :incoming ->
+            "(n)<-[:#{edge_label}]-(:#{dest_label})"
+
+          :outgoing ->
+            "(n)-[:#{edge_label}]->(:#{dest_label})"
+
+          _ ->
+            "(n)-[:#{edge_label}]-(:#{dest_label})"
+        end
+      end)
+
+    ("MATCH " <>
+       Cypher.node(:n, label, properties) <>
+       " WHERE NOT " <>
+       node_relationships <>
+       " DETACH DELETE n")
+    |> Cypher.run_expecting_deletions()
+  end
+
+  def safe_delete_nodes(label, properties, relationships)
+      when is_atom(label) and length(relationships) == 0 do
+    delete_nodes(label, properties)
   end
 
   @spec merge_node(atom(), map()) ::
@@ -77,7 +122,8 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def merge_node(label, properties) when is_atom(label) do
+  def merge_node(label, properties)
+      when is_atom(label) and is_map(properties) do
     ("MERGE " <> Cypher.node(:n, label, properties) <> " RETURN n")
     |> Cypher.run()
   end
@@ -115,7 +161,8 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  def update_node(label, match_properties, set_properties, remove_properties) when is_atom(label) do
+  def update_node(label, match_properties, set_properties, remove_properties)
+      when is_atom(label) and map_size(set_properties) != 0 and length(remove_properties) != 0 do
     ("MATCH " <>
        Cypher.node(:n, label, match_properties) <>
        " SET n += " <>

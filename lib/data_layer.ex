@@ -254,10 +254,11 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp destroy_record(resource, record) do
-    label = AshNeo4j.DataLayer.Info.label(resource)
+    label = Info.label(resource)
     id_properties = id_properties(resource, record)
+    # preserve_relationships = Info.preserve_relationships(resource)
 
-    case Neo4jHelper.delete_nodes(label, id_properties) do
+    case Neo4jHelper.safe_delete_nodes(label, id_properties, []) do
       {:ok, _} ->
         :ok
 
