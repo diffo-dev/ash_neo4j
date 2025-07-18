@@ -1,4 +1,5 @@
 defmodule AshNeo4j.Neo4jHelper do
+  require Logger
   alias AshNeo4j.Cypher
 
   @moduledoc """
@@ -286,7 +287,7 @@ defmodule AshNeo4j.Neo4jHelper do
         length(records) > 0
 
       {:error, error} ->
-        IO.puts("Error running query: #{inspect(error)}")
+        Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
         :error
     end
   end

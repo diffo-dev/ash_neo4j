@@ -7,7 +7,8 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
 
   state_machine do
     initial_states([:initial])
-    state_attribute :operational_state
+    state_attribute(:operational_state)
+
     transitions do
       transition(:start, from: :initial, to: [:started])
       transition(:stop, from: :started, to: [:stopped])
@@ -33,11 +34,11 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
   attributes do
     uuid_primary_key :id, writable?: true
 
-    #attribute :operational_state, :atom do
+    # attribute :operational_state, :atom do
     #  allow_nil? false
     #  default :initial
     #  public? true
     #  constraints one_of: [:initial, :started, :stopped]
-    #end
+    # end
   end
 end
