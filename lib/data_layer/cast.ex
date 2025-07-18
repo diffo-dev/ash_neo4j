@@ -1,5 +1,6 @@
 defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
+  require Logger
 
   @struct_name_regex Regex.compile!("%(.+){.*}")
   @struct_properties_regex Regex.compile!("%.+{(.*)}")
@@ -14,10 +15,13 @@ defmodule AshNeo4j.DataLayer.Cast do
       nil
     else
       if attribute == nil do
-        IO.puts("warning: cannot cast as name #{name} is not an attribute of resource #{resource}")
+        Logger.warning(
+          "AshNeo4j.Cast: cannot cast as name #{name} is not an attribute of resource #{inspect(resource)}"
+        )
+
         value
       else
-        #IO.inspect(attribute.type, label: :cast_attribute_type)
+        # IO.inspect(attribute.type, label: :cast_attribute_type)
         case attribute.type do
           Ash.Type.Atom ->
             cast_atom(value)
@@ -101,7 +105,6 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_list(value)
 
           _name ->
-            # IO.puts("warning: no specific cast for type #{inspect(name)}")
             cast(value)
         end
       end
@@ -170,6 +173,7 @@ defmodule AshNeo4j.DataLayer.Cast do
 
   defp cast_property(property) when is_binary(property) do
     trimmed = String.trim(property)
+
     cond do
       String.contains?(trimmed, "=>") ->
         # "\"aEnd\"" => 1
@@ -177,7 +181,8 @@ defmodule AshNeo4j.DataLayer.Cast do
         splits = String.split(unquoted, "=>")
         key = String.trim(hd(splits))
         value = String.trim(hd(tl(splits)))
-        { cast(key), cast(value) }
+        {cast(key), cast(value)}
+
       true ->
         splits = String.split(trimmed, ":")
         key = hd(splits)
@@ -192,7 +197,7 @@ defmodule AshNeo4j.DataLayer.Cast do
         datetime
 
       {:error, _message} ->
-        IO.puts("warning: value #{value} can't be parsed as DateTime")
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as DateTime")
         value
     end
   end
@@ -264,12 +269,12 @@ defmodule AshNeo4j.DataLayer.Cast do
                     float
 
                   :error ->
-                    # IO.puts("warning: value #{value} has leading integer but isn't an integer or float")
+                    Logger.warning("AshNeo4j.Cast: value #{value} has leading integer but isn't an integer or float")
                     value
                 end
 
               :error ->
-                # IO.puts("warning: no cast for value #{value}")
+                Logger.warning("AshNeo4j.Cast: no cast for value #{value}")
                 value
             end
         end
@@ -361,7 +366,7 @@ defmodule AshNeo4j.DataLayer.Cast do
         decimal
 
       :error ->
-        IO.puts("warning: value #{value} can't be parsed as a Decimal")
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as a Decimal")
         value
     end
   end
@@ -384,7 +389,7 @@ defmodule AshNeo4j.DataLayer.Cast do
             regex
 
           {:error, _} ->
-            IO.puts("warning: value #{value} can't be parsed as Regex")
+            Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
             value
         end
 
@@ -394,12 +399,12 @@ defmodule AshNeo4j.DataLayer.Cast do
             regex
 
           {:error, _} ->
-            IO.puts("warning: value #{value} can't be parsed as Regex")
+            Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
             value
         end
 
       _ ->
-        IO.puts("warning: value #{value} can't be parsed as Regex")
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
         value
     end
   end

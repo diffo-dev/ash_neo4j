@@ -87,7 +87,7 @@ defmodule AshNeo4j.DataLayer.Info do
   @doc """
   Returns the reverse node relationship given resource and relationship name
   """
-  @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: list(tuple()) | nil
+  @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: tuple() | nil
   def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
     node_relationship = node_relationship(resource, name)
 
