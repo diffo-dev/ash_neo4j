@@ -3,6 +3,7 @@ defmodule AshNeo4j.DataLayer do
 
   @behaviour Ash.DataLayer
 
+  require Logger
   alias AshNeo4j.DataLayer.Info
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
@@ -38,7 +39,7 @@ defmodule AshNeo4j.DataLayer do
     examples: [
       """
       neo4j do
-        store [:title]
+        label [:Comment]
         translate id: :uuid
         relate [{:post, :BELONGS_TO, :outgoing}]
       end
@@ -54,14 +55,14 @@ defmodule AshNeo4j.DataLayer do
         type: {:list, @node_relationship},
         doc: "Optional list of node relationships, as tuples of {relationship_name, edge_label, edge_direction}"
       ],
+      translate: [
+        type: :keyword_list,
+        doc: "Optional list of attribute to node property translations"
+      ],
       skip: [
         type: {:list, :atom},
         doc: "Optional list of attributes not to be stored directly as node properties",
         required: false
-      ],
-      translate: [
-        type: :keyword_list,
-        doc: "Optional list of attribute to node property translations"
       ]
     ]
   }
@@ -74,16 +75,19 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def filter(query, filter, _resource) do
+    # TODO check filter involves node properties
     {:ok, %{query | filter: filter}}
   end
 
   @impl true
   def sort(query, sort, _resource) do
+    # TODO check sort involves node properties
     {:ok, %{query | sort: sort}}
   end
 
   @impl true
   def add_calculation(query, calculation, _expression, _resource) do
+    # TODO check calculation involves node properties, can be from related nodes if loaded
     {:ok, Map.put(query, :calculations, [calculation | query.calculations])}
     # |> IO.inspect(label: :add_calculation_result)
   end
@@ -120,89 +124,132 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   @spec run_query(any(), atom()) :: {:error, any()} | {:ok, any()}
-  def run_query(query, _resource) do
-    #IO.inspect(query, label: "AshNeo4j.DataLayer.run_query query")
+  def run_query(query, resource) do
+    Logger.debug("""
+    AshNeo4j.DataLayer: run_query(#{inspect(query)}, #{inspect(resource)})
+    """)
 
-    case QueryHelper.query_nodes(query) do
-      {:error, error} ->
-        {:error, error}
+    result =
+      case QueryHelper.query_nodes(query) do
+        {:error, error} ->
+          {:error, error}
 
-      {:ok, []} ->
-        {:ok, []}
+        {:ok, []} ->
+          {:ok, []}
 
-      {:ok, groups} ->
-        results =
-          convert_groups_to_resources(query, groups)
-          |> filter_stream(query.domain, query.filter)
-          |> Enum.to_list()
+        {:ok, groups} ->
+          results =
+            convert_groups_to_resources(query, groups)
+            |> filter_stream(query.domain, query.filter)
+            |> Enum.to_list()
 
-        {:ok, results}
-    end
+          {:ok, results}
+      end
 
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.run_query result")
+    Logger.debug("""
+    AshNeo4j.DataLayer: run_query result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def create(resource, changeset) do
+    Logger.debug("""
+    AshNeo4j.DataLayer: create(#{inspect(resource)}, #{inspect(changeset)})
+    """)
+
     primary_keys = Ash.Resource.Info.primary_key(resource)
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
-    if Enum.empty?(id_attributes) do
-      {:error, "no values supplied for primary keys #{primary_keys}"}
-    else
-      create_from_attributes(resource, changeset.attributes)
-    end
+    result =
+      if Enum.empty?(id_attributes) do
+        {:error, "no values supplied for primary keys #{primary_keys}"}
+      else
+        create_from_attributes(resource, changeset.attributes)
+      end
+
+    Logger.debug("""
+    AshNeo4j.DataLayer: create result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def upsert(resource, changeset, keys) do
+    Logger.debug("""
+    AshNeo4j.DataLayer: upsert(#{inspect(resource)}, #{inspect(changeset)}, #{inspect(keys)})
+    """)
+
     id_properties = id_properties(resource, changeset.attributes)
 
-    if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
-      create(resource, changeset)
-    else
-      key_filters =
-        Enum.map(keys, fn key ->
-          {key,
-           Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
-             Map.get(changeset.params, to_string(key))}
-        end)
+    result =
+      if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
+        create(resource, changeset)
+      else
+        key_filters =
+          Enum.map(keys, fn key ->
+            {key,
+             Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
+               Map.get(changeset.params, to_string(key))}
+          end)
 
-      query = Ash.Query.do_filter(resource, and: [key_filters])
+        query = Ash.Query.do_filter(resource, and: [key_filters])
 
-      resource
-      |> resource_to_query(changeset.domain)
-      |> Map.put(:filter, query.filter)
-      |> Map.put(:tenant, changeset.tenant)
-      |> run_query(resource)
-      |> case do
-        {:ok, []} ->
-          create(resource, changeset)
+        resource
+        |> resource_to_query(changeset.domain)
+        |> Map.put(:filter, query.filter)
+        |> Map.put(:tenant, changeset.tenant)
+        |> run_query(resource)
+        |> case do
+          {:ok, []} ->
+            create(resource, changeset)
 
-        {:ok, [result]} ->
-          to_set = Ash.Changeset.set_on_upsert(changeset, keys)
+          {:ok, [result]} ->
+            to_set = Ash.Changeset.set_on_upsert(changeset, keys)
 
-          changeset =
-            changeset
-            |> Map.put(:attributes, %{})
-            |> Map.put(:data, result)
-            |> Ash.Changeset.force_change_attributes(to_set)
+            changeset =
+              changeset
+              |> Map.put(:attributes, %{})
+              |> Map.put(:data, result)
+              |> Ash.Changeset.force_change_attributes(to_set)
 
-          update(resource, changeset)
+            update(resource, changeset)
 
-        {:ok, _} ->
-          {:error, "Multiple records matching keys"}
+          {:ok, _} ->
+            {:error, "Multiple records matching keys"}
+        end
       end
-    end
+
+    Logger.debug("""
+    AshNeo4j.DataLayer: upsert result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def update(resource, changeset) do
-    update_from_changeset(nil, resource, changeset)
+    Logger.debug("""
+    AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
+    """)
+
+    result = update_from_changeset(nil, resource, changeset)
+
+    Logger.debug("""
+    AshNeo4j.DataLayer: update result #{inspect(result)}
+    """)
+
+    result
   end
 
   @impl true
   def destroy(resource, changeset) do
+    Logger.debug("""
+    AshNeo4j.DataLayer: destroy(#{inspect(resource)}, #{inspect(changeset)}})
+    """)
+
     destroy_record(resource, changeset.data)
   end
 
@@ -259,9 +306,9 @@ defmodule AshNeo4j.DataLayer do
     Process.get({:neo4j_in_transaction, Info.label(resource)}, false) == true
   end
 
-  def filter_matches(records, nil, _domain), do: records
+  defp filter_matches(records, nil, _domain), do: records
 
-  def filter_matches(records, filter, domain) do
+  defp filter_matches(records, filter, domain) do
     # IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     deduplicate(filter.resource, records)
@@ -293,45 +340,49 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  # consolidates list of groups in row form [ %{s, r, d} ] to [{s, [{r, d}]}]
+  # consolidates list of groups in row form [ %{s, r, d} ] to values in form [{s, [{r, d}]}]
+  # also handles [%{s, r1, d1, r0, d0}] to values in form [{s, [{r1, d1}, {r0, d0}}]
   defp consolidate_groups(groups) when is_list(groups) do
     Enum.reduce(groups, [], fn group, acc ->
       s = Map.get(group, "s")
-      r = Map.get(group, "r")
-      d = Map.get(group, "d")
+      tuple_count = Integer.floor_div(Enum.count(group), 2)
+
+      tuples =
+        Enum.reduce(0..(tuple_count - 1)//1, [], fn tuple, acc ->
+          r = Map.get(group, "r#{tuple}") || Map.get(group, "r")
+          d = Map.get(group, "d#{tuple}") || Map.get(group, "d")
+
+          cond do
+            r != nil && d != nil ->
+              [{r, d} | acc]
+
+            true ->
+              acc
+          end
+        end)
 
       cond do
         [] == acc ->
           # new source node
-          cond do
-            # new source unrelated
-            r == nil -> [{s, []}]
-            # new source node related
-            true -> [{s, [{r, d}]}]
-          end
+          [{s, tuples}]
 
         [previous | tail] = acc ->
           cond do
             Map.get(s, :id) == elem(previous, 0).id ->
               # same node
               cond do
-                r == nil ->
+                tuples == [] ->
                   # same node with no relationship
                   acc
 
                 true ->
                   # same node with new relationship
-                  related = elem(previous, 1)
-                  [{s, [{r, d} | related]} | tail]
+                  [{s, tuples ++ elem(previous, 1)} | tail]
               end
 
-            r == nil ->
-              # new unrelated node
-              [{s, []} | acc]
-
             true ->
-              # new related node
-              [{s, [{r, d}]} | acc]
+              # new node
+              [{s, tuples} | acc]
           end
       end
     end)
@@ -364,13 +415,16 @@ defmodule AshNeo4j.DataLayer do
     related = elem(consolidated_group, 1)
 
     enrichments =
-      Enum.into(related, [], &enrichment(query.resource, &1))
-      #|> Enum.filter(& &1) #drop falsy values
+      Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
+      # |> IO.inspect(label: :enrichments_pre_consolidation)
       |> consolidate_enrichments()
-      #|> IO.inspect(label: :enrichments)
+
+    # |> IO.inspect(label: :enrichments)
 
     convert_node_to_resource(query.resource, source_node, enrichments)
     |> evaluate_calculations(query)
+
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -392,57 +446,77 @@ defmodule AshNeo4j.DataLayer do
                   [enrichment | acc]
               end
           end
+
         nil ->
           acc
       end
     end)
   end
 
-  defp enrichment(resource, {edge, dest_node}) when is_atom(resource) and is_map(edge) and is_map(dest_node) do
-    #IO.inspect(resource, label: :enrichment_resource)
-    #IO.inspect(edge, label: :enrichment_edge)
-    #IO.inspect(dest_node, label: :enrichment_dest_node)
+  defp enrichments(resource, acc, {edge, dest_node})
+       when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
+    # IO.inspect(resource, label: :enrichment_resource)
+    # IO.inspect(edge, label: :enrichment_edge)
+    # IO.inspect(dest_node, label: :enrichment_dest_node)
     dest_label = String.to_atom(List.first(dest_node.labels))
     relationship_label = String.to_atom(edge.type)
     relationship = Info.relationship(resource, relationship_label, dest_label)
 
     if relationship != nil do
-      #IO.inspect(relationship, label: :enrichment_relationship)
+      # IO.inspect(relationship, label: :enrichment_relationship)
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
 
-      if reverse_node_relationship != nil do
-        reverse_relationship =
-          Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
-          #|> IO.inspect(label: :enrichment_reverse_relationship)
-
+      reverse_relationship =
         cond do
-          relationship.cardinality == :many ->
-            dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            {relationship.name, [dest_resource]}
-
-          relationship.cardinality == :one && relationship.type == :belongs_to  ->
-            destination_property = Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
-            #|> IO.inspect(label: :enrichment_destination_property)
-            {relationship.source_attribute, Map.get(dest_node.properties, destination_property)}
-
-          reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one ->
-            source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
-            #|> IO.inspect(label: :enrichment_source_property)
-            {relationship.destination_attribute, Map.get(dest_node.properties, source_property)}
+          reverse_node_relationship == nil ->
+            nil
 
           true ->
-            IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, unsupported")
-            nil
+            Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
         end
-      else
-        IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no reverse relationship")
-        nil
+
+      cond do
+        relationship.cardinality == :many ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          [{relationship.name, [dest_resource]} | acc]
+
+        relationship.cardinality == :one && relationship.type == :belongs_to ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+
+          destination_property =
+            Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+
+          [
+            {relationship.name, dest_resource},
+            {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc
+          ]
+
+        reverse_relationship != nil &&
+            (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
+          # |> IO.inspect(label: :enrichment_source_property)
+          [
+            {reverse_relationship.name, dest_resource},
+            {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
+          ]
+
+        true ->
+          Logger.warning(
+            "AshNeo4j.DataLayer: unable to enrich source node #{inspect(Info.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, unsupported"
+          )
+
+          acc
       end
     else
-      IO.puts("warning: unable to enrich source node #{Info.label(resource)} with edge #{edge.type} and destination node #{dest_node.labels}, no relationship")
-      nil
+      Logger.warning(
+        "AshNeo4j.DataLayer: unable to enrich source node #{inspect(Info.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, no relationship"
+      )
+
+      acc
     end
-    #|> IO.inspect(label: :enrichment)
+
+    # |> IO.inspect(label: :enrichments)
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])
@@ -534,8 +608,18 @@ defmodule AshNeo4j.DataLayer do
         # create_node_with_relationships
         case Neo4jHelper.create_node_with_relationships(Info.label(resource), properties, relationships) do
           {:ok, %Boltx.Response{results: groups}} ->
-            # return the created node (TODO enrich with destination resources)
-            {:ok, convert_node_to_resource(resource, Map.get(hd(groups), "s"))}
+            consolidated_groups = consolidate_groups(groups)
+            # return the enriched created resource
+            cond do
+              length(consolidated_groups) == 1 ->
+                query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
+                resource = convert_to_resource(query, hd(consolidated_groups))
+                # |> IO.inspect(label: :enriched_resource)
+                {:ok, resource}
+
+              true ->
+                {:error, "expected groups to consolidate to a single group (resource)"}
+            end
 
           {:error, error} ->
             {:error, error}

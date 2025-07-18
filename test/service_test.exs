@@ -60,8 +60,44 @@ defmodule AshNeo4j.Service.Test do
         Resource
         |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
 
+      # |> IO.inspect(label: :resource)
+
       assert is_struct(resource.specification, Specification)
       assert is_struct(resource.service, Service)
+      assert resource.specification_id == esim_v1.id
+      assert resource.service_id == service.id
+    end
+
+    test "find a service by specification id, checking resource enrichment" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service1 = Service |> Ash.create!(%{name: "broadband_0001", specified_by: broadband_v1.id})
+      broadband_v2 = Specification |> Ash.create!(%{name: "broadband", major_version: 2})
+      service2 = Service |> Ash.create!(%{name: "broadband_0002", specified_by: broadband_v2.id})
+      esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
+
+      _resource1 =
+        Resource
+        |> Ash.create!(%{name: "esim_0001", specified_by: esim_v1.id, used_by_service: service1.id})
+
+      resource2 =
+        Resource
+        |> Ash.create!(%{name: "esim_0002", specified_by: esim_v1.id, used_by_service: service2.id})
+
+      found_service =
+        Service
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(specification_id: broadband_v2.id)
+        |> Ash.read_one!()
+
+      # check enrichment
+      assert is_struct(found_service.specification, Specification)
+      assert found_service.specification_id == broadband_v2.id
+
+      refute is_struct(found_service.resources, Ash.NotLoaded)
+      assert length(found_service.resources) == 1
+      found_resource = hd(found_service.resources)
+      assert is_struct(found_resource, Resource)
+      assert found_resource.id == resource2.id
     end
   end
 
@@ -139,7 +175,7 @@ defmodule AshNeo4j.Service.Test do
       assert is_struct(refreshed_event, Event)
       assert refreshed_event.service_id == service.id
       refute refreshed_event.resource_id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
+      assert is_struct(refreshed_event.service, Service)
       assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
@@ -165,7 +201,7 @@ defmodule AshNeo4j.Service.Test do
       refute refreshed_event.service_id
       assert refreshed_event.resource_id == resource.id
       assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
+      assert is_struct(refreshed_event.resource, Resource)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
@@ -200,7 +236,6 @@ defmodule AshNeo4j.Service.Test do
                :AFTER,
                :outgoing
              )
-
     end
   end
 end
