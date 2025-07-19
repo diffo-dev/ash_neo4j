@@ -117,18 +117,21 @@ defmodule AshNeo4j.Service.Test do
     end
 
     test "service-service-resource-resource relationships using ash" do
-      {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service"}) |> Ash.create()
-      {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service"}) |> Ash.create()
+      {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
+      {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
+
+      {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service", specified_by: service_specification.id}) |> Ash.create()
+      {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service", specified_by: service_specification.id}) |> Ash.create()
 
       {:ok, _related_parent_service} =
         parent_service |> Ash.Changeset.for_update(:update, manage_services: [child_service.id]) |> Ash.update()
 
-      {:ok, parent_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "parent_resource"}) |> Ash.create()
+      {:ok, parent_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "parent_resource", specified_by: resource_specification.id}) |> Ash.create()
 
       {:ok, _related_child_service} =
         child_service |> Ash.Changeset.for_update(:update, use_resources: [parent_resource.id]) |> Ash.update()
 
-      {:ok, child_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "child_resource"}) |> Ash.create()
+      {:ok, child_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "child_resource", specified_by: resource_specification.id}) |> Ash.create()
 
       {:ok, _related_parent_resource} =
         parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
@@ -162,9 +165,43 @@ defmodule AshNeo4j.Service.Test do
     end
   end
 
+  describe "ash destroy action tests" do
+    test "unused specification node can be destroyed" do
+      {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
+      :ok = service_specification |> Ash.destroy()
+    end
+
+    test "service can be destroyed" do
+      {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
+      {:ok, service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
+      :ok = service |> Ash.destroy()
+    end
+
+    test "resource can be destroyed" do
+      {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
+      {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
+      :ok = resource |> Ash.destroy()
+    end
+
+    @tag bugged: true #issue 110
+    test "specification cannot be destroyed when used by a service" do
+      {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
+      {:ok, _service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
+      {:error, _error} = service_specification |> Ash.destroy()
+    end
+
+    @tag bugged: true #issue 110
+    test "specification cannot be destroyed when used by a resource" do
+      {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
+      {:ok, _resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
+      {:error, _error} = resource_specification |> Ash.destroy()
+    end
+  end
+
   describe "has one relationship tests" do
     test "(InternalService) -[FIRED]-> (Event)" do
-      {:ok, service} = Service |> Ash.create(%{name: "service"})
+      {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
+      {:ok, service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
       assert is_struct(updated_service, Service)
@@ -189,7 +226,8 @@ defmodule AshNeo4j.Service.Test do
     end
 
     test "(InternalResource) -[FIRED]-> (Event)" do
-      {:ok, resource} = Resource |> Ash.create(%{name: "resource"})
+      {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
+      {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
       assert is_struct(updated_resource, Resource)

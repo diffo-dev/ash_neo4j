@@ -133,6 +133,30 @@ defmodule AshNeo4j.DataLayer.Info do
     |> to_string()
   end
 
+  @doc """
+  Returns the list of node relationships which block resource deletion, given the source resource
+  The node relationships are tuples of {edge_label, edge_direction, destination_label}
+  """
+  @spec preserve_node_relationships(Ash.Resource.t()) :: list(tuple())
+  def preserve_node_relationships(resource) when is_atom(resource) do
+    Enum.reduce(relate(resource), [],
+      fn {name, edge_label, direction}, acc ->
+        relationship = Ash.Resource.Info.relationship(resource, name) #|> IO.inspect(label: :relationship)
+        reverse_relationship = Ash.Resource.Info.relationship(relationship.destination, name) #|> IO.inspect(label: :reverse_relationship)
+        cond do
+          reverse_relationship && reverse_relationship.cardinality == :one ->
+            if reverse_relationship.allow_nil? do
+              acc
+            else
+              [{edge_label, direction, label(relationship.destination)} | acc]
+            end
+          true ->
+            acc
+        end
+      end)
+    #|> IO.inspect(label: "preserve_node_relationship for resource #{resource}")
+  end
+
   defp reverse(direction) when is_atom(direction) do
     case direction do
       :incoming -> :outgoing

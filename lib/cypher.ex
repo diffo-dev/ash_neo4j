@@ -231,7 +231,7 @@ defmodule AshNeo4j.Cypher do
         {:error, "nothing deleted"}
       else
         Logger.debug("AshNeo4j.Cypher: run_expecting_deletions deleted #{deleted_nodes} nodes")
-        :ok
+        boltx_result
       end
     else
       boltx_result
