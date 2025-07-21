@@ -62,4 +62,18 @@ defmodule AshNeo4j.Test.Resource.Service do
     has_many :resources, AshNeo4j.Test.Resource.Resource
     has_one :event, AshNeo4j.Test.Resource.Event
   end
+
+  calculations do
+    calculate :href,
+              :string,
+              expr(
+                "serviceInventoryManagement/v" <>
+                  specification.tmf_version <>
+                  "/service/" <>
+                  specification.name <>
+                  "/" <> id
+              ) do
+      description "the inventory href of the service"
+    end
+  end
 end

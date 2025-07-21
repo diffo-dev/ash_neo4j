@@ -39,7 +39,15 @@ defmodule AshNeo4j.Service.Test do
       assert latest_specification.major_version == 2
       assert latest_specification.name == "access"
       {:ok, refreshed_latest_specification} = latest_specification |> Ash.load(:version)
-      assert refreshed_latest_specification.version == "v2.0"
+      assert refreshed_latest_specification.version == "v2.0.0"
+    end
+
+    @tag debug: true
+    test "service can calculate href using referenced specification" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+      {:ok, refreshed_service} = service |> Ash.load(:href)
+      assert refreshed_service.href == "serviceInventoryManagement/v4/service/broadband/#{service.id}"
     end
   end
 
@@ -208,7 +216,7 @@ defmodule AshNeo4j.Service.Test do
     test "specification cannot be destroyed when used by a resource" do
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
       {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
-      {:error, error} = resource_specification |> Ash.destroy() |> IO.inspect
+      {:error, error} = resource_specification |> Ash.destroy() |> IO.inspect()
       assert is_struct(error, Ash.Error.Invalid)
       :ok = resource |> Ash.destroy()
       :ok = resource_specification |> Ash.destroy()

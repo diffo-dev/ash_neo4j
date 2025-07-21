@@ -11,8 +11,10 @@ defmodule AshNeo4j.Test.Resource.Specification do
     ]
 
     translate id: :uuid
+
     relate [
-      {:instances, :SPECIFIES, :outgoing}
+      {:services, :SPECIFIES, :outgoing},
+      {:resources, :SPECIFIES, :outgoing}
     ]
   end
 
@@ -21,7 +23,7 @@ defmodule AshNeo4j.Test.Resource.Specification do
 
     create :create do
       primary? true
-      accept [:name, :type, :href, :major_version, :minor_version]
+      accept [:name, :type, :href, :major_version, :minor_version, :patch_version, :tmf_version]
       load [:version]
     end
 
@@ -45,18 +47,26 @@ defmodule AshNeo4j.Test.Resource.Specification do
     attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
     attribute :major_version, :integer, default: 1, public?: true
     attribute :minor_version, :integer, default: 0, public?: true
+    attribute :patch_version, :integer, default: 0, public?: true
+    attribute :tmf_version, :integer, default: 4, public?: true
   end
 
   relationships do
-    has_many :instances, Diffo.Provider.Instance do
-      description "the instances specified by this specification"
+    has_many :services, AshNeo4j.Test.Resource.Service do
+      description "the resources specified by this specification"
+      destination_attribute :specification_id
+      public? true
+    end
+
+    has_many :resources, AshNeo4j.Test.Resource.Resource do
+      description "the resources specified by this specification"
       destination_attribute :specification_id
       public? true
     end
   end
 
   calculations do
-    calculate :version, :string, expr("v" <> major_version <> "." <> minor_version)
+    calculate :version, :string, expr("v" <> major_version <> "." <> minor_version <> "." <> patch_version)
   end
 
   preparations do
