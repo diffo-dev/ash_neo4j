@@ -1,5 +1,5 @@
 defmodule AshNeo4j.Verifiers.VerifyRelate do
-  @moduledoc "Verifies that a relate relates to a relationship, and that the edge label meets Neo4j conventions"
+  @moduledoc "Verifies that each relate relates to a relationship, and that the edge labels meets Neo4j conventions"
   use Spark.Dsl.Verifier
 
   alias Spark.Dsl.Verifier

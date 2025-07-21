@@ -13,6 +13,11 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :relate, [], true)
   end
 
+  @spec guard(Ash.Resource.t()) :: list(tuple()) | nil
+  def guard(resource) do
+    Extension.get_opt(resource, [:neo4j], :guard, [], true)
+  end
+
   @spec skip(Ash.Resource.t()) :: list() | nil
   def skip(resource) do
     Extension.get_opt(resource, [:neo4j], :skip, [], true)
@@ -136,10 +141,11 @@ defmodule AshNeo4j.DataLayer.Info do
   @doc """
   Returns the list of node relationships which block resource deletion, given the source resource
   The node relationships are tuples of {edge_label, edge_direction, destination_label}
+  These include explicit guard relationships.
   """
   @spec preserve_node_relationships(Ash.Resource.t()) :: list(tuple())
   def preserve_node_relationships(resource) when is_atom(resource) do
-    Enum.reduce(relate(resource), [], fn {name, edge_label, direction}, acc ->
+    Enum.reduce(relate(resource), guard(resource), fn {name, edge_label, direction}, acc ->
       relationship = Ash.Resource.Info.relationship(resource, name)
       reverse_node_relationship = reverse_node_relationship(resource, relationship.name)
 

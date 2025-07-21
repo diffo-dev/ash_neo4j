@@ -32,16 +32,14 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
 
-  @node_relationship {:tuple, [:atom, :atom, :atom]}
-
   @neo4j %Spark.Dsl.Section{
     name: :neo4j,
     examples: [
       """
       neo4j do
-        label [:Comment]
-        translate id: :uuid
+        label :Comment
         relate [{:post, :BELONGS_TO, :outgoing}]
+        translate id: :uuid
       end
       """
     ],
@@ -52,12 +50,19 @@ defmodule AshNeo4j.DataLayer do
         required: false
       ],
       relate: [
-        type: {:list, @node_relationship},
-        doc: "Optional list of node relationships, as tuples of {relationship_name, edge_label, edge_direction}"
+        type: {:list, {:tuple, [:atom, :atom, :atom]}},
+        doc: "Optional list of relationships, as tuples of {relationship_name, edge_label, edge_direction}",
+        required: false
+      ],
+      guard: [
+        type: {:list, {:tuple, [:atom, :atom, :atom]}},
+        doc: "Optional list of node relationships, as tuples of {edge_label, edge_direction, destination_label}",
+        required: false
       ],
       translate: [
-        type: :keyword_list,
-        doc: "Optional list of attribute to node property translations"
+        type: :non_empty_keyword_list,
+        doc: "Optional list of attribute to node property translations",
+        required: false
       ],
       skip: [
         type: {:list, :atom},
@@ -109,6 +114,7 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyLabelPascalCase,
       AshNeo4j.Verifiers.VerifyIdTranslated,
       AshNeo4j.Verifiers.VerifyRelate,
+      AshNeo4j.Verifiers.VerifyGuard,
       AshNeo4j.Verifiers.VerifyPropertiesCamelCase
     ],
     transformers: [
