@@ -120,18 +120,31 @@ defmodule AshNeo4j.Service.Test do
       {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
 
-      {:ok, parent_service} = Service |> Ash.Changeset.for_create(:create, %{name: "parent_service", specified_by: service_specification.id}) |> Ash.create()
-      {:ok, child_service} = Service |> Ash.Changeset.for_create(:create, %{name: "child_service", specified_by: service_specification.id}) |> Ash.create()
+      {:ok, parent_service} =
+        Service
+        |> Ash.Changeset.for_create(:create, %{name: "parent_service", specified_by: service_specification.id})
+        |> Ash.create()
+
+      {:ok, child_service} =
+        Service
+        |> Ash.Changeset.for_create(:create, %{name: "child_service", specified_by: service_specification.id})
+        |> Ash.create()
 
       {:ok, _related_parent_service} =
         parent_service |> Ash.Changeset.for_update(:update, manage_services: [child_service.id]) |> Ash.update()
 
-      {:ok, parent_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "parent_resource", specified_by: resource_specification.id}) |> Ash.create()
+      {:ok, parent_resource} =
+        Resource
+        |> Ash.Changeset.for_create(:create, %{name: "parent_resource", specified_by: resource_specification.id})
+        |> Ash.create()
 
       {:ok, _related_child_service} =
         child_service |> Ash.Changeset.for_update(:update, use_resources: [parent_resource.id]) |> Ash.update()
 
-      {:ok, child_resource} = Resource |> Ash.Changeset.for_create(:create, %{name: "child_resource", specified_by: resource_specification.id}) |> Ash.create()
+      {:ok, child_resource} =
+        Resource
+        |> Ash.Changeset.for_create(:create, %{name: "child_resource", specified_by: resource_specification.id})
+        |> Ash.create()
 
       {:ok, _related_parent_resource} =
         parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
@@ -183,14 +196,16 @@ defmodule AshNeo4j.Service.Test do
       :ok = resource |> Ash.destroy()
     end
 
-    @tag bugged: true #issue 110
+    # issue 110
+    @tag bugged: true
     test "specification cannot be destroyed when used by a service" do
       {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
       {:ok, _service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
       {:error, _error} = service_specification |> Ash.destroy()
     end
 
-    @tag bugged: true #issue 110
+    # issue 110
+    @tag bugged: true
     test "specification cannot be destroyed when used by a resource" do
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
       {:ok, _resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})

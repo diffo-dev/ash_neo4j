@@ -3,6 +3,7 @@ defmodule AshNeo4j.Blog.Test do
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.Test.Resource.Author
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   alias AshNeo4j.Test.Resource.Tag
@@ -323,9 +324,21 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "ash create action tests" do
+    test "author node can be created using ash" do
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      assert author.name == "author"
+    end
+
+    test "post node can be created using ash - failed must have an author" do
+      {:error, _error} = Post |> Ash.Changeset.for_create(:create, %{title: "post4"}) |> Ash.create()
+    end
+
     test "post node can be created using ash" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post4"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post4", written_by: author.id}) |> Ash.create()
       assert post.title == "post4"
+      assert post.author_id == author.id
+      assert is_struct(post.author, Author)
     end
 
     test "comment node can be created using ash" do
@@ -336,7 +349,8 @@ defmodule AshNeo4j.Blog.Test do
 
   describe "ash update action tests" do
     test "post can be updated using ash" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post5"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post5", written_by: author.id}) |> Ash.create()
 
       {:ok, updated_post} =
         post |> Ash.Changeset.for_update(:update, %{score: 1}) |> Ash.update()
@@ -345,9 +359,11 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "post attributes can be updated to nil using ash" do
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+
       {:ok, post} =
         Post
-        |> Ash.Changeset.for_create(:create, %{title: "post5", score: 1})
+        |> Ash.Changeset.for_create(:create, %{title: "post5", score: 1, written_by: author.id})
         |> Ash.create()
 
       {:ok, updated_post} =
@@ -357,7 +373,8 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "post and comment node can be related using ash" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post6"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post6", written_by: author.id}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment5"}) |> Ash.create()
       {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
       # the post should have the comment
@@ -368,7 +385,8 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "post and comments nodes can be related using ash update" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
 
@@ -385,7 +403,8 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "post and comment nodes can be updated and related using ash update" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment6"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment7"}) |> Ash.create()
 
@@ -403,7 +422,8 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "post and comment nodes can be related and unrelated using ash update" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
       {:ok, comment1} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
       {:ok, comment2} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment9"}) |> Ash.create()
 
@@ -443,8 +463,25 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "ash destroy action tests" do
+    test "unrelated author can be destroyed using ash" do
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      :ok = author |> Ash.destroy()
+    end
+
+    test "author cannot be destroyed while related to post using ash" do
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post8", written_by: author.id}) |> Ash.create()
+      {:error, _error} = author |> Ash.destroy()
+
+      # now unrelate by deleting the post
+      :ok = post |> Ash.destroy()
+
+      :ok = author |> Ash.destroy()
+    end
+
     test "related post can be destroyed using ash" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post8"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post8", written_by: author.id}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment8"}) |> Ash.create()
 
       {:ok, related_post} =
@@ -457,7 +494,8 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "related comment can be destroyed using ash" do
-      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post9"}) |> Ash.create()
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post9", written_by: author.id}) |> Ash.create()
       {:ok, comment} = Comment |> Ash.Changeset.for_create(:create, %{title: "comment9"}) |> Ash.create()
 
       {:ok, related_post} = post |> Ash.Changeset.for_update(:update, add_comments: [comment.id]) |> Ash.update()
@@ -482,8 +520,12 @@ defmodule AshNeo4j.Blog.Test do
     end
 
     test "sort asc and desc is optimised" do
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+
       for i <- 1..3 do
-        Post |> Ash.Changeset.for_create(:create, %{title: "post#{i}", score: div(i + 1, 2)}) |> Ash.create()
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "post#{i}", score: div(i + 1, 2), written_by: author.id})
+        |> Ash.create()
       end
 
       {:ok, result} = Post |> Ash.Query.sort(score: :desc, title: :asc) |> Ash.read()
@@ -525,8 +567,9 @@ defmodule AshNeo4j.Blog.Test do
 
   describe "many-to-many relationship tests" do
     test "many posts can be tagged with each tag" do
-      {:ok, post1} = Post |> Ash.create(%{title: "post1"})
-      {:ok, post2} = Post |> Ash.create(%{title: "post2"})
+      {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
+      {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})
+      {:ok, post2} = Post |> Ash.create(%{title: "post2", written_by: author.id})
       {:ok, tag1} = Tag |> Ash.create(%{value: "tag1"})
       {:ok, tag2} = Tag |> Ash.create(%{value: "tag2"})
       posts = [post1, post2]
@@ -577,8 +620,12 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   defp create_post_nodes(count) when is_integer(count) do
+    Neo4jHelper.create_node(:Author, %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+
     for i <- 1..count do
-      Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: Ash.UUID.generate()})
+      Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: post_uuid = Ash.UUID.generate()})
+
+      Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
     end
   end
 
@@ -589,8 +636,11 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
+    Neo4jHelper.create_node(:Author, %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+
     for post <- 1..posts do
       Neo4jHelper.create_node(:Post, %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
+      Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
 
       for comment <- 1..comments do
         Neo4jHelper.create_node(:Comment, %{

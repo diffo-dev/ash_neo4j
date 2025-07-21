@@ -1,8 +1,8 @@
 spark_locals_without_parens = [
   label: 1,
-  store: 1,
+  relate: 1,
   translate: 1,
-  relate: 1
+  skip: 1
 ]
 
 [
