@@ -265,7 +265,8 @@ defmodule AshNeo4j.DataLayer do
           :ok
 
         {:error, "nothing deleted"} ->
-          {:error, Ash.Error.Invalid.exception()}
+          IO.inspect(changeset)
+          {:error, Ash.Error.Invalid.Unavailable.exception([resource: resource, source: AshNeo4j.DataLayer, reason: "guarded relationships prevent deletion"])}
 
         {:error, error} ->
           {:error, error}

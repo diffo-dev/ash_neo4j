@@ -205,10 +205,11 @@ defmodule AshNeo4j.Service.Test do
       :ok = service_specification |> Ash.destroy()
     end
 
+    @tag debug: true
     test "specification cannot be destroyed when used by a resource" do
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
       {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
-      {:error, error} = resource_specification |> Ash.destroy()
+      {:error, error} = resource_specification |> Ash.destroy() |> IO.inspect
       assert is_struct(error, Ash.Error.Invalid)
       :ok = resource |> Ash.destroy()
       :ok = resource_specification |> Ash.destroy()
