@@ -5,6 +5,11 @@ defmodule AshNeo4j.Test.Resource.Specification do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
+    guard [
+      {:SPECIFIES, :outgoing, :InternalService},
+      {:SPECIFIES, :outgoing, :InternalResource}
+    ]
+
     translate id: :uuid
   end
 

@@ -93,3 +93,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Maintenance
 
 * fixed Ash.Error.Unknown no function matching clause in AshNeo4j.Cypher.expression/4
+
+## [v0.2.5](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.4...v0.2.5) (2025-07-21)
+
+### Features:
+
+* guard against destroy
+* improved has_one and belongs_to enrichment
+* improved logging
+
+### Maintenance
+
+* fixed destroy should fail when destination has allow_nil?: false

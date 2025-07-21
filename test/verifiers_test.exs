@@ -4,7 +4,7 @@ defmodule AshNeo4j.Test.Verifiers do
   use ExUnit.Case, async: false
 
   describe "Verifiers tests" do
-    test "invalid label" do
+    test "label: invalid label" do
       assert_raise Spark.Error.DslError, fn ->
         defmodule InvalidLabel do
           @moduledoc false
@@ -45,7 +45,7 @@ defmodule AshNeo4j.Test.Verifiers do
       end
     end
 
-    test "edge label style" do
+    test "relate: edge label style" do
       assert_raise Spark.Error.DslError,
                    ~r/relate: edge labels must be upper case and may have an underscore, invalid edge labels: uses/,
                    fn ->
@@ -74,7 +74,7 @@ defmodule AshNeo4j.Test.Verifiers do
                    end
     end
 
-    test "mismatched relationship names" do
+    test "relate: mismatched relationship names" do
       assert_raise Spark.Error.DslError,
                    ~r/relate: relationship names must match the name of a relationship, mismatched relationship names: resourced/,
                    fn ->
@@ -103,36 +103,7 @@ defmodule AshNeo4j.Test.Verifiers do
                    end
     end
 
-    test "edge direction" do
-      assert_raise Spark.Error.DslError,
-                   ~r/relate: edge directions must be :incoming or :outgoing, invalid edge directions: forwards/,
-                   fn ->
-                     defmodule InvalidEdgeDirection do
-                       @moduledoc false
-                       use Ash.Resource,
-                         domain: AshNeo4j.Test.Domain,
-                         data_layer: AshNeo4j.DataLayer
-
-                       neo4j do
-                         label :Resource
-                         relate [{:resources, :USES, :forwards}]
-                         translate id: :uuid
-                       end
-
-                       attributes do
-                         uuid_primary_key :id, writable?: true
-                         attribute :name, :string, public?: true
-                         attribute :resource_id, :uuid, public?: true
-                       end
-
-                       relationships do
-                         has_many :resources, InvalidEdgeDirection
-                       end
-                     end
-                   end
-    end
-
-    test "mismatched relationships" do
+    test "relate: mismatched relationships" do
       assert_raise Spark.Error.DslError,
                    ~r/relate: relate must have an entry for each relationship/,
                    fn ->
@@ -157,6 +128,98 @@ defmodule AshNeo4j.Test.Verifiers do
                        relationships do
                          has_many :resources, MismatchedRelationships
                          belongs_to :resource, MismatchedRelationships, public?: true
+                       end
+                     end
+                   end
+    end
+
+    test "relate: invalid edge direction" do
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: edge directions must be :incoming or :outgoing, invalid edge directions: forwards/,
+                   fn ->
+                     defmodule RelateInvalidEdgeDirection do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         label :Resource
+                         relate [{:resources, :USES, :forwards}]
+                         translate id: :uuid
+                       end
+
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                       end
+
+                       relationships do
+                         has_many :resources, RelateInvalidEdgeDirection
+                       end
+                     end
+                   end
+    end
+
+    test "guard: edge label style" do
+      assert_raise Spark.Error.DslError,
+                   ~r/guard: edge labels must be upper case and may have an underscore, invalid edge labels: \[:specifies\]/,
+                   fn ->
+                     defmodule GuardInvalidEdgeLabel do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         guard [{:specifies, :outgoing, :Resource}]
+                       end
+
+                       attributes do
+                         uuid_primary_key :uuid, writable?: true
+                       end
+                     end
+                   end
+    end
+
+    test "guard: invalid edge direction" do
+      assert_raise Spark.Error.DslError,
+                   ~r/guard: invalid edge directions: \[:forwards\]/,
+                   fn ->
+                     defmodule GuardInvalidEdgeDirection do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         guard [{:SPECIFIES, :forwards, :Resource}]
+                       end
+
+                       attributes do
+                         uuid_primary_key :uuid, writable?: true
+                       end
+                     end
+                   end
+    end
+
+    test "guard: destination label style" do
+      assert_raise Spark.Error.DslError,
+                   ~r/guard: destination labels must be PascalCase, invalid destination labels: \[:resource\]/,
+                   fn ->
+                     defmodule GuardInvalidDestinationLabel do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         guard [{:SPECIFIES, :outgoing, :resource}]
+                       end
+
+                       attributes do
+                         uuid_primary_key :uuid, writable?: true
                        end
                      end
                    end

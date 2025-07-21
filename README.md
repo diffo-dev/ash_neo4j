@@ -13,7 +13,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.4"},
+    {:ash_neo4j, "~> 0.2.5"},
   ]
 end
 ```
@@ -77,12 +77,24 @@ The DSL may be used to label the Ash Resource's underlying graph node. If omitte
 
 ## Relate
 
-The DSL is used to direct any node relationships.
+The DSL must be used to direct each relationship.
 ```elixir
   neo4j do
     relate [{:post, :BELONGS_TO, :outgoing}]
   end
 ```
+
+## Guard
+
+The DSL may be used to guard destroy actions.
+```elixir
+  neo4j do
+    relate [{:WRITTEN_BY, :outgoing, :Post}]
+  end
+```
+
+Guard is useful where the resource has no explicit relationships, but other resources expect the resource to exist while they are related.
+Guard can also be used where the underlying node has other edges which should prevent resource destruction.
 
 ## Translate
 
