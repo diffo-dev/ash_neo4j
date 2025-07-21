@@ -256,20 +256,24 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: destroy(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    destroy_record(resource, changeset.data)
-  end
-
-  defp destroy_record(resource, record) do
     label = Info.label(resource)
-    id_properties = id_properties(resource, record)
+    id_properties = id_properties(resource, changeset.data)
 
-    case Neo4jHelper.safe_delete_nodes(label, id_properties, Info.preserve_node_relationships(resource)) do
-      {:ok, _} ->
-        :ok
+    result =
+      case Neo4jHelper.safe_delete_nodes(label, id_properties, Info.preserve_node_relationships(resource)) do
+        {:ok, _} ->
+          :ok
 
-      {:error, error} ->
-        {:error, error}
-    end
+        {:error, "nothing deleted"} ->
+          {:error, Ash.Error.Invalid.exception()}
+
+        {:error, error} ->
+          {:error, error}
+      end
+
+    Logger.debug("AshNeo4j.DataLayer: delete result #{inspect(result)}")
+
+    result
   end
 
   @impl true
