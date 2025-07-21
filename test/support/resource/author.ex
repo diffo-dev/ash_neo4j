@@ -1,12 +1,12 @@
-defmodule AshNeo4j.Test.Resource.Tag do
+defmodule AshNeo4j.Test.Resource.Author do
   @moduledoc false
   use Ash.Resource,
     domain: AshNeo4j.Test.Domain,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :Tag
-    relate [{:posts, :TAGS, :outgoing}]
+    label :Author
+    relate [{:posts, :WROTE, :outgoing}]
     translate id: :uuid
     skip [:post_id]
   end
@@ -26,7 +26,7 @@ defmodule AshNeo4j.Test.Resource.Tag do
 
   attributes do
     uuid_primary_key :id
-    attribute :value, :string, public?: true
+    attribute :name, :string, public?: true
     attribute :post_id, :uuid
   end
 
