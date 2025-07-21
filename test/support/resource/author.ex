@@ -5,7 +5,6 @@ defmodule AshNeo4j.Test.Resource.Author do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :Author
     relate [{:posts, :WROTE, :outgoing}]
     translate id: :uuid
     skip [:post_id]
