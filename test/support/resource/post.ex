@@ -9,16 +9,25 @@ defmodule AshNeo4j.Test.Resource.Post do
 
     relate [
       {:comments, :BELONGS_TO, :incoming},
-      {:tags, :TAGS, :incoming}
+      {:tags, :TAGS, :incoming},
+      {:author, :WROTE, :incoming}
     ]
 
-    skip([:tag_id])
     translate id: :uuid
+
+    skip [:tag_id]
   end
 
   actions do
     default_accept :*
-    defaults [:read, :create, :destroy]
+    defaults [:read, :destroy]
+
+    create :create do
+      primary? true
+      argument :written_by, :uuid
+
+      change manage_relationship(:written_by, :author, type: :append_and_remove)
+    end
 
     update :update do
       primary? true
@@ -51,6 +60,7 @@ defmodule AshNeo4j.Test.Resource.Post do
     attribute :score, :integer, public?: true, allow_nil?: true
     attribute :public, :boolean, public?: true
     attribute :unique, :string, public?: true
+    attribute :author_id, :uuid, public?: true, allow_nil?: false
     attribute :tag_id, :uuid, public?: true
   end
 
@@ -61,5 +71,6 @@ defmodule AshNeo4j.Test.Resource.Post do
   relationships do
     has_many :comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true
     has_many :tags, AshNeo4j.Test.Resource.Tag, destination_attribute: :post_id, public?: true
+    belongs_to :author, AshNeo4j.Test.Resource.Author, public?: true, allow_nil?: false
   end
 end

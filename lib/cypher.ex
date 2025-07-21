@@ -194,7 +194,6 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   def run(cypher) when is_bitstring(cypher) do
-    # IO.inspect(cypher, label: :run_cypher)
     Logger.debug("""
     AshNeo4.Cypher: run(#{cypher})
     """)
@@ -208,5 +207,34 @@ defmodule AshNeo4j.Cypher do
     end
 
     boltx_result
+  end
+
+  def run_expecting_deletions(cypher) when is_bitstring(cypher) do
+    Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
+
+    boltx_result = Boltx.query(Bolt, cypher)
+
+    if elem(boltx_result, 0) == :ok do
+      response = elem(boltx_result, 1)
+
+      deleted_nodes =
+        case response.stats do
+          [] ->
+            0
+
+          %{} ->
+            Map.get(response.stats, "nodes-deleted", 0)
+        end
+
+      if deleted_nodes == 0 do
+        Logger.error("AshNeo4j.Cypher: nothing deleted")
+        {:error, "nothing deleted"}
+      else
+        Logger.debug("AshNeo4j.Cypher: run_expecting_deletions deleted #{deleted_nodes} nodes")
+        boltx_result
+      end
+    else
+      boltx_result
+    end
   end
 end
