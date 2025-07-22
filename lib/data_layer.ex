@@ -444,7 +444,7 @@ defmodule AshNeo4j.DataLayer do
     convert_node_to_resource(query.resource, source_node, enrichments)
     |> evaluate_calculations(query)
 
-    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do

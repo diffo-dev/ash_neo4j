@@ -83,5 +83,4 @@ defmodule AshNeo4j.Test.Resource.Service do
               sort: [id: :asc]
             )
   end
-
 end

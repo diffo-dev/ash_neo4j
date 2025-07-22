@@ -11,7 +11,6 @@ defmodule AshNeo4j.Test.Resource.Specification do
     ]
 
     translate id: :uuid
-
   end
 
   actions do
