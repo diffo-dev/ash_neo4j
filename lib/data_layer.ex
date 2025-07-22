@@ -28,8 +28,11 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, :expression_calculation), do: true
-  # def can?(_, :expression_calculation_sort), do: true
+  def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
+  def can?(_, {:join, _}), do: true
+  def can?(_, {:lateral_join, _}), do: true
+  def can?(_, {:filter_relationship, _}), do: true
   def can?(_, _), do: false
 
   @neo4j %Spark.Dsl.Section{
@@ -441,7 +444,7 @@ defmodule AshNeo4j.DataLayer do
     convert_node_to_resource(query.resource, source_node, enrichments)
     |> evaluate_calculations(query)
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
+    #|> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do

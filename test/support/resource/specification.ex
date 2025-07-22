@@ -12,10 +12,6 @@ defmodule AshNeo4j.Test.Resource.Specification do
 
     translate id: :uuid
 
-    relate [
-      {:services, :SPECIFIES, :outgoing},
-      {:resources, :SPECIFIES, :outgoing}
-    ]
   end
 
   actions do
@@ -49,20 +45,6 @@ defmodule AshNeo4j.Test.Resource.Specification do
     attribute :minor_version, :integer, default: 0, public?: true
     attribute :patch_version, :integer, default: 0, public?: true
     attribute :tmf_version, :integer, default: 4, public?: true
-  end
-
-  relationships do
-    has_many :services, AshNeo4j.Test.Resource.Service do
-      description "the resources specified by this specification"
-      destination_attribute :specification_id
-      public? true
-    end
-
-    has_many :resources, AshNeo4j.Test.Resource.Resource do
-      description "the resources specified by this specification"
-      destination_attribute :specification_id
-      public? true
-    end
   end
 
   calculations do

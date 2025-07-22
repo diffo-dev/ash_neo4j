@@ -76,4 +76,12 @@ defmodule AshNeo4j.Test.Resource.Service do
       description "the inventory href of the service"
     end
   end
+
+  preparations do
+    prepare build(
+              load: [:href],
+              sort: [id: :asc]
+            )
+  end
+
 end

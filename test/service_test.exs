@@ -42,7 +42,6 @@ defmodule AshNeo4j.Service.Test do
       assert refreshed_latest_specification.version == "v2.0.0"
     end
 
-    @tag debug: true
     test "service can calculate href using referenced specification" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})

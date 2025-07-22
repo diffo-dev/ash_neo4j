@@ -93,7 +93,7 @@ defmodule AshNeo4j.MixProject do
   defp deps do
     [
       {:ash, ash_version("~> 3.5")},
-      {:ash_state_machine, "~> 0.2.11", only: [:dev, :test]},
+      {:ash_state_machine, "~> 0.2.8", only: [:dev, :test]},
       {:boltx, ">= 0.0.6"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
