@@ -185,6 +185,8 @@ defmodule AshNeo4j.QueryHelper do
 
   defp convert_value(value) when is_binary(value), do: "'#{value}'"
 
+  defp convert_value(value) when is_atom(value), do: "'#{value}'"
+
   defp convert_value(values) when is_struct(values, MapSet),
     do: "[#{Enum.map(values, fn value -> convert_value(value) end) |> Enum.join(",")}]"
 
