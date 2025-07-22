@@ -28,8 +28,11 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, :expression_calculation), do: true
-  # def can?(_, :expression_calculation_sort), do: true
+  def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
+  def can?(_, {:join, _}), do: true
+  def can?(_, {:lateral_join, _}), do: true
+  def can?(_, {:filter_relationship, _}), do: true
   def can?(_, _), do: false
 
   @neo4j %Spark.Dsl.Section{
@@ -265,8 +268,12 @@ defmodule AshNeo4j.DataLayer do
           :ok
 
         {:error, "nothing deleted"} ->
-          IO.inspect(changeset)
-          {:error, Ash.Error.Invalid.Unavailable.exception([resource: resource, source: AshNeo4j.DataLayer, reason: "guarded relationships prevent deletion"])}
+          {:error,
+           Ash.Error.Invalid.Unavailable.exception(
+             resource: resource,
+             source: AshNeo4j.DataLayer,
+             reason: "guarded relationships prevent deletion"
+           )}
 
         {:error, error} ->
           {:error, error}

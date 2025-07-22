@@ -96,7 +96,7 @@ defmodule AshNeo4j.QueryHelper do
             "WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
 
         true ->
-          Logger.warning("AshNeo4j.Cast: combination of predicates #{inspect(predicates)} not supported")
+          Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
           "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
       end
     end
@@ -118,7 +118,7 @@ defmodule AshNeo4j.QueryHelper do
           Cypher.expression(:s, property_name, "contains", attribute)
 
         _ ->
-          Logger.warning("AshNeo4j.Cast: predicate #{inspect(predicate)} not handled")
+          Logger.warning("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
           "TRUE"
       end
     end)
@@ -172,7 +172,7 @@ defmodule AshNeo4j.QueryHelper do
   defp convert_operator(:is_nil), do: "is_nil"
 
   defp convert_operator(operator) do
-    Logger.warning("AshNeo4j.Cast: operator #{operator} not handled")
+    Logger.warning("AshNeo4j.QueryHelper: operator #{operator} not handled")
     nil
   end
 
