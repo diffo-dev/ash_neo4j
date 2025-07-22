@@ -322,6 +322,30 @@ defmodule AshNeo4j.Blog.Test do
 
       assert length(results) == 0
     end
+
+    test "multiple predicates can be applied - and" do
+      create_post_nodes(3)
+
+      results =
+        Post
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(score >= 1 and score <= 2)
+        |> Ash.read!()
+
+      assert length(results) == 2
+    end
+
+    test "multiple predicates can be applied - or" do
+      create_post_nodes(3)
+
+      results =
+        Post
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(score < 1 or score > 2)
+        |> Ash.read!()
+
+      assert length(results) == 1
+    end
   end
 
   describe "ash create action tests" do

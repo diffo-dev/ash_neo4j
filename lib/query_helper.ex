@@ -42,62 +42,69 @@ defmodule AshNeo4j.QueryHelper do
       # there is no filter, but we want related nodes to simulate foreign keys
       "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
     else
-      simple_filter = Ash.Filter.to_simple_filter(ash_query.filter)
+      # will a simple filter work?
+      simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, [skip_invalid?: true])
       predicates = Map.get(simple_filter, :predicates, [])
 
-      # need to sort out which predicates are source property related, and which are relationship related
-      relationship_predicates =
-        Enum.reduce(predicates, [], fn predicate, acc ->
-          if Map.has_key?(predicate, :operator) do
-            operator = convert_operator(predicate.operator)
-            property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-            relationship_name = String.split(property_name, "_") |> List.first()
-            node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-            relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+      if predicates == [] do
+        # simple filter didn't work
+        Logger.warning("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
+        "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+      else
+        # need to sort out which predicates are source property related, and which are relationship related
+        relationship_predicates =
+          Enum.reduce(predicates, [], fn predicate, acc ->
+            if Map.has_key?(predicate, :operator) do
+              operator = convert_operator(predicate.operator)
+              property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
+              relationship_name = String.split(property_name, "_") |> List.first()
+              node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
+              relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
 
-            if (operator == "in" || operator == "=") && node_relationship != nil && relationship != nil &&
-                 to_string(relationship.source_attribute) == property_name do
-              [predicate | acc]
+              if (operator == "in" || operator == "=") && node_relationship != nil && relationship != nil &&
+                  to_string(relationship.source_attribute) == property_name do
+                [predicate | acc]
+              else
+                acc
+              end
             else
               acc
             end
-          else
-            acc
-          end
-        end)
+          end)
 
-      property_predicates = predicates -- relationship_predicates
+        property_predicates = predicates -- relationship_predicates
 
-      cond do
-        Enum.empty?(relationship_predicates) ->
-          "MATCH (s:#{label}) WHERE " <>
-            predicates(ash_query.resource, property_predicates) <>
-            " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+        cond do
+          Enum.empty?(relationship_predicates) ->
+            "MATCH (s:#{label}) WHERE " <>
+              predicates(ash_query.resource, property_predicates) <>
+              " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
 
-        length(relationship_predicates) == 1 ->
-          predicate = hd(relationship_predicates)
-          operator = convert_operator(predicate.operator)
-          property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-          property_value = convert_value(predicate.right)
-          relationship_name = String.split(property_name, "_") |> List.first()
-          node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-          relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
-          dest_label = Info.label(relationship.destination)
+          length(relationship_predicates) == 1 ->
+            predicate = hd(relationship_predicates)
+            operator = convert_operator(predicate.operator)
+            property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
+            property_value = convert_value(predicate.right)
+            relationship_name = String.split(property_name, "_") |> List.first()
+            node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
+            relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+            dest_label = Info.label(relationship.destination)
 
-          dest_property_name =
-            Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+            dest_property_name =
+              Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
-          "MATCH " <>
-            Cypher.node(:s, label) <>
-            Cypher.relationship(node_relationship) <>
-            Cypher.node(:d, dest_label) <>
-            " WHERE " <>
-            Cypher.expression(:d, dest_property_name, operator, property_value) <>
-            "WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
+            "MATCH " <>
+              Cypher.node(:s, label) <>
+              Cypher.relationship(node_relationship) <>
+              Cypher.node(:d, dest_label) <>
+              " WHERE " <>
+              Cypher.expression(:d, dest_property_name, operator, property_value) <>
+              "WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
 
-        true ->
-          Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
-          "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+          true ->
+            Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
+            "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+        end
       end
     end
   end
