@@ -52,9 +52,6 @@ defmodule AshNeo4j.Test.Resource.Event do
   end
 
   preparations do
-    prepare build(
-      load: [:previous_event]
-    )
+    prepare build(load: [:previous_event])
   end
-
 end

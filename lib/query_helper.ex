@@ -43,7 +43,7 @@ defmodule AshNeo4j.QueryHelper do
       "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
     else
       # will a simple filter work?
-      simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, [skip_invalid?: true])
+      simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
       predicates = Map.get(simple_filter, :predicates, [])
 
       if predicates == [] do
@@ -62,7 +62,7 @@ defmodule AshNeo4j.QueryHelper do
               relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
 
               if (operator == "in" || operator == "=") && node_relationship != nil && relationship != nil &&
-                  to_string(relationship.source_attribute) == property_name do
+                   to_string(relationship.source_attribute) == property_name do
                 [predicate | acc]
               else
                 acc

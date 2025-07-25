@@ -105,3 +105,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Maintenance
 
 * fixed destroy should fail when destination has allow_nil?: false
+
+## [v0.2.6](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.5...v0.2.6) (2025-07-25)
+
+### Maintenance
+
+* fixed nested calculations with references are nil

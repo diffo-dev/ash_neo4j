@@ -74,7 +74,6 @@ defmodule AshNeo4j.Blog.Test do
       assert length(resources) == 2
       # read using Ash with filter
       result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "post2"]) |> Ash.read!()
-      # |> IO.inspect(label: :post_node)
       assert length(result) == 1
       post = hd(result)
       assert is_struct(post, Post)
@@ -89,7 +88,6 @@ defmodule AshNeo4j.Blog.Test do
       assert length(resources) == 2
       # read using Ash with filter
       result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "comment2"]) |> Ash.read!()
-      # |> IO.inspect(label: :comment_node)
       assert length(result) == 1
       comment = hd(result)
       assert is_struct(comment, Comment)
@@ -109,7 +107,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.load([:comments])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read post1 loading comments")
       assert is_struct(post, Post)
       assert length(post.comments) == 1
       assert is_struct(hd(post.comments), Comment)
@@ -126,7 +123,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.filter_input(title: [eq: "post1"])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read_one post1 loading comments")
       assert is_struct(post, Post)
       assert length(post.comments) == 2
       Enum.each(post.comments, &assert(is_struct(&1, Comment)))
@@ -143,7 +139,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.filter_input(title: [eq: "comment1.1"])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read comment1.1 loading post")
       assert is_struct(comment, Comment)
       assert comment.title == "comment1.1"
       assert is_struct(comment.post, Post)
@@ -590,7 +585,6 @@ defmodule AshNeo4j.Blog.Test do
     end
   end
 
-  @tag debug: true
   describe "many-to-many relationship tests" do
     test "many posts can be tagged with each tag" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
@@ -607,7 +601,7 @@ defmodule AshNeo4j.Blog.Test do
           post
           |> Ash.Changeset.new()
           |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
-          |> Ash.update() |> IO.inspect(label: :tagged_post)
+          |> Ash.update()
 
         post
       end)
@@ -630,7 +624,7 @@ defmodule AshNeo4j.Blog.Test do
           Post
           |> Ash.Query.for_read(:read)
           |> Ash.Query.filter(id: post.id)
-          |> Ash.read_one!() |> IO.inspect(label: :post)
+          |> Ash.read_one!()
 
         assert length(retrieved_post.tags) == length(tag_ids)
       end
@@ -638,7 +632,7 @@ defmodule AshNeo4j.Blog.Test do
       # retrieve tags and check they are related to posts
       for tag_id <- tag_ids do
         tag =
-          Tag |> Ash.Query.for_read(:read) |> Ash.Query.filter(id: tag_id) |> Ash.read_one!() |> IO.inspect(label: :tag)
+          Tag |> Ash.Query.for_read(:read) |> Ash.Query.filter(id: tag_id) |> Ash.read_one!()
 
         assert length(tag.posts) == length(posts)
       end

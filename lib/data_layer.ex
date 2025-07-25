@@ -27,8 +27,8 @@ defmodule AshNeo4j.DataLayer do
   # def can?(_, :transact), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  #def can?(_, :expression_calculation), do: true
-  #def can?(_, :expression_calculation_sort), do: true
+  # def can?(_, :expression_calculation), do: true
+  # def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, {:join, _}), do: true
   def can?(_, {:lateral_join, _}), do: true
@@ -490,30 +490,30 @@ defmodule AshNeo4j.DataLayer do
 
       cond do
         relationship.cardinality == :one && relationship.type == :belongs_to ->
-          #dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
 
           destination_property =
             Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
           [
-            #{relationship.name, dest_resource},
+            # {relationship.name, dest_resource},
             {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc
           ]
 
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
-          #dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
           source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
           # |> IO.inspect(label: :enrichment_source_property)
           [
-            #{reverse_relationship.name, dest_resource},
+            # {reverse_relationship.name, dest_resource},
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
           ]
 
         # 'back to back' has_many implementing many_to_many
         relationship.cardinality == :many && reverse_relationship != nil && reverse_relationship.cardinality == :many ->
           dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-            [{relationship.name, [dest_resource]} | acc]
+          [{relationship.name, [dest_resource]} | acc]
 
         true ->
           Logger.warning(

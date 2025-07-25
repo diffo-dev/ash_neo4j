@@ -75,8 +75,6 @@ defmodule AshNeo4j.Test.Resource.Post do
   end
 
   preparations do
-    prepare build(
-      load: [:comments, :author]
-    )
+    prepare build(load: [:comments, :author])
   end
 end
