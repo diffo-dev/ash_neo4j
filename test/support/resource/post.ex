@@ -69,8 +69,12 @@ defmodule AshNeo4j.Test.Resource.Post do
   end
 
   relationships do
-    has_many :comments, AshNeo4j.Test.Resource.Comment, destination_attribute: :post_id, public?: true
-    has_many :tags, AshNeo4j.Test.Resource.Tag, destination_attribute: :post_id, public?: true
+    has_many :comments, AshNeo4j.Test.Resource.Comment, public?: true
+    has_many :tags, AshNeo4j.Test.Resource.Tag, public?: true
     belongs_to :author, AshNeo4j.Test.Resource.Author, public?: true, allow_nil?: false
+  end
+
+  preparations do
+    prepare build(load: [:comments, :author])
   end
 end

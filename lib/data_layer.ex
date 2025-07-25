@@ -27,8 +27,8 @@ defmodule AshNeo4j.DataLayer do
   # def can?(_, :transact), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  def can?(_, :expression_calculation), do: true
-  def can?(_, :expression_calculation_sort), do: true
+  # def can?(_, :expression_calculation), do: true
+  # def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, {:join, _}), do: true
   def can?(_, {:lateral_join, _}), do: true
@@ -93,13 +93,6 @@ defmodule AshNeo4j.DataLayer do
     {:ok, %{query | sort: sort}}
   end
 
-  @impl true
-  def add_calculation(query, calculation, _expression, _resource) do
-    # TODO check calculation involves node properties, can be from related nodes if loaded
-    {:ok, Map.put(query, :calculations, [calculation | query.calculations])}
-    # |> IO.inspect(label: :add_calculation_result)
-  end
-
   @doc false
   def store_opt(attributes) do
     if Enum.all?(attributes, &is_atom/1) do
@@ -128,7 +121,7 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, calculations: []]
+    defstruct [:resource, :sort, :filter, :limit, :offset, :domain]
   end
 
   @impl true
@@ -163,6 +156,9 @@ defmodule AshNeo4j.DataLayer do
   end
 
   @impl true
+  @spec create(atom() | map(), any()) ::
+          {:error, <<_::64, _::_*8>> | %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
   def create(resource, changeset) do
     Logger.debug("""
     AshNeo4j.DataLayer: create(#{inspect(resource)}, #{inspect(changeset)})
@@ -440,9 +436,8 @@ defmodule AshNeo4j.DataLayer do
     # |> IO.inspect(label: :enrichments)
 
     convert_node_to_resource(query.resource, source_node, enrichments)
-    |> evaluate_calculations(query)
 
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result with calculations")
+    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -494,30 +489,31 @@ defmodule AshNeo4j.DataLayer do
         end
 
       cond do
-        relationship.cardinality == :many ->
-          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-          [{relationship.name, [dest_resource]} | acc]
-
         relationship.cardinality == :one && relationship.type == :belongs_to ->
-          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
 
           destination_property =
             Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
           [
-            {relationship.name, dest_resource},
+            # {relationship.name, dest_resource},
             {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc
           ]
 
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
-          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
           source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
           # |> IO.inspect(label: :enrichment_source_property)
           [
-            {reverse_relationship.name, dest_resource},
+            # {reverse_relationship.name, dest_resource},
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
           ]
+
+        # 'back to back' has_many implementing many_to_many
+        relationship.cardinality == :many && reverse_relationship != nil && reverse_relationship.cardinality == :many ->
+          dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
+          [{relationship.name, [dest_resource]} | acc]
 
         true ->
           Logger.warning(
@@ -557,20 +553,6 @@ defmodule AshNeo4j.DataLayer do
     |> Ash.Resource.set_meta(struct(Ecto.Schema.Metadata, state: :loaded))
 
     # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
-  end
-
-  defp evaluate_calculations(resource_instance, query) when is_struct(resource_instance) and is_struct(query, Query) do
-    query.calculations
-    |> Enum.reverse()
-    |> Enum.reduce(
-      resource_instance,
-      fn calculation, acc ->
-        # allow calculations to chain previous results
-        expression = Keyword.get(calculation.opts, :expr, %Ash.NotLoaded{})
-        opts = [resource: query.resource, record: acc]
-        Map.put(acc, calculation.name, Ash.Expr.eval!(expression, opts))
-      end
-    )
   end
 
   defp filter_stream(stream, _domain, nil), do: stream

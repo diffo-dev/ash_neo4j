@@ -50,7 +50,7 @@ defmodule AshNeo4j.Test.Resource.Specification do
     calculate :version, :string, expr("v" <> major_version <> "." <> minor_version <> "." <> patch_version)
   end
 
-    preparations do
+  preparations do
     prepare build(
               load: [:version],
               sort: [name: :asc, major_version: :desc]

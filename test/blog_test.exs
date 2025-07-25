@@ -74,12 +74,11 @@ defmodule AshNeo4j.Blog.Test do
       assert length(resources) == 2
       # read using Ash with filter
       result = Post |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "post2"]) |> Ash.read!()
-      # |> IO.inspect(label: :post_node)
       assert length(result) == 1
       post = hd(result)
       assert is_struct(post, Post)
       assert post.title == "post2"
-      assert is_struct(post.comments, Ash.NotLoaded)
+      assert is_list(post.comments)
     end
 
     test "comment node can be read using ash" do
@@ -89,7 +88,6 @@ defmodule AshNeo4j.Blog.Test do
       assert length(resources) == 2
       # read using Ash with filter
       result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "comment2"]) |> Ash.read!()
-      # |> IO.inspect(label: :comment_node)
       assert length(result) == 1
       comment = hd(result)
       assert is_struct(comment, Comment)
@@ -109,7 +107,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.load([:comments])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read post1 loading comments")
       assert is_struct(post, Post)
       assert length(post.comments) == 1
       assert is_struct(hd(post.comments), Comment)
@@ -126,7 +123,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.filter_input(title: [eq: "post1"])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read_one post1 loading comments")
       assert is_struct(post, Post)
       assert length(post.comments) == 2
       Enum.each(post.comments, &assert(is_struct(&1, Comment)))
@@ -143,7 +139,6 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Query.filter_input(title: [eq: "comment1.1"])
         |> Ash.read_one!()
 
-      # |> IO.inspect(label: "ash read comment1.1 loading post")
       assert is_struct(comment, Comment)
       assert comment.title == "comment1.1"
       assert is_struct(comment.post, Post)

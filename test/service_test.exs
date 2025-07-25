@@ -236,7 +236,7 @@ defmodule AshNeo4j.Service.Test do
       assert is_struct(refreshed_event, Event)
       assert refreshed_event.service_id == service.id
       refute refreshed_event.resource_id
-      assert is_struct(refreshed_event.service, Service)
+      assert is_struct(refreshed_event.service, Ash.NotLoaded)
       assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
@@ -263,7 +263,7 @@ defmodule AshNeo4j.Service.Test do
       refute refreshed_event.service_id
       assert refreshed_event.resource_id == resource.id
       assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Resource)
+      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
@@ -285,10 +285,11 @@ defmodule AshNeo4j.Service.Test do
       refute updated_activate_event.event_id
       assert is_struct(updated_activate_event.previous_event, Event)
 
+      # the create event should not have a previous event
       {:ok, refreshed_create_event} = create_event |> Ash.reload()
       assert is_struct(refreshed_create_event, Event)
       refute refreshed_create_event.event_id
-      assert is_struct(refreshed_create_event.previous_event, Ash.NotLoaded)
+      refute refreshed_create_event.previous_event
 
       assert Neo4jHelper.nodes_relate_how?(
                :Event,

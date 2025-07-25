@@ -50,4 +50,8 @@ defmodule AshNeo4j.Test.Resource.Event do
     belongs_to :service, AshNeo4j.Test.Resource.Service, public?: true
     belongs_to :resource, AshNeo4j.Test.Resource.Resource, public?: true
   end
+
+  preparations do
+    prepare build(load: [:previous_event])
+  end
 end
