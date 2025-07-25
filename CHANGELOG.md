@@ -111,3 +111,6 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Maintenance
 
 * fixed nested calculations with references are nil
+* fixed cypher error when filtering on atom type
+* fixed Ash.Error.Unknwon when a delete is guarded
+* fixed Ash.Error.Unknown invalid filter statement provided
