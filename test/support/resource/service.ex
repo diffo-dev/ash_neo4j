@@ -79,7 +79,7 @@ defmodule AshNeo4j.Test.Resource.Service do
 
   preparations do
     prepare build(
-              load: [:href],
+              load: [:href, :specification, :services, :resources, :event],
               sort: [id: :asc]
             )
   end
