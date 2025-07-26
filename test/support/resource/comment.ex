@@ -31,4 +31,9 @@ defmodule AshNeo4j.Test.Resource.Comment do
   relationships do
     belongs_to :post, AshNeo4j.Test.Resource.Post, public?: true
   end
+
+  preparations do
+    prepare build(sort: [title: :asc])
+  end
+
 end
