@@ -35,5 +35,4 @@ defmodule AshNeo4j.Test.Resource.Comment do
   preparations do
     prepare build(sort: [title: :asc])
   end
-
 end

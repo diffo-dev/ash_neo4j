@@ -145,18 +145,16 @@ defmodule AshNeo4j.Blog.Test do
       assert comment.post.title == "post1"
     end
 
-    @tag debug: true
     test "posts have sorted comments" do
       create_posts_with_comments(1, 3)
+
       results =
-        Post
-        |> Ash.Query.for_read(:read)
-        |> Ash.read!() |> IO.inspect()
+        Post |> Ash.Query.for_read(:read) |> Ash.read!()
 
       assert length(results) == 1
       post = hd(results)
       assert length(post.comments) == 3
-      titles = Enum.into(post.comments, [], &Map.get(&1, :title)) |> IO.inspect(label: :titles)
+      titles = Enum.into(post.comments, [], &Map.get(&1, :title))
       # were the titles sorted?
       assert Enum.sort(titles) == titles
     end
@@ -457,6 +455,7 @@ defmodule AshNeo4j.Blog.Test do
       assert related_post.score == 1
     end
 
+    @tag debug: true
     test "post and comment nodes can be related and unrelated using ash update" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()

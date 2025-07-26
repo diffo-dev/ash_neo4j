@@ -8,13 +8,12 @@ defmodule AshNeo4j.Test.Resource.Event do
     label :Event
 
     relate [
-      {:previous_event, :AFTER, :outgoing},
       {:service, :FIRED, :incoming},
       {:resource, :FIRED, :incoming}
     ]
 
     translate id: :uuid
-    skip([:service_id, :resource_id, :event_id])
+    skip [:service_id, :resource_id]
   end
 
   actions do
@@ -31,9 +30,7 @@ defmodule AshNeo4j.Test.Resource.Event do
 
     update :update do
       primary? true
-
-      argument :previous_event, :uuid
-      change manage_relationship(:previous_event, :previous_event, type: :append_and_remove)
+      accept [:type]
     end
   end
 
@@ -42,16 +39,16 @@ defmodule AshNeo4j.Test.Resource.Event do
     attribute :type, :atom, public?: true
     attribute :service_id, :uuid
     attribute :resource_id, :uuid
-    attribute :event_id, :uuid, public?: true
+    create_timestamp :inserted_at
+    update_timestamp :updated_at
   end
 
   relationships do
-    has_one :previous_event, AshNeo4j.Test.Resource.Event, public?: true
     belongs_to :service, AshNeo4j.Test.Resource.Service, public?: true
     belongs_to :resource, AshNeo4j.Test.Resource.Resource, public?: true
   end
 
   preparations do
-    prepare build(load: [:previous_event])
+    prepare build(sort: [inserted_at: :desc])
   end
 end

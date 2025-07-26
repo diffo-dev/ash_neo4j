@@ -75,6 +75,20 @@ defmodule AshNeo4j.Service.Test do
       assert resource.service_id == service.id
     end
 
+    test "service can be created with fired events using ash" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+
+      {:ok, event} = Event |> Ash.create(%{type: :create})
+
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id, fire_event: event.id})
+
+      assert length(service.events) == 1
+      fired_event = hd(service.events)
+      assert is_struct(fired_event, Event)
+      assert DateTime.compare(fired_event.inserted_at, event.inserted_at) == :eq
+      assert DateTime.after?(fired_event.updated_at, event.updated_at)
+    end
+
     test "find a service by specification id, checking resource enrichment" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service1 = Service |> Ash.create!(%{name: "broadband_0001", specified_by: broadband_v1.id})
@@ -109,18 +123,26 @@ defmodule AshNeo4j.Service.Test do
   end
 
   describe "ash update action tests" do
-    test "resource node can be created and related to a specification using ash create" do
-      esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
-      resource = Resource |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id})
-
-      assert resource.specification.id == esim_v1.id
+    test "service attributes can be updated using ash" do
+      broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+      updated_service = service |> Ash.Changeset.for_update(:update, %{name: "my broadband"}) |> Ash.update!()
+      assert updated_service.name == "my broadband"
     end
 
-    test "service node can be created and related to a specification using ash create" do
+    test "service events can be fired using ash" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
 
-      assert service.specification.id == broadband_v1.id
+      {:ok, event} = Event |> Ash.create(%{type: :create})
+
+      {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
+
+      assert length(updated_service.events) == 1
+      fired_event = hd(updated_service.events)
+      assert is_struct(fired_event, Event)
+      assert DateTime.compare(fired_event.inserted_at, event.inserted_at) == :eq
+      assert DateTime.after?(fired_event.updated_at, event.updated_at)
     end
 
     test "service-service-resource-resource relationships using ash" do
@@ -229,8 +251,10 @@ defmodule AshNeo4j.Service.Test do
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
       assert is_struct(updated_service, Service)
-      assert updated_service.event.id == event.id
-      assert is_struct(updated_service.event, Event)
+      assert updated_service.events
+      fired_event = hd(updated_service.events)
+      assert is_struct(fired_event, Event)
+      assert fired_event.id == event.id
 
       {:ok, refreshed_event} = event |> Ash.reload()
       assert is_struct(refreshed_event, Event)
@@ -255,8 +279,10 @@ defmodule AshNeo4j.Service.Test do
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
       assert is_struct(updated_resource, Resource)
-      assert updated_resource.event.id == event.id
-      assert is_struct(updated_resource.event, Event)
+      assert updated_resource.events
+      fired_event = hd(updated_resource.events)
+      assert is_struct(fired_event, Event)
+      assert fired_event.id == event.id
 
       {:ok, refreshed_event} = event |> Ash.reload()
       assert is_struct(refreshed_event, Event)
@@ -271,32 +297,6 @@ defmodule AshNeo4j.Service.Test do
                :Event,
                %{type: :create},
                :FIRED,
-               :outgoing
-             )
-    end
-
-    test "(Event) -[AFTER]-> (Event)" do
-      {:ok, create_event} = Event |> Ash.create(%{type: :create})
-      refute create_event.event_id
-      assert is_struct(create_event.previous_event, Ash.NotLoaded)
-      {:ok, activate_event} = Event |> Ash.create(%{type: :activate})
-      {:ok, updated_activate_event} = activate_event |> Ash.update(%{previous_event: create_event.id})
-      assert is_struct(updated_activate_event, Event)
-      refute updated_activate_event.event_id
-      assert is_struct(updated_activate_event.previous_event, Event)
-
-      # the create event should not have a previous event
-      {:ok, refreshed_create_event} = create_event |> Ash.reload()
-      assert is_struct(refreshed_create_event, Event)
-      refute refreshed_create_event.event_id
-      refute refreshed_create_event.previous_event
-
-      assert Neo4jHelper.nodes_relate_how?(
-               :Event,
-               %{type: :activate},
-               :Event,
-               %{type: :create},
-               :AFTER,
                :outgoing
              )
     end

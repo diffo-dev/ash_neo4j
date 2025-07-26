@@ -12,7 +12,7 @@ defmodule AshNeo4j.Test.Resource.Service do
       {:parent_service, :MANAGES, :incoming},
       {:services, :MANAGES, :outgoing},
       {:resources, :USES, :outgoing},
-      {:event, :FIRED, :outgoing}
+      {:events, :FIRED, :outgoing}
     ]
 
     skip([:service_id, :parent_service_id])
@@ -30,12 +30,19 @@ defmodule AshNeo4j.Test.Resource.Service do
       primary? true
       accept [:name]
       argument :specified_by, :uuid
+      argument :manage_services, {:array, :uuid}
+      argument :use_resources, {:array, :uuid}
+      argument :fire_event, :uuid
 
       change manage_relationship(:specified_by, :specification, type: :append_and_remove)
+      change manage_relationship(:manage_services, :services, type: :append_and_remove)
+      change manage_relationship(:use_resources, :resources, type: :append_and_remove)
+      change manage_relationship(:fire_event, :events, type: :append_and_remove)
     end
 
     update :update do
       primary? true
+      accept [:name]
       require_atomic? false
       argument :manage_services, {:array, :uuid}
       argument :use_resources, {:array, :uuid}
@@ -43,7 +50,7 @@ defmodule AshNeo4j.Test.Resource.Service do
 
       change manage_relationship(:manage_services, :services, type: :append_and_remove)
       change manage_relationship(:use_resources, :resources, type: :append_and_remove)
-      change manage_relationship(:fire_event, :event, type: :append_and_remove)
+      change manage_relationship(:fire_event, :events, type: :append_and_remove)
     end
   end
 
@@ -60,7 +67,7 @@ defmodule AshNeo4j.Test.Resource.Service do
     belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
-    has_one :event, AshNeo4j.Test.Resource.Event
+    has_many :events, AshNeo4j.Test.Resource.Event
   end
 
   calculations do
@@ -79,7 +86,7 @@ defmodule AshNeo4j.Test.Resource.Service do
 
   preparations do
     prepare build(
-              load: [:href, :specification, :services, :resources, :event],
+              load: [:href, :specification, :services, :resources],
               sort: [id: :asc]
             )
   end

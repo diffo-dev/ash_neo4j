@@ -240,7 +240,116 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    result = update_from_changeset(nil, resource, changeset)
+    dest_id = id_properties(resource, changeset.data) |> IO.inspect(label: :dest_id)
+    dest_label = Info.label(resource)
+
+    update_properties = properties(resource, changeset.attributes) |> IO.inspect(label: :update_properties)
+
+    remove_properties = remove_properties(resource, changeset.attributes)
+
+    property_update_result =
+      if !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) do
+        # update properties
+        case dest_label |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
+          {:ok, %Boltx.Response{results: []}} ->
+            {:error, "no result"}
+
+          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+            node = Map.get(node_map, "n")
+            {:ok, convert_node_to_resource(resource, node)}
+
+          {:error, error} ->
+            {:error, error}
+        end
+      end
+
+    relationship_update_result =
+      if accessing_from = Map.get(changeset.context, :accessing_from) do
+        if Map.get(accessing_from, :unrelating?) do
+          IO.inspect(changeset, label: :changeset)
+          # unrelate
+          # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
+          # example changeset.attributes %{post_id: nil}
+          # note changeset.data has the current post_id
+          source_resource = Map.get(accessing_from, :source) |> IO.inspect(label: :source_resource)
+          source_label = Info.label(source_resource)
+          source_relationship_name = Map.get(accessing_from, :name) |> IO.inspect(label: :source_relationship_name)
+
+          node_relationship =
+            Info.node_relationship(source_resource, source_relationship_name) |> IO.inspect(label: :node_relationship)
+
+          source_id =
+            relationship_properties(resource, source_resource, changeset.data) |> IO.inspect(label: :source_id)
+
+          case map_size(source_id) do
+            0 ->
+              {:error, "couldn't unrelate nodes"}
+            _ ->
+              {_relationship_name, edge_label, edge_direction} = node_relationship
+
+              case Neo4jHelper.unrelate_nodes(
+                     source_label,
+                     source_id,
+                     dest_label,
+                     dest_id,
+                     edge_label,
+                     edge_direction
+                   ) do
+                {:ok, %Boltx.Response{results: []}} ->
+                  {:error, "no result"}
+
+                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                  node = Map.get(node_map, "d")
+                  {:ok, convert_node_to_resource(resource, node)}
+
+                {:error, error} ->
+                  {:error, error}
+              end
+          end
+        else
+          # relate
+          # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
+          source_resource = Map.get(accessing_from, :source) |> IO.inspect(label: :source_resource)
+          source_label = Info.label(source_resource)
+          source_relationship_name = Map.get(accessing_from, :name) |> IO.inspect(label: :source_relationship_name)
+
+          node_relationship =
+            Info.node_relationship(source_resource, source_relationship_name) |> IO.inspect(label: :node_relationship)
+
+          source_id =
+            relationship_properties(resource, source_resource, changeset.attributes) |> IO.inspect(label: :source_id)
+
+          case map_size(source_id) do
+            0 ->
+              {:error, "couldn't relate nodes"}
+            _ ->
+              {_relationship_name, edge_label, edge_direction} = node_relationship
+
+              case Neo4jHelper.relate_nodes(
+                     source_label,
+                     source_id,
+                     dest_label,
+                     dest_id,
+                     edge_label,
+                     edge_direction
+                   ) do
+                {:ok, %Boltx.Response{results: []}} ->
+                  {:error, "no result"}
+
+                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                  node = Map.get(node_map, "d")
+                  {:ok, convert_node_to_resource(resource, node)}
+
+                {:error, error} ->
+                  {:error, error}
+              end
+
+
+          end
+        end
+      end
+
+    result = relationship_update_result || property_update_result
 
     Logger.debug("""
     AshNeo4j.DataLayer: update result #{inspect(result)}
@@ -612,75 +721,34 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp update_from_changeset(_records, dest_resource, changeset)
-       when is_atom(dest_resource) and is_struct(changeset, Ash.Changeset) do
-    dest_id = id_properties(dest_resource, changeset.data)
-    update_properties = properties(dest_resource, changeset.attributes)
-    remove_properties = remove_properties(dest_resource, changeset.attributes)
-
-    cond do
-      accessing_from = Map.get(changeset.context, :accessing_from) ->
-        # update relationship
-
-        # relate nodes, for example Comment resource, changeset.attributes: %{post_id: "5d5fcf34-f6cc-461b-9867-5da7b6f6ae44"}
-        # where changeset.context: %{accessing_from: %{name: :comments, source: AshNeo4j.Test.Resource.Post}}
-        dest_label = Info.label(dest_resource)
-        source_resource = Map.get(accessing_from, :source)
-        source_label = Info.label(source_resource)
-        source_attribute_name = Map.get(accessing_from, :name)
-        dest_attribute_name = hd(Map.keys(changeset.attributes))
-        source_node_property_name = Info.source_node_property_name(source_resource, dest_resource, dest_attribute_name)
-        node_relationship = Info.node_relationship(source_resource, source_attribute_name)
-
-        case node_relationship do
-          nil ->
-            {:error, "node relationship interdeterminate"}
-
-          {_relationship_name, edge_label, edge_direction} ->
-            if Map.get(accessing_from, :unrelating?) do
-              # unrelate using source attribute in changeset.data
-              source_id = %{source_node_property_name => Map.get(changeset.data, dest_attribute_name)}
-
-              case Neo4jHelper.unrelate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
-                {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                  node = Map.get(node_map, "d")
-                  {:ok, convert_node_to_resource(dest_resource, node)}
-
-                {:error, error} ->
-                  {:error, error}
-              end
-            else
-              # relate using source attribute value in changeset.attribute
-              source_id = %{source_node_property_name => Map.get(changeset.attributes, dest_attribute_name)}
-
-              case Neo4jHelper.relate_nodes(source_label, source_id, dest_label, dest_id, edge_label, edge_direction) do
-                {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                  node = Map.get(node_map, "d")
-                  {:ok, convert_node_to_resource(dest_resource, node)}
-
-                {:error, error} ->
-                  {:error, error}
-              end
-            end
-        end
-
-      !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) ->
-        # update properties
-        case Info.label(dest_resource) |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
-          {:ok, %Boltx.Response{results: [node_map | _]}} ->
-            node = Map.get(node_map, "n")
-            {:ok, convert_node_to_resource(dest_resource, node)}
-
-          {:error, error} ->
-            {:error, error}
-        end
-    end
-  end
-
   defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
     primary_keys = Ash.Resource.Info.primary_key(resource)
     translation = Info.translation(resource)
     Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translation, key, key), Map.get(map, key)} end)
+  end
+
+  defp relationship_properties(source_resource, dest_resource, source_map)
+       when is_atom(source_resource) and is_atom(dest_resource) and is_map(source_map) do
+    IO.inspect({source_resource, dest_resource}, label: :source_and_dest_resource)
+
+    Info.relationship_attributes(source_resource)
+    |> Enum.reduce(
+      %{},
+      fn {key, _relationship_name}, acc ->
+        if value = Map.get(source_map, key) do
+          IO.inspect({key, value}, label: :key_value)
+
+          if source_property_name = Info.source_node_property_name(dest_resource, source_resource, key) do
+            Map.put(acc, source_property_name, value)
+          else
+            acc
+          end
+        else
+          acc
+        end
+      end
+    )
+    |> IO.inspect(label: :relationship_properties)
   end
 
   defp properties(resource, map) when is_atom(resource) and is_map(map) do
