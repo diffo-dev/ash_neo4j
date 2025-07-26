@@ -325,33 +325,7 @@ defmodule AshNeo4j.DataLayer do
   defp filter_matches(records, filter, domain) do
     # IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
-    deduplicate(filter.resource, records)
-  end
-
-  # deduplicates records by primary key
-  defp deduplicate(resource, records) when is_atom(resource) and is_list(records) do
-    if length(records) > 1 do
-      # IO.inspect(records, label: "AshNeo4j.DataLayer.deduplicate records")
-      # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate keys")
-      primary_keys = Ash.Resource.Info.primary_key(resource)
-
-      case length(primary_keys) do
-        1 ->
-          # primary_key = List.first(primary_keys)
-          Enum.into(records, %{}, fn record ->
-            composite_key_value = Enum.map_join(primary_keys, "_", fn primary_key -> Map.get(record, primary_key) end)
-            {composite_key_value, record}
-          end)
-          |> Map.values()
-
-        # |> IO.inspect(label: "AshNeo4j.DataLayer.deduplicate result")
-        _ ->
-          # TODO handle composite primary key
-          records
-      end
-    else
-      records
-    end
+    records
   end
 
   # consolidates list of groups in row form [ %{s, r, d} ] to values in form [{s, [{r, d}]}]
