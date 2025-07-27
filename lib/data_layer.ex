@@ -552,11 +552,10 @@ defmodule AshNeo4j.DataLayer do
   defp enrichments(resource, acc, {edge, dest_node})
        when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
     # IO.inspect(resource, label: :enrichment_resource)
-    # IO.inspect(edge, label: :enrichment_edge)
-    # IO.inspect(dest_node, label: :enrichment_dest_node)
     dest_label = String.to_atom(List.first(dest_node.labels))
-    relationship_label = String.to_atom(edge.type)
-    relationship = Info.relationship(resource, relationship_label, dest_label)
+    edge_label = String.to_atom(edge.type)
+    edge_direction = edge_direction(edge, dest_node)
+    relationship = Info.relationship(resource, edge_label, edge_direction, dest_label)
 
     if relationship != nil do
       # IO.inspect(relationship, label: :enrichment_relationship)
@@ -614,6 +613,17 @@ defmodule AshNeo4j.DataLayer do
     end
 
     # |> IO.inspect(label: :enrichments)
+  end
+
+  defp edge_direction(edge, dest_node) when is_map(edge) and is_map(dest_node) do
+    cond do
+      dest_node.id == edge.start ->
+        :incoming
+      dest_node.id == edge.end ->
+        :outgoing
+      true ->
+        nil
+    end
   end
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])

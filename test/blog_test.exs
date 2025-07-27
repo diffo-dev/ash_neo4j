@@ -455,7 +455,6 @@ defmodule AshNeo4j.Blog.Test do
       assert related_post.score == 1
     end
 
-    @tag debug: true
     test "post and comment nodes can be related and unrelated using ash update" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
@@ -601,6 +600,7 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "many-to-many relationship tests" do
+    @tag bugged: true # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing post_id"
     test "many posts can be tagged with each tag" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})

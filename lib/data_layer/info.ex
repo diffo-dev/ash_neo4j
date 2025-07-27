@@ -65,27 +65,27 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns a matching Ash.Resource.Info relationship given relationship and destination node labels
+  Returns a matching Ash.Resource.Info relationship given edge label, edge direction and destination node label
   """
-  @spec relationship(Ash.Resource.t(), atom(), atom()) :: struct() | nil
-  def relationship(resource, relationship_label, dest_label)
-      when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
+  @spec relationship(Ash.Resource.t(), atom(), atom(), atom()) :: struct() | nil
+  def relationship(resource, relationship_label, direction, dest_label)
+      when is_atom(resource) and is_atom(relationship_label) and is_atom(direction) and is_atom(dest_label) do
     relationships =
-      Enum.reduce(relate(resource), [], fn {relationship_name, edge_label, _edge_direction}, acc ->
+      Enum.reduce(relate(resource), [], fn {relationship_name, edge_label, edge_direction}, acc ->
         relationship = Ash.Resource.Info.relationship(resource, relationship_name)
         dest_resource = relationship.destination
         relationship_destination_label = __MODULE__.label(dest_resource)
 
-        if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
+        if relationship != nil and relationship_label == edge_label and direction == edge_direction and dest_label == relationship_destination_label do
           acc ++ [relationship]
         else
           acc
         end
       end)
 
-    case relationships do
-      [] -> nil
-      _ -> hd(relationships)
+    case length(relationships) do
+      1 -> hd(relationships)
+      _ -> nil
     end
   end
 
