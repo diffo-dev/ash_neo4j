@@ -64,7 +64,7 @@ defmodule AshNeo4j.Test.Resource.Service do
 
   relationships do
     belongs_to :specification, AshNeo4j.Test.Resource.Specification, public?: true
-    belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true, source_attribute: :parent_service_id
+    belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true, source_attribute: :service_id
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
     has_many :events, AshNeo4j.Test.Resource.Event

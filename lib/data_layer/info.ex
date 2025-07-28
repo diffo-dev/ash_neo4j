@@ -140,6 +140,19 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Converts attributes to node properties
+  """
+  @spec convert_to_properties(Ash.Resource.t(), map()) :: map()
+  def convert_to_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    translation = translation(resource)
+
+    Enum.reduce(attributes, %{}, fn {attribute_name, value}, acc ->
+      property_name = Keyword.get(translation, attribute_name, attribute_name)
+      Map.put(acc, property_name, value)
+    end)
+  end
+
+  @doc """
   Returns the list of node relationships which block resource deletion, given the source resource
   The node relationships are tuples of {edge_label, edge_direction, destination_label}
   These include explicit guard relationships.
@@ -171,7 +184,10 @@ defmodule AshNeo4j.DataLayer.Info do
     end)
   end
 
-  defp reverse(direction) when is_atom(direction) do
+  @doc """
+  Returns the reverse direction
+  """
+  def reverse(direction) when is_atom(direction) do
     case direction do
       :incoming -> :outgoing
       :outgoing -> :incoming

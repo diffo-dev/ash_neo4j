@@ -55,7 +55,7 @@ defmodule AshNeo4j.QueryHelper do
               node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
               relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
 
-              if (operator == "in" || operator == "=") && node_relationship != nil && relationship != nil &&
+              if (operator == "in" or operator == "=") and node_relationship != nil and relationship != nil and
                    to_string(relationship.source_attribute) == property_name do
                 [predicate | acc]
               else
@@ -93,7 +93,7 @@ defmodule AshNeo4j.QueryHelper do
               Cypher.node(:d, dest_label) <>
               " WHERE " <>
               Cypher.expression(:d, dest_property_name, operator, property_value) <>
-              "WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
+              " WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
 
           true ->
             Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")

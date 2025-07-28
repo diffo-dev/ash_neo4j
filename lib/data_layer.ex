@@ -240,8 +240,8 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    dest_id = id_properties(resource, changeset.data)
-    dest_label = Info.label(resource)
+    subject_id = id_properties(resource, changeset.data)
+    subject_label = Info.label(resource)
 
     update_properties = properties(resource, changeset.attributes)
 
@@ -250,9 +250,9 @@ defmodule AshNeo4j.DataLayer do
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) do
         # update properties
-        case dest_label |> Neo4jHelper.update_node(dest_id, update_properties, remove_properties) do
+        case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_properties) do
           {:ok, %Boltx.Response{results: []}} ->
-            {:error, "no result"}
+            {:error, "no result to update node"}
 
           {:ok, %Boltx.Response{results: [node_map | _]}} ->
             node = Map.get(node_map, "n")
@@ -265,41 +265,38 @@ defmodule AshNeo4j.DataLayer do
 
     relationship_update_result =
       if accessing_from = Map.get(changeset.context, :accessing_from) do
+        object_resource = Map.get(accessing_from, :source)
+        object_label = Info.label(object_resource)
+        object_relationship_name = Map.get(accessing_from, :name)
+        object_node_relationship = Info.node_relationship(object_resource, object_relationship_name)
+
         if Map.get(accessing_from, :unrelating?) do
           # unrelate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
           # example changeset.attributes %{post_id: nil}
           # note changeset.data has the current post_id
-          source_resource = Map.get(accessing_from, :source)
-          source_label = Info.label(source_resource)
-          source_relationship_name = Map.get(accessing_from, :name)
+          object_id = relationship_properties(resource, object_resource, changeset.data)
 
-          node_relationship =
-            Info.node_relationship(source_resource, source_relationship_name)
-
-          source_id =
-            relationship_properties(resource, source_resource, changeset.data)
-
-          case map_size(source_id) do
+          case map_size(object_id) do
             0 ->
               {:error, "couldn't unrelate nodes"}
 
             _ ->
-              {_relationship_name, edge_label, edge_direction} = node_relationship
+              {_relationship_name, edge_label, object_to_subject_direction} = object_node_relationship
 
               case Neo4jHelper.unrelate_nodes(
-                     source_label,
-                     source_id,
-                     dest_label,
-                     dest_id,
+                     subject_label,
+                     subject_id,
+                     object_label,
+                     object_id,
                      edge_label,
-                     edge_direction
+                     Info.reverse(object_to_subject_direction)
                    ) do
                 {:ok, %Boltx.Response{results: []}} ->
-                  {:error, "no result"}
+                  {:error, "no result to unrelate nodes"}
 
                 {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                  node = Map.get(node_map, "d")
+                  node = Map.get(node_map, "s")
                   {:ok, convert_node_to_resource(resource, node)}
 
                 {:error, error} ->
@@ -309,36 +306,28 @@ defmodule AshNeo4j.DataLayer do
         else
           # relate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
-          source_resource = Map.get(accessing_from, :source)
-          source_label = Info.label(source_resource)
-          source_relationship_name = Map.get(accessing_from, :name)
+          object_id = relationship_properties(resource, object_resource, changeset.attributes)
 
-          node_relationship =
-            Info.node_relationship(source_resource, source_relationship_name)
-
-          source_id =
-            relationship_properties(resource, source_resource, changeset.attributes)
-
-          case map_size(source_id) do
+          case map_size(object_id) do
             0 ->
               {:error, "couldn't relate nodes"}
 
             _ ->
-              {_relationship_name, edge_label, edge_direction} = node_relationship
+              {_relationship_name, edge_label, object_to_subject_direction} = object_node_relationship
 
               case Neo4jHelper.relate_nodes(
-                     source_label,
-                     source_id,
-                     dest_label,
-                     dest_id,
+                     subject_label,
+                     subject_id,
+                     object_label,
+                     object_id,
                      edge_label,
-                     edge_direction
+                     Info.reverse(object_to_subject_direction)
                    ) do
                 {:ok, %Boltx.Response{results: []}} ->
-                  {:error, "no result"}
+                  {:error, "no result to relate nodes"}
 
                 {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                  node = Map.get(node_map, "d")
+                  node = Map.get(node_map, "s")
                   {:ok, convert_node_to_resource(resource, node)}
 
                 {:error, error} ->
@@ -349,50 +338,46 @@ defmodule AshNeo4j.DataLayer do
       else
         if changeset.relationships do
           Enum.reduce_while(changeset.relationships, nil, fn {relationship_name, relationship_change}, _acc ->
-            node_relationship =
+            subject_node_relationship =
               Info.node_relationship(resource, relationship_name)
 
-            relationship =
+            subject_relationship =
               Ash.Resource.Info.relationship(resource, relationship_name)
 
-            dest_resource = relationship.destination
-            dest_attribute_name = relationship.destination_attribute
-            source_attribute_name = relationship.source_attribute
-            source_property_name = Info.convert_to_property_name(dest_resource, dest_attribute_name)
-            source_label = Info.label(resource)
-            dest_label = Info.label(dest_resource)
+            object_resource = subject_relationship.destination
+            object_label = Info.label(object_resource)
 
             {arguments, _} = hd(relationship_change)
 
             case arguments do
               [] ->
                 # unrelate
-                source_property_value =
-                  Map.get(changeset.data, source_attribute_name)
+                subject_source_attribute = subject_relationship.source_attribute
+                subject_destination_attribute = subject_relationship.destination_attribute
+                object_property_name = Info.convert_to_property_name(object_resource, subject_destination_attribute)
+                object_property_value = Map.get(changeset.data, subject_source_attribute)
+                object_id = %{object_property_name => object_property_value}
 
-                source_id = %{source_property_name => source_property_value}
-
-                case map_size(source_id) do
+                case map_size(object_id) do
                   0 ->
                     {:error, "couldn't unrelate nodes"}
 
                   _ ->
-                    {_relationship_name, edge_label, edge_direction} = node_relationship
+                    {_relationship_name, edge_label, subject_to_object_direction} = subject_node_relationship
 
-                    # we unrelate in the reverse direction
                     case Neo4jHelper.unrelate_nodes(
-                           dest_label,
-                           dest_id,
-                           source_label,
-                           source_id,
+                           subject_label,
+                           subject_id,
+                           object_label,
+                           object_id,
                            edge_label,
-                           edge_direction
+                           subject_to_object_direction
                          ) do
                       {:ok, %Boltx.Response{results: []}} ->
-                        {:halt, {:error, "no result"}}
+                        {:halt, {:error, "no result to unrelate nodes"}}
 
                       {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                        node = Map.get(node_map, "d")
+                        node = Map.get(node_map, "s")
                         {:cont, {:ok, convert_node_to_resource(resource, node)}}
 
                       {:error, error} ->
@@ -401,38 +386,45 @@ defmodule AshNeo4j.DataLayer do
                 end
 
               _ ->
-                # relate
-                source_property_value =
-                  Map.get(changeset.attributes, source_attribute_name)
+                # relate each argument
+                arg_relate_result =
+                  Enum.reduce_while(arguments, nil, fn argument, _acc ->
+                    object_id = Info.convert_to_properties(object_resource, argument)
 
-                source_id = %{source_property_name => source_property_value}
+                    case map_size(object_id) do
+                      0 ->
+                        {:halt, {:error, "couldn't relate nodes using argument"}}
 
-                case map_size(source_id) do
-                  0 ->
-                    {:error, "couldn't relate nodes"}
+                      _ ->
+                        {_relationship_name, edge_label, subject_to_object_edge_direction} = subject_node_relationship
 
-                  _ ->
-                    {_relationship_name, edge_label, edge_direction} = node_relationship
+                        case Neo4jHelper.relate_nodes(
+                               subject_label,
+                               subject_id,
+                               object_label,
+                               object_id,
+                               edge_label,
+                               subject_to_object_edge_direction
+                             ) do
+                          {:ok, %Boltx.Response{results: []}} ->
+                            {:halt, {:error, "no result to relate nodes"}}
 
-                    # we relate in the reverse direction
-                    case Neo4jHelper.relate_nodes(
-                           dest_label,
-                           dest_id,
-                           source_label,
-                           source_id,
-                           edge_label,
-                           edge_direction
-                         ) do
-                      {:ok, %Boltx.Response{results: []}} ->
-                        {:halt, {:error, "no result"}}
+                          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                            node = Map.get(node_map, "s")
+                            {:cont, {:ok, convert_node_to_resource(resource, node)}}
 
-                      {:ok, %Boltx.Response{results: [node_map | _]}} ->
-                        node = Map.get(node_map, "d")
-                        {:cont, {:ok, convert_node_to_resource(resource, node)}}
-
-                      {:error, error} ->
-                        {:halt, {:error, error}}
+                          {:error, error} ->
+                            {:halt, {:error, error}}
+                        end
                     end
+                  end)
+
+                case arg_relate_result do
+                  {:error, _} ->
+                    {:halt, arg_relate_result}
+
+                  {:ok, _} ->
+                    {:cont, arg_relate_result}
                 end
             end
           end)

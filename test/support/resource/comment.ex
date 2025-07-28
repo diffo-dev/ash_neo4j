@@ -29,7 +29,7 @@ defmodule AshNeo4j.Test.Resource.Comment do
   end
 
   relationships do
-    belongs_to :post, AshNeo4j.Test.Resource.Post, public?: true
+    belongs_to :post, AshNeo4j.Test.Resource.Post, destination_attribute: :id, public?: true
   end
 
   preparations do

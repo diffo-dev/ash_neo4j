@@ -70,7 +70,7 @@ defmodule AshNeo4j.Test.Resource.Post do
 
   relationships do
     has_many :comments, AshNeo4j.Test.Resource.Comment, public?: true
-    has_many :tags, AshNeo4j.Test.Resource.Tag, public?: true
+    has_many :tags, AshNeo4j.Test.Resource.Tag, destination_attribute: :post_id, source_attribute: :id, public?: true
     belongs_to :author, AshNeo4j.Test.Resource.Author, public?: true, allow_nil?: false
   end
 

@@ -143,8 +143,6 @@ defmodule AshNeo4j.Service.Test do
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
     end
 
-    # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing service_id"
-    @tag bugged: true
     test "service-service-resource-resource relationships using ash" do
       {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
