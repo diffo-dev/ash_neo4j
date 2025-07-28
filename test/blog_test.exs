@@ -145,18 +145,16 @@ defmodule AshNeo4j.Blog.Test do
       assert comment.post.title == "post1"
     end
 
-    @tag debug: true
     test "posts have sorted comments" do
       create_posts_with_comments(1, 3)
+
       results =
-        Post
-        |> Ash.Query.for_read(:read)
-        |> Ash.read!() |> IO.inspect()
+        Post |> Ash.Query.for_read(:read) |> Ash.read!()
 
       assert length(results) == 1
       post = hd(results)
       assert length(post.comments) == 3
-      titles = Enum.into(post.comments, [], &Map.get(&1, :title)) |> IO.inspect(label: :titles)
+      titles = Enum.into(post.comments, [], &Map.get(&1, :title))
       # were the titles sorted?
       assert Enum.sort(titles) == titles
     end
@@ -455,6 +453,24 @@ defmodule AshNeo4j.Blog.Test do
       assert length(related_post.comments) == 2
       # the post should also have the updated score
       assert related_post.score == 1
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Post,
+               %{title: "post7"},
+               :Comment,
+               %{title: "comment6"},
+               :BELONGS_TO,
+               :incoming
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Post,
+               %{title: "post7"},
+               :Comment,
+               %{title: "comment7"},
+               :BELONGS_TO,
+               :incoming
+             )
     end
 
     test "post and comment nodes can be related and unrelated using ash update" do
@@ -602,6 +618,8 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "many-to-many relationship tests" do
+    # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing post_id"
+    @tag bugged: true
     test "many posts can be tagged with each tag" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})

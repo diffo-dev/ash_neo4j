@@ -21,7 +21,6 @@ defmodule AshNeo4j.DataLayer.Cast do
 
         value
       else
-        # IO.inspect(attribute.type, label: :cast_attribute_type)
         case attribute.type do
           Ash.Type.Atom ->
             cast_atom(value)
@@ -109,8 +108,6 @@ defmodule AshNeo4j.DataLayer.Cast do
         end
       end
     end
-
-    # |> IO.inspect(label: "cast result")
   end
 
   defp cast_atom(nil) when is_nil(nil) do
@@ -124,9 +121,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   defp cast_function(value) when is_binary(value) do
     [module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
     module_function_splits = String.split(module_function, ".")
-    # |> IO.inspect(label: :function)
     function = List.last(module_function_splits)
-    # |> IO.inspect(label: :module)
     module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse())
     Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
   end
@@ -286,7 +281,6 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast(map) when is_map(map) do
-    IO.inspect(map, label: :cast_map)
     cast_map(map)
   end
 

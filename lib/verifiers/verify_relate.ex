@@ -4,7 +4,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @regex ~r/^[A-Z]*_?[A-Z]*$/
+  @regex ~r/^[A-Z]+(_[A-Z]+)*$/
 
   @impl true
   def verify(dsl) do

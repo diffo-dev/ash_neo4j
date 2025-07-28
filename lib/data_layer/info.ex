@@ -65,27 +65,28 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns a matching Ash.Resource.Info relationship given relationship and destination node labels
+  Returns a matching Ash.Resource.Info relationship given edge label, edge direction and destination node label
   """
-  @spec relationship(Ash.Resource.t(), atom(), atom()) :: struct() | nil
-  def relationship(resource, relationship_label, dest_label)
-      when is_atom(resource) and is_atom(relationship_label) and is_atom(dest_label) do
+  @spec relationship(Ash.Resource.t(), atom(), atom(), atom()) :: struct() | nil
+  def relationship(resource, relationship_label, direction, dest_label)
+      when is_atom(resource) and is_atom(relationship_label) and is_atom(direction) and is_atom(dest_label) do
     relationships =
-      Enum.reduce(relate(resource), [], fn {relationship_name, edge_label, _edge_direction}, acc ->
+      Enum.reduce(relate(resource), [], fn {relationship_name, edge_label, edge_direction}, acc ->
         relationship = Ash.Resource.Info.relationship(resource, relationship_name)
         dest_resource = relationship.destination
         relationship_destination_label = __MODULE__.label(dest_resource)
 
-        if relationship != nil && relationship_label == edge_label && dest_label == relationship_destination_label do
+        if relationship != nil and relationship_label == edge_label and direction == edge_direction and
+             dest_label == relationship_destination_label do
           acc ++ [relationship]
         else
           acc
         end
       end)
 
-    case relationships do
-      [] -> nil
-      _ -> hd(relationships)
+    case length(relationships) do
+      1 -> hd(relationships)
+      _ -> nil
     end
   end
 
@@ -139,6 +140,19 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Converts attributes to node properties
+  """
+  @spec convert_to_properties(Ash.Resource.t(), map()) :: map()
+  def convert_to_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    translation = translation(resource)
+
+    Enum.reduce(attributes, %{}, fn {attribute_name, value}, acc ->
+      property_name = Keyword.get(translation, attribute_name, attribute_name)
+      Map.put(acc, property_name, value)
+    end)
+  end
+
+  @doc """
   Returns the list of node relationships which block resource deletion, given the source resource
   The node relationships are tuples of {edge_label, edge_direction, destination_label}
   These include explicit guard relationships.
@@ -168,11 +182,12 @@ defmodule AshNeo4j.DataLayer.Info do
         acc
       end
     end)
-
-    # |> IO.inspect(label: "preserve_node_relationship for resource #{resource}")
   end
 
-  defp reverse(direction) when is_atom(direction) do
+  @doc """
+  Returns the reverse direction
+  """
+  def reverse(direction) when is_atom(direction) do
     case direction do
       :incoming -> :outgoing
       :outgoing -> :incoming

@@ -31,6 +31,6 @@ defmodule AshNeo4j.Test.Resource.Tag do
   end
 
   relationships do
-    has_many :posts, AshNeo4j.Test.Resource.Post, public?: true
+    has_many :posts, AshNeo4j.Test.Resource.Post, destination_attribute: :tag_id, source_attribute: :id, public?: true
   end
 end

@@ -67,8 +67,6 @@ defmodule AshNeo4j.BoltxHelper do
     |> Map.put(:second, value.seconds)
     |> Map.reject(fn {_k, v} -> v == nil end)
     |> Duration.new!()
-
-    # |> IO.inspect(label: :to_elixir_duration_result)
   end
 
   def to_elixir_duration(value) when is_bitstring(value) do
@@ -113,7 +111,6 @@ defmodule AshNeo4j.BoltxHelper do
       end
 
     Boltx.Types.Duration.create(months, days, seconds, nanoseconds)
-    # |> IO.inspect(label: :from_elixir_duration_result)
   end
 
   @doc """
