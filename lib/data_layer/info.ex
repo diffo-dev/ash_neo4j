@@ -76,7 +76,8 @@ defmodule AshNeo4j.DataLayer.Info do
         dest_resource = relationship.destination
         relationship_destination_label = __MODULE__.label(dest_resource)
 
-        if relationship != nil and relationship_label == edge_label and direction == edge_direction and dest_label == relationship_destination_label do
+        if relationship != nil and relationship_label == edge_label and direction == edge_direction and
+             dest_label == relationship_destination_label do
           acc ++ [relationship]
         else
           acc
@@ -168,8 +169,6 @@ defmodule AshNeo4j.DataLayer.Info do
         acc
       end
     end)
-
-    # |> IO.inspect(label: "preserve_node_relationship for resource #{resource}")
   end
 
   defp reverse(direction) when is_atom(direction) do

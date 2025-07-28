@@ -20,8 +20,6 @@ defmodule AshNeo4j.QueryHelper do
       |> skip(ash_query)
       |> limit(ash_query)
 
-    # |> IO.inspect(label: :query_nodes_cypher)
-
     case Cypher.run(cypher) do
       {:ok, %Boltx.Response{results: results}} ->
         {:ok, results}
@@ -29,13 +27,9 @@ defmodule AshNeo4j.QueryHelper do
       {:error, _} ->
         {:error, "Error running cypher #{cypher}"}
     end
-
-    # |> IO.inspect(label: "query_nodes results")
   end
 
   defp cypher(ash_query) when is_struct(ash_query) do
-    # IO.inspect(ash_query, label: :cypher_ash_query)
-
     label = Info.label(ash_query.resource)
 
     if ash_query.filter == nil do

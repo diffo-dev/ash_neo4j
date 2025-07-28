@@ -67,8 +67,6 @@ defmodule AshNeo4j.Service.Test do
         Resource
         |> Ash.create!(%{name: "esim_0000", specified_by: esim_v1.id, used_by_service: service.id})
 
-      # |> IO.inspect(label: :resource)
-
       assert is_struct(resource.specification, Specification)
       assert is_struct(resource.service, Service)
       assert resource.specification_id == esim_v1.id
@@ -145,7 +143,8 @@ defmodule AshNeo4j.Service.Test do
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
     end
 
-    @tag bugged: true # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing service_id"
+    # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing service_id"
+    @tag bugged: true
     test "service-service-resource-resource relationships using ash" do
       {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
@@ -238,7 +237,7 @@ defmodule AshNeo4j.Service.Test do
     test "specification cannot be destroyed when used by a resource" do
       {:ok, resource_specification} = Specification |> Ash.create(%{name: "resource specification", type: :resource})
       {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
-      {:error, error} = resource_specification |> Ash.destroy() |> IO.inspect()
+      {:error, error} = resource_specification |> Ash.destroy()
       assert is_struct(error, Ash.Error.Invalid)
       :ok = resource |> Ash.destroy()
       :ok = resource_specification |> Ash.destroy()

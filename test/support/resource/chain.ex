@@ -28,8 +28,8 @@ defmodule AshNeo4j.Test.Resource.Chain do
       accept [:name]
       argument :head_id, :uuid
       argument :tail_id, :uuid
-      change manage_relationship :head_id, :head, type: :append_and_remove
-      change manage_relationship :tail_id, :tail, type: :append_and_remove
+      change manage_relationship(:head_id, :head, type: :append_and_remove)
+      change manage_relationship(:tail_id, :tail, type: :append_and_remove)
     end
 
     update :update do
@@ -37,8 +37,8 @@ defmodule AshNeo4j.Test.Resource.Chain do
       accept [:name]
       argument :head_id, :uuid
       argument :tail_id, :uuid
-      change manage_relationship :head_id, :head, type: :append_and_remove
-      change manage_relationship :tail_id, :tail, type: :append_and_remove
+      change manage_relationship(:head_id, :head, type: :append_and_remove)
+      change manage_relationship(:tail_id, :tail, type: :append_and_remove)
     end
   end
 
@@ -56,6 +56,6 @@ defmodule AshNeo4j.Test.Resource.Chain do
   end
 
   preparations do
-    prepare build sort: [inserted_at: :desc], load: [:head_id, :tail_id]
+    prepare build(sort: [name: :asc], load: [:head_id, :tail_id])
   end
 end

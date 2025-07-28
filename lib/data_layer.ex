@@ -240,10 +240,10 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    dest_id = id_properties(resource, changeset.data) |> IO.inspect(label: :dest_id)
+    dest_id = id_properties(resource, changeset.data)
     dest_label = Info.label(resource)
 
-    update_properties = properties(resource, changeset.attributes) |> IO.inspect(label: :update_properties)
+    update_properties = properties(resource, changeset.attributes)
 
     remove_properties = remove_properties(resource, changeset.attributes)
 
@@ -266,24 +266,24 @@ defmodule AshNeo4j.DataLayer do
     relationship_update_result =
       if accessing_from = Map.get(changeset.context, :accessing_from) do
         if Map.get(accessing_from, :unrelating?) do
-          IO.inspect(changeset, label: :changeset)
           # unrelate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
           # example changeset.attributes %{post_id: nil}
           # note changeset.data has the current post_id
-          source_resource = Map.get(accessing_from, :source) |> IO.inspect(label: :source_resource)
+          source_resource = Map.get(accessing_from, :source)
           source_label = Info.label(source_resource)
-          source_relationship_name = Map.get(accessing_from, :name) |> IO.inspect(label: :source_relationship_name)
+          source_relationship_name = Map.get(accessing_from, :name)
 
           node_relationship =
-            Info.node_relationship(source_resource, source_relationship_name) |> IO.inspect(label: :node_relationship)
+            Info.node_relationship(source_resource, source_relationship_name)
 
           source_id =
-            relationship_properties(resource, source_resource, changeset.data) |> IO.inspect(label: :source_id)
+            relationship_properties(resource, source_resource, changeset.data)
 
           case map_size(source_id) do
             0 ->
               {:error, "couldn't unrelate nodes"}
+
             _ ->
               {_relationship_name, edge_label, edge_direction} = node_relationship
 
@@ -309,19 +309,20 @@ defmodule AshNeo4j.DataLayer do
         else
           # relate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
-          source_resource = Map.get(accessing_from, :source) |> IO.inspect(label: :source_resource)
+          source_resource = Map.get(accessing_from, :source)
           source_label = Info.label(source_resource)
-          source_relationship_name = Map.get(accessing_from, :name) |> IO.inspect(label: :source_relationship_name)
+          source_relationship_name = Map.get(accessing_from, :name)
 
           node_relationship =
-            Info.node_relationship(source_resource, source_relationship_name) |> IO.inspect(label: :node_relationship)
+            Info.node_relationship(source_resource, source_relationship_name)
 
           source_id =
-            relationship_properties(resource, source_resource, changeset.attributes) |> IO.inspect(label: :source_id)
+            relationship_properties(resource, source_resource, changeset.attributes)
 
           case map_size(source_id) do
             0 ->
               {:error, "couldn't relate nodes"}
+
             _ ->
               {_relationship_name, edge_label, edge_direction} = node_relationship
 
@@ -343,9 +344,100 @@ defmodule AshNeo4j.DataLayer do
                 {:error, error} ->
                   {:error, error}
               end
-
-
           end
+        end
+      else
+        if changeset.relationships do
+          Enum.reduce_while(changeset.relationships, nil, fn {relationship_name, relationship_change}, _acc ->
+            node_relationship =
+              Info.node_relationship(resource, relationship_name)
+
+            relationship =
+              Ash.Resource.Info.relationship(resource, relationship_name)
+
+            dest_resource = relationship.destination
+            dest_attribute_name = relationship.destination_attribute
+            source_attribute_name = relationship.source_attribute
+            source_property_name = Info.convert_to_property_name(dest_resource, dest_attribute_name)
+            source_label = Info.label(resource)
+            dest_label = Info.label(dest_resource)
+
+            {arguments, _} = hd(relationship_change)
+
+            case arguments do
+              [] ->
+                # unrelate
+                source_property_value =
+                  Map.get(changeset.data, source_attribute_name)
+
+                source_id = %{source_property_name => source_property_value}
+
+                case map_size(source_id) do
+                  0 ->
+                    {:error, "couldn't unrelate nodes"}
+
+                  _ ->
+                    {_relationship_name, edge_label, edge_direction} = node_relationship
+
+                    # we unrelate in the reverse direction
+                    case Neo4jHelper.unrelate_nodes(
+                           dest_label,
+                           dest_id,
+                           source_label,
+                           source_id,
+                           edge_label,
+                           edge_direction
+                         ) do
+                      {:ok, %Boltx.Response{results: []}} ->
+                        {:halt, {:error, "no result"}}
+
+                      {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                        node = Map.get(node_map, "d")
+                        {:cont, {:ok, convert_node_to_resource(resource, node)}}
+
+                      {:error, error} ->
+                        {:halt, {:error, error}}
+                    end
+                end
+
+              _ ->
+                # relate
+                source_property_value =
+                  Map.get(changeset.attributes, source_attribute_name)
+
+                source_id = %{source_property_name => source_property_value}
+
+                case map_size(source_id) do
+                  0 ->
+                    {:error, "couldn't relate nodes"}
+
+                  _ ->
+                    {_relationship_name, edge_label, edge_direction} = node_relationship
+
+                    # we relate in the reverse direction
+                    case Neo4jHelper.relate_nodes(
+                           dest_label,
+                           dest_id,
+                           source_label,
+                           source_id,
+                           edge_label,
+                           edge_direction
+                         ) do
+                      {:ok, %Boltx.Response{results: []}} ->
+                        {:halt, {:error, "no result"}}
+
+                      {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                        node = Map.get(node_map, "d")
+                        {:cont, {:ok, convert_node_to_resource(resource, node)}}
+
+                      {:error, error} ->
+                        {:halt, {:error, error}}
+                    end
+                end
+            end
+          end)
+        else
+          {:error, "changeset not handled"}
         end
       end
 
@@ -432,7 +524,6 @@ defmodule AshNeo4j.DataLayer do
   defp filter_matches(records, nil, _domain), do: records
 
   defp filter_matches(records, filter, domain) do
-    # IO.inspect(filter, label: "AshNeo4j.DataLayer.filter_matches filter")
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     records
   end
@@ -491,36 +582,25 @@ defmodule AshNeo4j.DataLayer do
       end
     )
     |> Enum.reverse()
-
-    # |> IO.inspect(label: :consolidate_groups_result)
   end
 
   # converts nodes to resources, where the input is a list of related node groups
   # the output of each group is a single resource, enriched with attributes linking related nodes
   defp convert_groups_to_resources(query, groups) when is_struct(query, Query) and is_list(groups) do
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources groups")
     consolidate_groups(groups)
     |> Stream.map(&convert_to_resource(query, &1))
-
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_groups_to_resources result")
   end
 
   defp convert_to_resource(query, consolidated_group)
        when is_struct(query, Query) and is_tuple(consolidated_group) do
-    # IO.inspect(consolidated_group, label: "AshNeo4j.DataLayer.convert_to_resource consolidated_group")
     source_node = elem(consolidated_group, 0)
     related = elem(consolidated_group, 1)
 
     enrichments =
       Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
-      # |> IO.inspect(label: :enrichments_pre_consolidation)
       |> consolidate_enrichments()
 
-    # |> IO.inspect(label: :enrichments)
-
     convert_node_to_resource(query.resource, source_node, enrichments)
-
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_to_resource result")
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -551,14 +631,12 @@ defmodule AshNeo4j.DataLayer do
 
   defp enrichments(resource, acc, {edge, dest_node})
        when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
-    # IO.inspect(resource, label: :enrichment_resource)
     dest_label = String.to_atom(List.first(dest_node.labels))
     edge_label = String.to_atom(edge.type)
     edge_direction = edge_direction(edge, dest_node)
     relationship = Info.relationship(resource, edge_label, edge_direction, dest_label)
 
     if relationship != nil do
-      # IO.inspect(relationship, label: :enrichment_relationship)
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
 
       reverse_relationship =
@@ -572,8 +650,6 @@ defmodule AshNeo4j.DataLayer do
 
       cond do
         relationship.cardinality == :one && relationship.type == :belongs_to ->
-          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
-
           destination_property =
             Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
@@ -584,9 +660,8 @@ defmodule AshNeo4j.DataLayer do
 
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
-          # dest_resource = convert_node_to_resource(relationship.destination, dest_node, [])
           source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
-          # |> IO.inspect(label: :enrichment_source_property)
+
           [
             # {reverse_relationship.name, dest_resource},
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
@@ -611,16 +686,16 @@ defmodule AshNeo4j.DataLayer do
 
       acc
     end
-
-    # |> IO.inspect(label: :enrichments)
   end
 
   defp edge_direction(edge, dest_node) when is_map(edge) and is_map(dest_node) do
     cond do
       dest_node.id == edge.start ->
         :incoming
+
       dest_node.id == edge.end ->
         :outgoing
+
       true ->
         nil
     end
@@ -628,8 +703,6 @@ defmodule AshNeo4j.DataLayer do
 
   defp convert_node_to_resource(resource, node, enrichments \\ [])
        when is_atom(resource) and is_map(node) and is_list(enrichments) do
-    # IO.inspect(node, label: "AshNeo4j.DataLayer.convert_node_to_resource node")
-
     enriched =
       Enum.into(enrichments, %{}, fn {field, value} ->
         {field, value}
@@ -644,8 +717,6 @@ defmodule AshNeo4j.DataLayer do
     struct!(resource, fields)
     |> Ash.Resource.set_metadata(%{node_id: node.id, data_layer: __MODULE__, labels: node.labels})
     |> Ash.Resource.set_meta(struct(Ecto.Schema.Metadata, state: :loaded))
-
-    # |> IO.inspect(label: "AshNeo4j.DataLayer.convert_node_to_resource result")
   end
 
   defp filter_stream(stream, _domain, nil), do: stream
@@ -707,7 +778,6 @@ defmodule AshNeo4j.DataLayer do
               length(consolidated_groups) == 1 ->
                 query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
                 resource = convert_to_resource(query, hd(consolidated_groups))
-                # |> IO.inspect(label: :enriched_resource)
                 {:ok, resource}
 
               true ->
@@ -739,15 +809,11 @@ defmodule AshNeo4j.DataLayer do
 
   defp relationship_properties(source_resource, dest_resource, source_map)
        when is_atom(source_resource) and is_atom(dest_resource) and is_map(source_map) do
-    IO.inspect({source_resource, dest_resource}, label: :source_and_dest_resource)
-
     Info.relationship_attributes(source_resource)
     |> Enum.reduce(
       %{},
       fn {key, _relationship_name}, acc ->
         if value = Map.get(source_map, key) do
-          IO.inspect({key, value}, label: :key_value)
-
           if source_property_name = Info.source_node_property_name(dest_resource, source_resource, key) do
             Map.put(acc, source_property_name, value)
           else
@@ -758,7 +824,6 @@ defmodule AshNeo4j.DataLayer do
         end
       end
     )
-    |> IO.inspect(label: :relationship_properties)
   end
 
   defp properties(resource, map) when is_atom(resource) and is_map(map) do
