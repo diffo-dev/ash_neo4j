@@ -398,7 +398,7 @@ defmodule AshNeo4j.DataLayer do
                       _ ->
                         {_relationship_name, edge_label, subject_to_object_edge_direction} = subject_node_relationship
 
-                        case Neo4jHelper.relate_nodes(
+                        case Neo4jHelper.relate_nodes_unrelating_destination(
                                subject_label,
                                subject_id,
                                object_label,

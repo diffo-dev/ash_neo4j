@@ -11,8 +11,7 @@ defmodule AshNeo4j.Test.Doc do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Actor)
-      Neo4jHelper.delete_nodes(:Movie)
+      Neo4jHelper.delete_all()
     end)
   end
 
