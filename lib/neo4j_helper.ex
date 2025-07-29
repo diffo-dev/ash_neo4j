@@ -251,7 +251,7 @@ defmodule AshNeo4j.Neo4jHelper do
              is_atom(edge_label) and is_atom(edge_direction) do
     ("MATCH " <>
        Cypher.node(:s, source_label, source_properties) <>
-       " WITH s OPTIONAL MATCH (s) " <>
+       " WITH s OPTIONAL MATCH (s)" <>
        Cypher.relationship(:r0, edge_label, edge_direction) <>
        Cypher.node(:d0, dest_label, %{}) <>
        " DELETE r0 WITH s MATCH " <>
@@ -291,7 +291,7 @@ defmodule AshNeo4j.Neo4jHelper do
        " WITH d OPTIONAL MATCH " <>
        Cypher.node(:s0, source_label, %{}) <>
        Cypher.relationship(:r0, edge_label, edge_direction) <>
-       " (d) DELETE r0 WITH d MATCH " <>
+       "(d) DELETE r0 WITH d MATCH " <>
        Cypher.node(:s, source_label, source_properties) <>
        " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d")
     |> Cypher.run()
