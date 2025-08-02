@@ -365,8 +365,6 @@ defmodule AshNeo4j.Test.Chain do
            )
   end
 
-  @tag bugged: true
-  # this doesn't work the new link doesn't replace the original link, rather chain2 and chain4 are both linked
   test "chain of 3 can have a link replaced via single update" do
     chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
     chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
@@ -375,6 +373,10 @@ defmodule AshNeo4j.Test.Chain do
     # chain4 replaces chain2
     _updated_chain4 =
       chain4 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
+
+    # note reload is needed
+    _reloaded_chain2 = chain2 |> Ash.reload!()
+    _reloaded_chain4 = chain4 |> Ash.reload!()
 
     refute Neo4jHelper.nodes_relate_how?(
              :Chain,
