@@ -112,5 +112,21 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 * fixed nested calculations with references are nil
 * fixed cypher error when filtering on atom type
-* fixed Ash.Error.Unknwon when a delete is guarded
+* fixed Ash.Error.Unknown when a delete is guarded
 * fixed Ash.Error.Unknown invalid filter statement provided
+
+## [v0.2.7](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.6...v0.2.7) (2025-08-03)
+
+### Features
+
+* relates node cypher avoids cartesian product warning
+
+### Maintenance
+
+* fixed Ash.Error.Unknown no result to unrelate nodes
+* fixed create or update belongs_to on same resoruce adds rather than replaces
+* fixed Ash.Error.Unknown no case clause matching on update
+* fixed guard edge label regex
+* fixed sorting not working
+* fixed nested calculations with references are nil
+
