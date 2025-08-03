@@ -190,7 +190,7 @@ defmodule AshNeo4j.Service.Test do
                %{name: "child_service"},
                :InternalResource,
                %{name: "parent_resource"},
-               :USES,
+               :CONFIGURES,
                :outgoing
              )
 
@@ -243,7 +243,7 @@ defmodule AshNeo4j.Service.Test do
   end
 
   describe "has one relationship tests" do
-    test "(InternalService) -[FIRED]-> (Event)" do
+    test "(InternalService) -[RAISED]-> (Event)" do
       {:ok, service_specification} = Specification |> Ash.create(%{name: "service specification"})
       {:ok, service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
@@ -266,7 +266,7 @@ defmodule AshNeo4j.Service.Test do
                %{name: "service"},
                :Event,
                %{type: :create},
-               :FIRED,
+               :RAISED,
                :outgoing
              )
     end

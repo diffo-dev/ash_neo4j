@@ -8,7 +8,7 @@ defmodule AshNeo4j.Test.Resource.Event do
     label :Event
 
     relate [
-      {:service, :FIRED, :incoming},
+      {:service, :RAISED, :incoming},
       {:resource, :FIRED, :incoming}
     ]
 
