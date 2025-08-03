@@ -56,12 +56,15 @@ defmodule AshNeo4j.DataLayer.Info do
   @spec node_relationship(Ash.Resource.t(), atom(), atom()) :: tuple() | nil
   def node_relationship(resource, edge_label, direction)
       when is_atom(resource) and is_atom(edge_label) and is_atom(direction) do
-    node_relationship = List.keyfind(relate(resource), edge_label, 1)
-
-    case node_relationship do
-      {_name, ^edge_label, ^direction} -> node_relationship
-      _ -> nil
-    end
+    Enum.find(
+      relate(resource),
+      fn related ->
+        case related do
+          {_, ^edge_label, ^direction} -> true
+          _ -> false
+        end
+      end
+    )
   end
 
   @doc """

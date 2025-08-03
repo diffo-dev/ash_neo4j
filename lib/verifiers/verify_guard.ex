@@ -4,7 +4,7 @@ defmodule AshNeo4j.Verifiers.VerifyGuard do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @edge_label_regex ~r/^[A-Z]*_?[A-Z]*$/
+  @edge_label_regex ~r/^[A-Z]+(_[A-Z]+)*$/
   @node_label_regex ~r/^[A-Z][a-zA-Z0-9]*$/
   @valid_edge_directions [:incoming, :outgoing, :any]
 

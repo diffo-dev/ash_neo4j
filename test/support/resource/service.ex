@@ -11,8 +11,8 @@ defmodule AshNeo4j.Test.Resource.Service do
       {:specification, :SPECIFIES, :incoming},
       {:parent_service, :MANAGES, :incoming},
       {:services, :MANAGES, :outgoing},
-      {:resources, :USES, :outgoing},
-      {:events, :FIRED, :outgoing}
+      {:resources, :CONFIGURES, :outgoing},
+      {:events, :RAISED, :outgoing}
     ]
 
     skip([:service_id, :parent_service_id])

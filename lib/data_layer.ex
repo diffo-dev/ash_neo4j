@@ -275,7 +275,8 @@ defmodule AshNeo4j.DataLayer do
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
           # example changeset.attributes %{post_id: nil}
           # note changeset.data has the current post_id
-          object_id = relationship_properties(resource, object_resource, changeset.data)
+          object_id =
+            relationship_properties(resource, object_resource, changeset.data, object_relationship_name)
 
           case map_size(object_id) do
             0 ->
@@ -306,7 +307,7 @@ defmodule AshNeo4j.DataLayer do
         else
           # relate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
-          object_id = relationship_properties(resource, object_resource, changeset.attributes)
+          object_id = relationship_properties(resource, object_resource, changeset.attributes, object_relationship_name)
 
           case map_size(object_id) do
             0 ->
@@ -799,23 +800,29 @@ defmodule AshNeo4j.DataLayer do
     Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translation, key, key), Map.get(map, key)} end)
   end
 
-  defp relationship_properties(source_resource, dest_resource, source_map)
-       when is_atom(source_resource) and is_atom(dest_resource) and is_map(source_map) do
-    Info.relationship_attributes(source_resource)
-    |> Enum.reduce(
-      %{},
-      fn {key, _relationship_name}, acc ->
-        if value = Map.get(source_map, key) do
-          if source_property_name = Info.source_node_property_name(dest_resource, source_resource, key) do
-            Map.put(acc, source_property_name, value)
-          else
-            acc
-          end
-        else
-          acc
-        end
+  defp relationship_properties(source_resource, dest_resource, source_map, dest_relationship_name)
+       when is_atom(source_resource) and is_atom(dest_resource) and is_map(source_map) and
+              is_atom(dest_relationship_name) do
+    # source_relationship_name
+    source_node_relationship = Info.reverse_node_relationship(dest_resource, dest_relationship_name)
+
+    if source_node_relationship != nil do
+      source_relationship_name = elem(source_node_relationship, 0)
+      source_relationship = Ash.Resource.Info.relationship(source_resource, source_relationship_name)
+      value = Map.get(source_map, source_relationship.source_attribute)
+
+      if value != nil do
+        dest_property_name =
+          Info.convert_to_property_name(dest_resource, source_relationship.destination_attribute)
+          |> String.to_atom()
+
+        %{dest_property_name => value}
+      else
+        %{}
       end
-    )
+    else
+      %{}
+    end
   end
 
   defp properties(resource, map) when is_atom(resource) and is_map(map) do
