@@ -53,8 +53,9 @@ defmodule AshNeo4j.DataLayer do
         required: false
       ],
       relate: [
-        type: {:list, {:tuple, [:atom, :atom, :atom]}},
-        doc: "Optional list of relationships, as tuples of {relationship_name, edge_label, edge_direction}",
+        type: {:list, {:tuple, [:atom, :atom, :atom, :atom]}},
+        doc:
+          "Optional list of relationships, as tuples of {relationship_name, edge_label, edge_direction, destination_label}",
         required: false
       ],
       guard: [
@@ -111,10 +112,12 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyIdTranslated,
       AshNeo4j.Verifiers.VerifyRelate,
       AshNeo4j.Verifiers.VerifyGuard,
-      AshNeo4j.Verifiers.VerifyPropertiesCamelCase
+      AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
+      AshNeo4j.Verifiers.VerifyEnrichable
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
+      AshNeo4j.Transformers.TransformDefaultRelate,
       AshNeo4j.Transformers.TransformAddTranslation,
       AshNeo4j.Transformers.TransformAddRelationshipAttributes
     ]
@@ -348,10 +351,11 @@ defmodule AshNeo4j.DataLayer do
             object_resource = subject_relationship.destination
             object_label = Info.label(object_resource)
 
-            {arguments, _} = hd(relationship_change)
+            {arguments, options} = hd(relationship_change)
+            type = Keyword.get(options, :type)
 
-            case arguments do
-              [] ->
+            cond do
+              arguments == [] or type == :remove ->
                 # unrelate
                 subject_source_attribute = subject_relationship.source_attribute
                 subject_destination_attribute = subject_relationship.destination_attribute
@@ -364,7 +368,8 @@ defmodule AshNeo4j.DataLayer do
                     {:error, "couldn't unrelate nodes"}
 
                   _ ->
-                    {_relationship_name, edge_label, subject_to_object_direction} = subject_node_relationship
+                    {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
+                      subject_node_relationship
 
                     case Neo4jHelper.unrelate_nodes(
                            subject_label,
@@ -386,7 +391,7 @@ defmodule AshNeo4j.DataLayer do
                     end
                 end
 
-              _ ->
+              true ->
                 # relate each argument
                 arg_relate_result =
                   Enum.reduce_while(arguments, nil, fn argument, _acc ->
@@ -397,7 +402,8 @@ defmodule AshNeo4j.DataLayer do
                         {:halt, {:error, "couldn't relate nodes using argument"}}
 
                       _ ->
-                        {_relationship_name, edge_label, subject_to_object_edge_direction} = subject_node_relationship
+                        {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
+                          subject_node_relationship
 
                         case Neo4jHelper.relate_nodes_unrelating_destination(
                                subject_label,
@@ -405,7 +411,7 @@ defmodule AshNeo4j.DataLayer do
                                object_label,
                                object_id,
                                edge_label,
-                               subject_to_object_edge_direction
+                               subject_to_object_direction
                              ) do
                           {:ok, %Boltx.Response{results: []}} ->
                             {:halt, {:error, "no result to relate nodes"}}
@@ -627,7 +633,9 @@ defmodule AshNeo4j.DataLayer do
     dest_label = String.to_atom(List.first(dest_node.labels))
     edge_label = String.to_atom(edge.type)
     edge_direction = edge_direction(edge, dest_node)
-    relationship = Info.relationship(resource, edge_label, edge_direction, dest_label)
+
+    relationship =
+      Info.relationship(resource, edge_label, edge_direction, dest_label)
 
     if relationship != nil do
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
@@ -743,7 +751,7 @@ defmodule AshNeo4j.DataLayer do
               node_relationship = Info.node_relationship(resource, name)
 
               case node_relationship do
-                {^name, edge_label, edge_direction} ->
+                {^name, edge_label, edge_direction, destination_label} ->
                   dest_node_property_name =
                     Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
 
@@ -753,7 +761,7 @@ defmodule AshNeo4j.DataLayer do
                     acc
                   else
                     dest_id = %{dest_node_property_name => dest_id_value}
-                    [{Info.label(dest_resource), dest_id, edge_label, edge_direction} | acc]
+                    [{destination_label, dest_id, edge_label, edge_direction} | acc]
                   end
 
                 nil ->

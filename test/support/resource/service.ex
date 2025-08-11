@@ -8,11 +8,11 @@ defmodule AshNeo4j.Test.Resource.Service do
     label :InternalService
 
     relate [
-      {:specification, :SPECIFIES, :incoming},
-      {:parent_service, :MANAGES, :incoming},
-      {:services, :MANAGES, :outgoing},
-      {:resources, :CONFIGURES, :outgoing},
-      {:events, :RAISED, :outgoing}
+      {:specification, :SPECIFIES, :incoming, :Specification},
+      {:parent_service, :MANAGES, :incoming, :Service},
+      {:services, :MANAGES, :outgoing, :Service},
+      {:resources, :CONFIGURES, :outgoing, :Resource},
+      {:events, :RAISED, :outgoing, :Event}
     ]
 
     skip([:service_id, :parent_service_id])

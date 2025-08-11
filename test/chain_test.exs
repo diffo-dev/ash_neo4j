@@ -4,6 +4,7 @@ defmodule AshNeo4j.Test.Chain do
   alias AshNeo4j.BoltxHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Chain
+  import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
   setup_all do
     BoltxHelper.start()
@@ -39,20 +40,128 @@ defmodule AshNeo4j.Test.Chain do
       refute chain1.head_id
       refute chain1.tail_id
 
-      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
+      chain2 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id})
+        |> Ash.create!()
+        |> IO.inspect(label: :chain2)
 
-      assert chain2.name == "chain2"
-      assert chain2.head_id == chain1.id
-      refute chain2.tail_id
-      assert is_struct(chain2.head, Chain)
-      assert chain2.head.id == chain1.id
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :TAIL_TO_HEAD,
+               :outgoing
+             )
 
-      loaded_chain1 = chain1 |> Ash.load!([:tail, :tail_id])
+      # check enrichment
+      check_enrichment(chain2, :head, Chain, :head_id, chain1.id)
+      check_enrichment(chain2, :tail, Ash.NotLoaded, :tail_id, nil)
 
-      assert loaded_chain1.tail_id == chain2.id
-      refute loaded_chain1.head_id
-      assert is_struct(loaded_chain1.tail, Chain)
-      assert loaded_chain1.tail.id == chain2.id
+      reloaded_chain1 = chain1 |> Ash.reload!() |> IO.inspect(label: :reloaded_chain1)
+      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
+
+    test "chain nodes can be chained head_to_tail using ash create" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+
+      assert chain1.name == "chain1"
+      refute chain1.head_id
+      refute chain1.tail_id
+
+      chain2 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id})
+        |> Ash.create!()
+        |> IO.inspect(label: :chain2)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+
+      # check enrichment
+      check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
+
+      reloaded_chain1 = chain1 |> Ash.reload!() |> IO.inspect(label: :reloaded_chain1)
+      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
+
+    test "chain nodes can be looped from same node using ash create" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+
+      assert chain1.name == "chain1"
+      refute chain1.head_id
+      refute chain1.tail_id
+
+      chain2 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id, head_id: chain1.id})
+        |> Ash.create!()
+        |> IO.inspect(label: :chain2)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :TAIL_TO_HEAD,
+               :outgoing
+             )
+
+      # check enrichment
+      check_enrichment(chain2, :head, Chain, :head_id, chain1.id)
+      check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
+
+      reloaded_chain1 = chain1 |> Ash.reload!()
+      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
+
+    test "chain nodes can be looped using create and update" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+
+      assert chain1.name == "chain1"
+      refute chain1.head_id
+      refute chain1.tail_id
+
+      chain2 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id})
+        |> Ash.create!()
+        |> IO.inspect(label: :chain2)
+
+      updated_chain1 =
+        chain1
+        |> Ash.Changeset.for_update(:update, %{tail_id: chain2.id})
+        |> Ash.update!()
+        |> IO.inspect(label: :updated_chain1)
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
@@ -62,356 +171,365 @@ defmodule AshNeo4j.Test.Chain do
                :HEAD_TO_TAIL,
                :outgoing
              )
+
+      # check enrichment
+      check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
+
+      # tail_id shouldn't need an explicit load but it does, seems to be an ash thing
+      reloaded_chain1 = updated_chain1 |> Ash.load!([:tail_id]) |> IO.inspect(label: :reloaded_chain1)
+      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(reloaded_chain1, :tail, Chain, :tail_id, chain2.id)
     end
-  end
 
-  test "chain nodes can be chained head to tail using ash create" do
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
+    test "chain nodes can be unlinked using ash update" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
 
-    assert chain2.name == "chain2"
-    refute chain2.head_id
-    refute chain2.tail_id
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :TAIL_TO_HEAD,
+               :incoming
+             )
 
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1", tail_id: chain2.id}) |> Ash.create!()
+      updated_chain2 = chain2 |> Ash.Changeset.for_update(:unrelate, %{head_id: chain1.id}) |> Ash.update!()
 
-    assert chain1.name == "chain1"
-    assert chain1.tail_id == chain2.id
-    refute chain1.head_id
-    assert is_struct(chain1.tail, Chain)
-    assert chain1.tail.id == chain2.id
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :TAIL_TO_HEAD,
+               :incoming
+             )
 
-    loaded_chain2 = chain2 |> Ash.load!([:head, :tail, :head_id, :tail_id])
+      # check enrichment
+      check_enrichment(updated_chain2, :head, nil, :head_id, nil)
+      check_enrichment(updated_chain2, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
 
-    assert loaded_chain2.head_id == chain1.id
-    refute loaded_chain2.tail_id
-    assert is_struct(loaded_chain2.head, Chain)
-    assert loaded_chain2.head.id == chain1.id
+    test "chain nodes can be chained head to tail length 3 using ash create" do
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain3.id}) |> Ash.create!()
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1", tail_id: chain2.id}) |> Ash.create!()
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-  test "chain nodes can be chained head to tail length 3 using ash create" do
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert chain3.name == "chain3"
-    refute chain3.head_id
-    refute chain3.tail_id
+      # check enrichment
+      check_enrichment(chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain1, :tail, Chain, :tail_id, chain2.id)
 
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain3.id}) |> Ash.create!()
+      check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain2, :tail, Chain, :tail_id, chain3.id)
 
-    assert chain2.name == "chain2"
-    assert chain2.tail_id == chain3.id
-    refute chain2.head_id
-    assert is_struct(chain2.tail, Chain)
-    assert chain2.tail.id == chain3.id
-    assert is_struct(chain2.head, Ash.NotLoaded)
+      check_enrichment(chain3, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain3, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
 
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1", tail_id: chain2.id}) |> Ash.create!()
+    test "chain can be made with ash create, inserting link into middle" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
 
-    assert chain1.name == "chain1"
-    assert chain1.tail_id == chain2.id
-    refute chain1.head_id
-    assert is_struct(chain1.tail, Chain)
-    assert chain1.tail.id == chain2.id
-    assert is_struct(chain1.head, Ash.NotLoaded)
+      chain2 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id, tail_id: chain3.id})
+        |> Ash.create!()
 
-    loaded_chain3 = chain3 |> Ash.load!([:head, :tail])
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain1"},
+               :TAIL_TO_HEAD,
+               :outgoing
+             )
 
-    assert loaded_chain3.head_id == chain2.id
-    refute loaded_chain3.tail_id
-    assert is_struct(loaded_chain3.head, Chain)
-    assert loaded_chain3.head.id == chain2.id
-    refute loaded_chain3.tail
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    loaded_chain2 = chain2 |> Ash.load!([:head, :tail])
+      # check enrichment
+      check_enrichment(chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain1, :tail, Ash.NotLoaded, :tail_id, nil)
 
-    assert loaded_chain2.head_id == chain1.id
-    assert loaded_chain2.tail_id == chain3.id
-    assert is_struct(loaded_chain2.head, Chain)
-    assert loaded_chain2.head.id == chain1.id
-    assert is_struct(loaded_chain2.tail, Chain)
-    assert loaded_chain2.tail.id == chain3.id
+      check_enrichment(chain2, :head, Chain, :head_id, chain1.id)
+      check_enrichment(chain2, :tail, Chain, :tail_id, chain3.id)
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      check_enrichment(chain3, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain3, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    @tag debug: true
+    test "chain of 3 can be made by updating head and tail on first and last links" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
 
-  test "chain can be made with ash create, inserting link into middle" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
+      updated_chain1 =
+        chain1
+        |> Ash.Changeset.for_update(:update, tail_id: chain2.id)
+        |> Ash.update!()
+        |> IO.inspect(label: :updated_chain1)
 
-    _chain2 =
-      Chain
-      |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id, tail_id: chain3.id})
-      |> Ash.create!()
+      updated_chain3 =
+        chain3
+        |> Ash.Changeset.for_update(:update, head_id: chain2.id)
+        |> Ash.update!()
+        |> IO.inspect(label: :updated_chain3)
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain3"},
+               :Chain,
+               %{name: "chain2"},
+               :TAIL_TO_HEAD,
+               :outgoing
+             )
 
-  test "chain of 3 can be made by updating head and tail on first and last links" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
+      # check enrichment
+      check_enrichment(updated_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(updated_chain1, :tail, Chain, :tail_id, chain2.id)
 
-    _updated_chain1 = chain1 |> Ash.Changeset.for_update(:update, tail_id: chain2.id) |> Ash.update!()
-    _updated_chain3 = chain3 |> Ash.Changeset.for_update(:update, head_id: chain2.id) |> Ash.update!()
+      check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
+      check_enrichment(chain2, :tail, Ash.NotLoaded, :tail_id, nil)
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      check_enrichment(updated_chain3, :head, Chain, :head_id, chain2.id)
+      check_enrichment(updated_chain3, :tail, Ash.NotLoaded, :tail_id, nil)
+    end
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    test "chain of 3 can be made by updating middle link" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
 
-  test "chain of 3 can be made by updating middle link" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3"}) |> Ash.create!()
+      _updated_chain2 =
+        chain2 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
 
-    _updated_chain2 =
-      chain2 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+    end
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    test "chain of 3 can be broken by updating middle link" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
+      _chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
 
-  test "chain of 3 can be broken by updating middle link" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
-    _chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
+      _updated_chain2 = chain2 |> Ash.Changeset.for_update(:update, head_id: nil, tail_id: nil) |> Ash.update!()
 
-    _updated_chain2 = chain2 |> Ash.Changeset.for_update(:update, head_id: nil, tail_id: nil) |> Ash.update!()
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+    end
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    test "chain of 3 can have a link replaced via update then create" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
 
-  test "chain of 3 can have a link replaced via update then create" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
+      # chain4 replaces chain2
+      _updated_chain2 = chain2 |> Ash.Changeset.for_update(:update, head_id: nil, tail_id: nil) |> Ash.update!()
 
-    # chain4 replaces chain2
-    _updated_chain2 = chain2 |> Ash.Changeset.for_update(:update, head_id: nil, tail_id: nil) |> Ash.update!()
+      _chain4 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain4", head_id: chain1.id, tail_id: chain3.id})
+        |> Ash.create!()
 
-    _chain4 =
-      Chain
-      |> Ash.Changeset.for_create(:create, %{name: "chain4", head_id: chain1.id, tail_id: chain3.id})
-      |> Ash.create!()
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain4"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain4"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain4"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+    end
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain4"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    @tag bugged: true
+    # this doesn't work the new link doesn't replace the original link, rather chain2 and chain4 are both linked
+    test "chain of 3 can have a link replaced via create" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
+      # chain4 replaces chain2
+      _chain4 =
+        Chain
+        |> Ash.Changeset.for_create(:create, %{name: "chain4", head_id: chain1.id, tail_id: chain3.id})
+        |> Ash.create!()
 
-  @tag bugged: true
-  # this doesn't work the new link doesn't replace the original link, rather chain2 and chain4 are both linked
-  test "chain of 3 can have a link replaced via create" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
-    # chain4 replaces chain2
-    _chain4 =
-      Chain
-      |> Ash.Changeset.for_create(:create, %{name: "chain4", head_id: chain1.id, tail_id: chain3.id})
-      |> Ash.create!()
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain4"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain4"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain4"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+    end
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain4"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-  end
+    test "chain of 3 can have a link replaced via single update" do
+      chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
+      chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
+      chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
+      chain4 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain4"}) |> Ash.create!()
+      # chain4 replaces chain2
+      _updated_chain4 =
+        chain4 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
 
-  test "chain of 3 can have a link replaced via single update" do
-    chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
-    chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
-    chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
-    chain4 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain4"}) |> Ash.create!()
-    # chain4 replaces chain2
-    _updated_chain4 =
-      chain4 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
+      # note reload is needed
+      _reloaded_chain2 = chain2 |> Ash.reload!()
+      _reloaded_chain4 = chain4 |> Ash.reload!()
 
-    # note reload is needed
-    _reloaded_chain2 = chain2 |> Ash.reload!()
-    _reloaded_chain4 = chain4 |> Ash.reload!()
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain2"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      refute Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain2"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    refute Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain2"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain1"},
+               :Chain,
+               %{name: "chain4"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
 
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain1"},
-             :Chain,
-             %{name: "chain4"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
-
-    assert Neo4jHelper.nodes_relate_how?(
-             :Chain,
-             %{name: "chain4"},
-             :Chain,
-             %{name: "chain3"},
-             :HEAD_TO_TAIL,
-             :outgoing
-           )
+      assert Neo4jHelper.nodes_relate_how?(
+               :Chain,
+               %{name: "chain4"},
+               :Chain,
+               %{name: "chain3"},
+               :HEAD_TO_TAIL,
+               :outgoing
+             )
+    end
   end
 end

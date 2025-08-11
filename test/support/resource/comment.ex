@@ -6,7 +6,7 @@ defmodule AshNeo4j.Test.Resource.Comment do
 
   neo4j do
     label :Comment
-    relate [{:post, :BELONGS_TO, :outgoing}]
+    relate [{:post, :BELONGS_TO, :outgoing, :Post}]
     translate id: :uuid
   end
 

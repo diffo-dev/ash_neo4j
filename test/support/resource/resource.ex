@@ -8,11 +8,11 @@ defmodule AshNeo4j.Test.Resource.Resource do
     label :InternalResource
 
     relate [
-      {:specification, :SPECIFIES, :incoming},
-      {:service, :CONFIGURES, :incoming},
-      {:resource, :USES, :incoming},
-      {:resources, :USES, :outgoing},
-      {:events, :FIRED, :outgoing}
+      {:specification, :SPECIFIES, :incoming, :Specification},
+      {:service, :CONFIGURES, :incoming, :Service},
+      {:resource, :USES, :incoming, :Resource},
+      {:resources, :USES, :outgoing, :Resource},
+      {:events, :FIRED, :outgoing, :Event}
     ]
 
     skip [:service_id, :resource_id]
