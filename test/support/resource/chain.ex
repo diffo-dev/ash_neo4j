@@ -8,7 +8,7 @@ defmodule AshNeo4j.Test.Resource.Chain do
     label :Chain
 
     relate [
-      {:head, :TAIL_TO_HEAD, :outgoing, :Chain},
+      {:head, :HEAD_TO_TAIL, :incoming, :Chain},
       {:tail, :HEAD_TO_TAIL, :outgoing, :Chain}
     ]
 

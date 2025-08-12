@@ -44,14 +44,13 @@ defmodule AshNeo4j.Test.Chain do
         Chain
         |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id})
         |> Ash.create!()
-        |> IO.inspect(label: :chain2)
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
-               %{name: "chain2"},
-               :Chain,
                %{name: "chain1"},
-               :TAIL_TO_HEAD,
+               :Chain,
+               %{name: "chain2"},
+               :HEAD_TO_TAIL,
                :outgoing
              )
 
@@ -59,12 +58,12 @@ defmodule AshNeo4j.Test.Chain do
       check_enrichment(chain2, :head, Chain, :head_id, chain1.id)
       check_enrichment(chain2, :tail, Ash.NotLoaded, :tail_id, nil)
 
-      reloaded_chain1 = chain1 |> Ash.reload!() |> IO.inspect(label: :reloaded_chain1)
+      reloaded_chain1 = chain1 |> Ash.load!([:tail, :tail_id])
       check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
-      check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
+      check_enrichment(reloaded_chain1, :tail, Chain, :tail_id, chain2.id)
     end
 
-    test "chain nodes can be chained head_to_tail using ash create" do
+    test "chain nodes can be chained head to tail using ash create" do
       chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
 
       assert chain1.name == "chain1"
@@ -75,23 +74,22 @@ defmodule AshNeo4j.Test.Chain do
         Chain
         |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id})
         |> Ash.create!()
-        |> IO.inspect(label: :chain2)
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
-               %{name: "chain2"},
-               :Chain,
                %{name: "chain1"},
+               :Chain,
+               %{name: "chain2"},
                :HEAD_TO_TAIL,
-               :outgoing
+               :incoming
              )
 
       # check enrichment
       check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
       check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
 
-      reloaded_chain1 = chain1 |> Ash.reload!() |> IO.inspect(label: :reloaded_chain1)
-      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
+      reloaded_chain1 = chain1 |> Ash.load!([:head, :head_id])
+      check_enrichment(reloaded_chain1, :head, Chain, :head_id, chain2.id)
       check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
     end
 
@@ -106,7 +104,6 @@ defmodule AshNeo4j.Test.Chain do
         Chain
         |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id, head_id: chain1.id})
         |> Ash.create!()
-        |> IO.inspect(label: :chain2)
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
@@ -122,19 +119,20 @@ defmodule AshNeo4j.Test.Chain do
                %{name: "chain2"},
                :Chain,
                %{name: "chain1"},
-               :TAIL_TO_HEAD,
-               :outgoing
+               :HEAD_TO_TAIL,
+               :incoming
              )
 
       # check enrichment
       check_enrichment(chain2, :head, Chain, :head_id, chain1.id)
       check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
 
-      reloaded_chain1 = chain1 |> Ash.reload!()
-      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
-      check_enrichment(reloaded_chain1, :tail, Ash.NotLoaded, :tail_id, nil)
+      reloaded_chain1 = chain1 |> Ash.load!([:head, :head_id, :tail, :tail_id])
+      check_enrichment(reloaded_chain1, :head, Chain, :head_id, chain2.id)
+      check_enrichment(reloaded_chain1, :tail, Chain, :tail_id, chain2.id)
     end
 
+    @tag debug: true
     test "chain nodes can be looped using create and update" do
       chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
 
@@ -146,13 +144,12 @@ defmodule AshNeo4j.Test.Chain do
         Chain
         |> Ash.Changeset.for_create(:create, %{name: "chain2", tail_id: chain1.id})
         |> Ash.create!()
-        |> IO.inspect(label: :chain2)
 
       updated_chain1 =
         chain1
         |> Ash.Changeset.for_update(:update, %{tail_id: chain2.id})
         |> Ash.update!()
-        |> IO.inspect(label: :updated_chain1)
+        |> Ash.load!([[:tail, :tail_id, :head, :head_id]])
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
@@ -173,13 +170,13 @@ defmodule AshNeo4j.Test.Chain do
              )
 
       # check enrichment
-      check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
-      check_enrichment(chain2, :tail, Chain, :tail_id, chain1.id)
+      check_enrichment(updated_chain1, :head, Chain, :head_id, chain2.id)
+      check_enrichment(updated_chain1, :tail, Chain, :tail_id, chain2.id)
 
       # tail_id shouldn't need an explicit load but it does, seems to be an ash thing
-      reloaded_chain1 = updated_chain1 |> Ash.load!([:tail_id]) |> IO.inspect(label: :reloaded_chain1)
-      check_enrichment(reloaded_chain1, :head, Ash.NotLoaded, :head_id, nil)
-      check_enrichment(reloaded_chain1, :tail, Chain, :tail_id, chain2.id)
+      reloaded_chain2 = chain2 |> Ash.load!([:tail, :tail_id, :head, :head_id])
+      check_enrichment(reloaded_chain2, :head, Chain, :head_id, chain1.id)
+      check_enrichment(reloaded_chain2, :tail, Chain, :tail_id, chain1.id)
     end
 
     test "chain nodes can be unlinked using ash update" do
@@ -283,7 +280,7 @@ defmodule AshNeo4j.Test.Chain do
       check_enrichment(chain3, :tail, Ash.NotLoaded, :tail_id, nil)
     end
 
-    @tag debug: true
+    @tag bugged: true
     test "chain of 3 can be made by updating head and tail on first and last links" do
       chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
       chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2"}) |> Ash.create!()
@@ -321,12 +318,12 @@ defmodule AshNeo4j.Test.Chain do
 
       # check enrichment
       check_enrichment(updated_chain1, :head, Ash.NotLoaded, :head_id, nil)
-      check_enrichment(updated_chain1, :tail, Chain, :tail_id, chain2.id)
+      check_enrichment(updated_chain1, :tail, Chain, :tail_id, chain2.id) #tail_id shouldn't be nil
 
       check_enrichment(chain2, :head, Ash.NotLoaded, :head_id, nil)
       check_enrichment(chain2, :tail, Ash.NotLoaded, :tail_id, nil)
 
-      check_enrichment(updated_chain3, :head, Chain, :head_id, chain2.id)
+      check_enrichment(updated_chain3, :head, Chain, :head_id, chain2.id) # head_id shouldn't be nil
       check_enrichment(updated_chain3, :tail, Ash.NotLoaded, :tail_id, nil)
     end
 
