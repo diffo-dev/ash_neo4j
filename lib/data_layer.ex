@@ -286,7 +286,7 @@ defmodule AshNeo4j.DataLayer do
               {:error, "couldn't unrelate nodes"}
 
             _ ->
-              {_relationship_name, edge_label, object_to_subject_direction} = object_node_relationship
+              {_relationship_name, edge_label, object_to_subject_direction, _destination_label} = object_node_relationship
 
               case Neo4jHelper.unrelate_nodes(
                      subject_label,
@@ -317,7 +317,7 @@ defmodule AshNeo4j.DataLayer do
               {:error, "couldn't relate nodes"}
 
             _ ->
-              {_relationship_name, edge_label, object_to_subject_direction} = object_node_relationship
+              {_relationship_name, edge_label, object_to_subject_direction, _object_label} = object_node_relationship
 
               case Neo4jHelper.relate_nodes(
                      subject_label,

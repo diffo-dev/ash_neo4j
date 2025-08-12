@@ -8,8 +8,8 @@ defmodule AshNeo4j.Test.Resource.Event do
     label :Event
 
     relate [
-      {:service, :RAISED, :incoming, :Service},
-      {:resource, :FIRED, :incoming, :Resource}
+      {:service, :RAISED, :incoming, :InternalService},
+      {:resource, :FIRED, :incoming, :InternalResource}
     ]
 
     translate id: :uuid

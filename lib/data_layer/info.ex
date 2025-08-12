@@ -85,15 +85,10 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: tuple() | nil
   def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
-    node_relationship = node_relationship(resource, name)
-
-    case node_relationship do
-      {^name, edge_label, edge_direction, _destination_label} ->
-        relationship = Ash.Resource.Info.relationship(resource, name)
-        node_relationship(relationship.destination, edge_label, reverse(edge_direction), label(resource))
-
-      nil ->
-        nil
+    destination_resource = Ash.Resource.Info.related(resource, name)
+    reverse_relationship_path = Ash.Resource.Info.reverse_relationship(resource, [name])
+    if reverse_relationship_path != nil do
+      node_relationship(destination_resource, hd(reverse_relationship_path))
     end
   end
 
@@ -149,7 +144,7 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec preserve_node_relationships(Ash.Resource.t()) :: list(tuple())
   def preserve_node_relationships(resource) when is_atom(resource) do
-    Enum.reduce(relate(resource), guard(resource), fn {name, edge_label, direction}, acc ->
+    Enum.reduce(relate(resource), guard(resource), fn {name, edge_label, edge_direction, destination_label}, acc ->
       relationship = Ash.Resource.Info.relationship(resource, name)
       reverse_node_relationship = reverse_node_relationship(resource, relationship.name)
 
@@ -162,7 +157,7 @@ defmodule AshNeo4j.DataLayer.Info do
             if reverse_relationship.allow_nil? do
               acc
             else
-              [{edge_label, direction, label(relationship.destination)} | acc]
+              [{edge_label, edge_direction, destination_label} | acc]
             end
 
           true ->

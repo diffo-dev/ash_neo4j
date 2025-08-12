@@ -485,11 +485,15 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
         |> Ash.update()
 
+      related_post
+
       {:ok, unrelated_post} =
         related_post
         |> Ash.Changeset.new()
         |> Ash.Changeset.for_update(:unrelate, remove_comments: [comment2.id])
         |> Ash.update()
+
+      related_post
 
       # the unrelated post should have only the first comment
       assert length(unrelated_post.comments) == 1
