@@ -48,6 +48,7 @@ defmodule AshNeo4j.Blog.Test do
       assert node.properties == %{"title" => "post1", "uuid" => uuid}
     end
 
+    @tag debug: true
     test "comment node can be read using Neo4jHelper" do
       # setup using Neo4jHelper
       uuid = Ash.UUID.generate()
@@ -471,6 +472,7 @@ defmodule AshNeo4j.Blog.Test do
              )
     end
 
+    @tag debug: true
     test "post and comment nodes can be related and unrelated using ash update" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
@@ -483,7 +485,10 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
         |> Ash.update()
 
-      related_post
+      refreshed_comment1 = comment1 |> Ash.reload!()
+      refreshed_comment2 = comment2 |> Ash.reload!()
+      check_enrichment(refreshed_comment1, :post, Ash.NotLoaded, :post_id, post.id)
+      check_enrichment(refreshed_comment2, :post, Ash.NotLoaded, :post_id, post.id)
 
       {:ok, unrelated_post} =
         related_post
@@ -491,10 +496,10 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Changeset.for_update(:unrelate, remove_comments: [comment2.id])
         |> Ash.update()
 
-      related_post
-
       # the unrelated post should have only the first comment
       assert length(unrelated_post.comments) == 1
+
+      refreshed_comment2 = comment2 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
                :Post,
@@ -513,6 +518,8 @@ defmodule AshNeo4j.Blog.Test do
                :BELONGS_TO,
                :incoming
              )
+
+      check_enrichment(refreshed_comment2, :post, nil, :post_id, nil)
     end
   end
 

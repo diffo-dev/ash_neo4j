@@ -109,7 +109,6 @@ defmodule AshNeo4j.DataLayer do
     sections: @sections,
     verifiers: [
       AshNeo4j.Verifiers.VerifyLabelPascalCase,
-      AshNeo4j.Verifiers.VerifyIdTranslated,
       AshNeo4j.Verifiers.VerifyRelate,
       AshNeo4j.Verifiers.VerifyGuard,
       AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
@@ -117,6 +116,7 @@ defmodule AshNeo4j.DataLayer do
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
+      AshNeo4j.Transformers.TransformEnsureIdTranslated,
       AshNeo4j.Transformers.TransformDefaultRelate,
       AshNeo4j.Transformers.TransformAddTranslation,
       AshNeo4j.Transformers.TransformAddRelationshipAttributes

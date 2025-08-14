@@ -4,12 +4,6 @@ defmodule AshNeo4j.Test.Resource.Comment do
     domain: AshNeo4j.Test.Domain,
     data_layer: AshNeo4j.DataLayer
 
-  neo4j do
-    label :Comment
-    relate [{:post, :BELONGS_TO, :outgoing, :Post}]
-    translate id: :uuid
-  end
-
   actions do
     default_accept :*
     defaults [:create, :destroy]

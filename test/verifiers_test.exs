@@ -25,26 +25,6 @@ defmodule AshNeo4j.Test.Verifiers do
       end
     end
 
-    test "id not translated" do
-      assert_raise Spark.Error.DslError, fn ->
-        defmodule IdNotTranslated do
-          @moduledoc false
-          use Ash.Resource,
-            domain: AshNeo4j.Test.Domain,
-            data_layer: AshNeo4j.DataLayer
-
-          neo4j do
-            label :Comment
-          end
-
-          attributes do
-            uuid_primary_key :id
-            attribute :title, :string, public?: true
-          end
-        end
-      end
-    end
-
     test "relate: edge label style" do
       assert_raise Spark.Error.DslError,
                    ~r/relate: edge labels must be upper case and may have an underscore, invalid edge labels: uses/,
