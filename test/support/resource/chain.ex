@@ -65,7 +65,6 @@ defmodule AshNeo4j.Test.Resource.Chain do
   end
 
   preparations do
-    prepare build(sort: [name: :asc])
-    # , load: [:tail_id, :head_id]
+    prepare build(sort: [name: :asc], load: [:tail_id, :head_id])
   end
 end

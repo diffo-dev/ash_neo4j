@@ -286,7 +286,8 @@ defmodule AshNeo4j.DataLayer do
               {:error, "couldn't unrelate nodes"}
 
             _ ->
-              {_relationship_name, edge_label, object_to_subject_direction, _destination_label} = object_node_relationship
+              {_relationship_name, edge_label, object_to_subject_direction, _destination_label} =
+                object_node_relationship
 
               case Neo4jHelper.unrelate_nodes(
                      subject_label,
@@ -655,7 +656,6 @@ defmodule AshNeo4j.DataLayer do
             Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
           [
-            # {relationship.name, dest_resource},
             {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc
           ]
 
@@ -664,7 +664,6 @@ defmodule AshNeo4j.DataLayer do
           source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
 
           [
-            # {reverse_relationship.name, dest_resource},
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
           ]
 
@@ -715,7 +714,23 @@ defmodule AshNeo4j.DataLayer do
         {resource_field, Cast.cast(resource, resource_field, property_value)}
       end)
 
-    struct!(resource, fields)
+    # nil belongs_to if destination_attribute is nil
+    belongs_to =
+      Ash.Resource.Info.relationships(resource)
+      |> Enum.filter(fn relationship ->
+        relationship.type == :belongs_to and relationship.allow_nil?
+      end)
+
+    nilled_fields =
+      Enum.reduce(belongs_to, fields, fn relationship, acc ->
+        if Map.get(fields, relationship.source_attribute) == nil do
+          acc |> Map.put(relationship.name, nil)
+        else
+          acc
+        end
+      end)
+
+    struct!(resource, nilled_fields)
     |> Ash.Resource.set_metadata(%{node_id: node.id, data_layer: __MODULE__, labels: node.labels})
     |> Ash.Resource.set_meta(struct(Ecto.Schema.Metadata, state: :loaded))
   end

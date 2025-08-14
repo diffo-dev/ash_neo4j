@@ -16,11 +16,10 @@ defmodule AshNeo4j.Service.Test do
 
   setup do
     on_exit(fn ->
-      :ok
-      #Neo4jHelper.delete_nodes(:InternalService)
-      #Neo4jHelper.delete_nodes(:InternalResource)
-      #Neo4jHelper.delete_nodes(:Specification)
-      #Neo4jHelper.delete_nodes(:Event)
+      Neo4jHelper.delete_nodes(:InternalService)
+      Neo4jHelper.delete_nodes(:InternalResource)
+      Neo4jHelper.delete_nodes(:Specification)
+      Neo4jHelper.delete_nodes(:Event)
     end)
   end
 
@@ -61,10 +60,10 @@ defmodule AshNeo4j.Service.Test do
     end
 
     @tag bugged: true
-    #https://github.com/diffo-dev/ash_neo4j/issues/140
+    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
-      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id}) |> IO.inspect(label: :service)
+      service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
       Process.sleep(10000)
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
 
@@ -265,7 +264,6 @@ defmodule AshNeo4j.Service.Test do
                :outgoing
              )
 
-      updated_service
       assert is_struct(updated_service, Service)
       assert updated_service.events
       fired_event = hd(updated_service.events)
@@ -273,11 +271,8 @@ defmodule AshNeo4j.Service.Test do
       assert fired_event.id == event.id
 
       {:ok, refreshed_event} = event |> Ash.reload()
-      assert is_struct(refreshed_event, Event)
-      assert refreshed_event.service_id == service.id
-      refute refreshed_event.resource_id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
+      check_enrichment(refreshed_event, :service, Ash.NotLoaded, :service_id, service.id)
+      check_enrichment(refreshed_event, :resource, nil, :resource_id, nil)
     end
 
     test "(InternalResource) -[FIRED]-> (Event)" do
@@ -285,18 +280,6 @@ defmodule AshNeo4j.Service.Test do
       {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
-      assert is_struct(updated_resource, Resource)
-      assert updated_resource.events
-      fired_event = hd(updated_resource.events)
-      assert is_struct(fired_event, Event)
-      assert fired_event.id == event.id
-
-      {:ok, refreshed_event} = event |> Ash.reload()
-      assert is_struct(refreshed_event, Event)
-      refute refreshed_event.service_id
-      assert refreshed_event.resource_id == resource.id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
@@ -306,6 +289,16 @@ defmodule AshNeo4j.Service.Test do
                :FIRED,
                :outgoing
              )
+
+      assert is_struct(updated_resource, Resource)
+      assert updated_resource.events
+      fired_event = hd(updated_resource.events)
+      assert is_struct(fired_event, Event)
+      assert fired_event.id == event.id
+
+      {:ok, refreshed_event} = event |> Ash.reload()
+      check_enrichment(refreshed_event, :service, nil, :service_id, nil)
+      check_enrichment(refreshed_event, :resource, Ash.NotLoaded, :resource_id, resource.id)
     end
   end
 end
