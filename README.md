@@ -36,16 +36,16 @@ Configure `AshNeo4j.DataLayer` as `data_layer:` within `use Ash.Resource` option
 
 ### Configuration
 
-Each Ash.Resource requires configuration of its AshNeo4j.DataLayer. An example Comment resource is given below, it can belong to a Post resource.
+Each Ash.Resource allows configuration of its AshNeo4j.DataLayer. An example Comment resource is given below, it can belong to a Post resource. The neo4j configuration block below is actually unnecessary as written.
 
 ```elixir
-defmodule Comment.Resource do
+defmodule Blog.Comment do
   use Ash.Resource,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
     label :Comment
-    relate [{:post, :BELONGS_TO, :outgoing}]
+    relate [{:post, :BELONGS_TO, :outgoing, :Post}]
     translate id: :uuid
   end
 
@@ -77,16 +77,20 @@ The DSL may be used to label the Ash Resource's underlying graph node. If omitte
 
 ## Relate
 
-The DSL must be used to direct each relationship.
+The DSL may be used to specifically direct any relationship, in the form {relationship_name, edge_label, edge_direction, destination_label}. An entry can be provided for any relationship to override the default values created by AshNeo4j.
+
 ```elixir
   neo4j do
-    relate [{:post, :BELONGS_TO, :outgoing}]
+    relate [{:post, :BELONGS_TO, :outgoing, :Post}]
   end
 ```
 
+Default relate clauses are always :outgoing from the source resource, and the edge_label is derived from the Ash relationship type.
+Relate clauses, whether specific or default must be unique {_, edge_label, edge_direction, destination_label} for a given source_label to allow determination of the source relationship.
+
 ## Guard
 
-The DSL may be used to guard destroy actions.
+The DSL may be used to guard destroy actions, in the form {edge_label, edge_direction, destination_label}. By default incoming allow_nil? false belongs_to are guarded against deletion while relationships exist. Guards can be created independently of explicit relationships.
 ```elixir
   neo4j do
     relate [{:WRITTEN_BY, :outgoing, :Post}]
@@ -98,7 +102,7 @@ Guard can also be used where the underlying node has other edges which should pr
 
 ## Translate
 
-The DSL may be used to translate the Ash Resource's attributes to node properties. 
+The DSL may be used to translate the Ash Resource's attributes to node properties. By default the id attribute will be translated according to the 'short name' of the type, such that the following declaration is unneccessary for an Ash.Type.UUID primary key.
 ```elixir
   neo4j do
     translate id: :uuid
@@ -110,7 +114,8 @@ Attributes with underscores are translated to camelCase Neo4j properties so don'
 
 ## Skip
 
-The DSL may be used to skip storing attributes as node properties. This is typically used for foreign keys, which not required with relate.
+The DSL may be used to skip storing attributes as node properties. This can be useful for 'transient' attributes.
+
 ```elixir
   neo4j do
     skip [:other_id]
@@ -121,11 +126,12 @@ The DSL may be used to skip storing attributes as node properties. This is typic
 
 The DSL is verified against misconfiguration and violation of accepted neo4j conventions providing compile time errors:
 
-* label: neo4j label must be PascalCase
-* neo4j: neo4j property names must be camelCase
+* neo4j label must be PascalCase
+* neo4j property names must be camelCase
+* edge label must be upper case and may have an underscore
+* edge direction must be in [:incoming, :outgoing]
 * relate: relationship_name must match the name of a relationship
-* relate: edge label must be upper case and may have an underscore
-* translate: :id attribute must be translated
+* relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
 
 ## Installing Neo4j and Configuring Boltx
 

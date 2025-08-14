@@ -64,7 +64,6 @@ defmodule AshNeo4j.Service.Test do
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
-      Process.sleep(10000)
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
 
       resource =
