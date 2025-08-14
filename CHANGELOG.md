@@ -130,3 +130,16 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * fixed sorting not working
 * fixed nested calculations with references are nil
 
+## [v0.2.8](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.7...v0.2.8) (2025-08-14)
+
+### Features
+
+* relate destination node label
+* independent relationships
+* simplified dsl
+
+### Maintenance
+
+* fixed unexpected empty query result
+* fixed has_many enrichment incorrect cypher
+

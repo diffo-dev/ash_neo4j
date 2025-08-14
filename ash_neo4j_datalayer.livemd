@@ -2,7 +2,9 @@
 
 ```elixir
 Mix.install(
-  [{:ash_neo4j, "~> 0.2"}],
+  [
+    {:ash_neo4j, "~> 0.2.8"}
+  ],
   consolidate_protocols: false
 )
 ```
@@ -49,11 +51,7 @@ We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/doc
 
 While [Neo4j community edition](https://github.com/neo4j/neo4j) is open source and you can build from source it is likely that you'll use an installation.
 
-Ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running. You can install latest major Neo4j versions from the community tab at [Neo4j Deployment Center](https://neo4j.com/deployment-center/?desktop-gdb), or use the [4.4.27 direct link](https://neo4j.com/download-thanks/?edition=community&release=4.4.27&flavour=rpm)
-
-I've used Neo4j community edition 4.4.27 (bolt 4.4) and to connect using boltx I needed to also set the environment variable ```BOLT_VERSIONS=4.4``` to steer [bolt protocol handshake](https://neo4j.com/docs/bolt/current/bolt/handshake), see also [bolt protocol and neo4j compatibility](https://neo4j.com/docs/bolt/current/bolt-compatibility/).
-
-AshNeo4j doesn't yet have any specific Neo4j 5.x optimisations and *should* be able to run on Neo4j 5.x.
+[AshNeo4j](https://github.com/diffo-dev/ash_neo4j) uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running. You can install latest major Neo4j versions from the community tab at [Neo4j Deployment Center](https://neo4j.com/deployment-center/?desktop-gdb), or use the [5.26.10 direct link](https://neo4j.com/download-thanks/?edition=community&release=5.26.10&flavour=unix)
 
 When you install neo4j you'll typically have a default username and password. Take note of this and any other non-standard config.
 
@@ -79,13 +77,15 @@ Boltx needs a process in your supervision tree, this will start one with the con
 AshNeo4j.BoltxHelper.start(config)
 ```
 
-As we mentioned earlier depending on what version of neo4j you are running the boltx version negotiation is likely to require you to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
+Skip for Neo4j 5:
+
+If you are stuck on Neo4j community 4.x boltx you'll need to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
 
 ```elixir
 bolt_versions = System.get_env("BOLT_VERSIONS")
 ```
 
-Now you should be able to verify that Neo4j is running:
+Now you should be able to verify that Ash Neo4j is connected to Neo4j using Boltx:
 
 ```elixir
 AshNeo4j.BoltxHelper.is_connected()
@@ -130,17 +130,13 @@ We'll start by defining an Ash Resource for a Specification. We intend to have a
 
 <!-- livebook:{"break_markdown":true} -->
 
-We've included `neo4j do` so that we translate the `:id` attribute to the neo4j node property `uuid`.
+For the Specfication resource we simply declare the data_layer when using Ash.Resource. Usually we'll need to do some minor configuration with a 'neo4j do' declaration block:
 
 ```elixir
 defmodule Specification do
   use Ash.Resource,
     domain: Domain,
     data_layer: AshNeo4j.DataLayer
-
-  neo4j do
-    translate id: :uuid
-  end
 
   actions do
     defaults [:read, :destroy, create: :*, update: :*]
@@ -169,7 +165,7 @@ specifications = [broadband_v1, mobile_backup_v2, nbn_ethernet_v1, esim_v1]
 
 ```
 
-Then we define an Ash Resource for Resource, using the AshNeo4j datalayer:
+Next we define an Ash Resource for Resource, using the AshNeo4j datalayer. A Resource is specified by a Specification, can use other Resources, and also belong to a Service. We can use the default relates for Resource belongs to Service.
 
 ```elixir
 defmodule Resource do
@@ -180,12 +176,10 @@ defmodule Resource do
 
   neo4j do
     relate [
-      {:specification, :SPECIFIES, :incoming},
-      {:resources, :USES, :outgoing}
+      {:specification, :SPECIFIES, :incoming, :Specification},
+      {:resources, :ASSIGNED_TO, :incoming, :Resource},
+      {:resource, :ASSIGNED_TO, :outgoing, :Resource}
     ]
-
-    skip [:service_id, :resource_id]
-    translate id: :uuid
   end
 
   actions do
@@ -231,15 +225,7 @@ defmodule Resource do
 end
 ```
 
-Now we'll create some resource instances, these will be related to the specifications we created earlier:
-
-```elixir
-esim_0001 = Resource |> Ash.create!(%{name: "esim_0001", specified_by: esim_v1.id})
-nbn_ethernet_0001 = Resource |> Ash.create!(%{name: "nbnEthernet_0001", specified_by: nbn_ethernet_v1.id})
-resources = [esim_0001, nbn_ethernet_0001]
-```
-
-We also want to define a Service, which is defined by a Specification and can manage child Services and be assigned Resources:
+We also need to declare a Service, also defined by a Specification and can manage child Services and be assigned Resources. Similarly we can use the default relates for Service belongs to Service.
 
 ```elixir
 defmodule Service do
@@ -252,13 +238,11 @@ defmodule Service do
     label :InternalService
 
     relate [
-      {:specification, :SPECIFIES, :incoming},
-      {:services, :MANAGES, :outgoing},
-      {:resources, :USES, :outgoing}
+      {:specification, :SPECIFIES, :incoming, :Specification},
+      {:services, :BELONGS_TO, :incoming, :Service},
+      {:resources, :IS_ASSIGNED, :incoming, :Resource},
+      {:resource, :IS_ASSIGNED, :outgoing, :Resource}
     ]
-
-    skip([:service_id, :parent_service_id])
-    translate id: :uuid
   end
 
   actions do
@@ -297,11 +281,20 @@ defmodule Service do
 
   relationships do
     belongs_to :specification, Specification, public?: true
-    belongs_to :parent_service, Service, public?: true
-    has_many :services, Service
-    has_many :resources, Resource
+    belongs_to :service, Service, public?: true
+    has_many :services, Service, public?: true
+    has_many :resources, Resource, public?: true
+    belongs_to :resource, Resource, public?: true
   end
 end
+```
+
+Now we'll create some resource instances, these will be related to the specifications we created earlier:
+
+```elixir
+esim_0001 = Resource |> Ash.create!(%{name: "esim_0001", specified_by: esim_v1.id})
+nbn_ethernet_0001 = Resource |> Ash.create!(%{name: "nbnEthernet_0001", specified_by: nbn_ethernet_v1.id})
+resources = [esim_0001, nbn_ethernet_0001]
 ```
 
 Now we create some services instances, also specified_by specifications.
@@ -351,15 +344,14 @@ By default Ash Neo4j converts snake cased attributes to PascalCase properties na
 
 Relationships are directed, the meaning should follow left to right, such as (Service) OWNS (Service), although with autonomous cars the reverse is also possible....
 
-We use `relate` to augment details of relevant `relationships`. Earlier on the Service we had
+We use `relate` to direct `relationships` where we don't want AshNeo4j defaults. Earlier on the Service we had:
 
 `relate [
-      {:specification, :SPECIFIES, :incoming},
-      {:services, :MANAGES, :outgoing},
-      {:resources, :USES, :outgoing}
+      {:specification, :SPECIFIES, :incoming, :Specification},
+      {:resources, :USES, :outgoing, :Resource}
    ]`
 
-We use `skip` to skip attributes that are transient and/or to ensure that foreign keys are not persisted on nodes as properties, rather they replaced by node relationships. Earlier on the Service we had `skip [:service_id, :parent_service_id]`.
+We can use skip to avoid persisting transisent attributes.
 
 Currently Ash Neo4j doesn't support [relationship properties](https://github.com/diffo-dev/ash_neo4j/discussions/4) although we are discussing how to support this.
 
