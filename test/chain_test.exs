@@ -299,7 +299,6 @@ defmodule AshNeo4j.Test.Chain do
         chain3
         |> Ash.Changeset.for_update(:update, head_id: chain2.id)
         |> Ash.update!()
-        |> IO.inspect(label: :updated_chain3)
 
       refreshed_chain2 = chain2 |> Ash.reload!()
 
@@ -341,8 +340,8 @@ defmodule AshNeo4j.Test.Chain do
       updated_chain2 =
         chain2 |> Ash.Changeset.for_update(:update, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
 
-      refreshed_chain1 = chain1 |> Ash.reload!() |> IO.inspect(label: :refreshed_chain1)
-      refreshed_chain3 = chain3 |> Ash.reload!() |> IO.inspect(label: :refreshed_chain3)
+      refreshed_chain1 = chain1 |> Ash.reload!()
+      refreshed_chain3 = chain3 |> Ash.reload!(0
 
       assert Neo4jHelper.nodes_relate_how?(
                :Chain,
@@ -441,8 +440,7 @@ defmodule AshNeo4j.Test.Chain do
       chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
 
       # chain4 replaces chain2
-      updated_chain2 =
-        chain2 |> Ash.Changeset.for_update(:unrelate, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
+      updated_chain2 = chain2 |> Ash.Changeset.for_update(:unrelate, head_id: chain1.id, tail_id: chain3.id) |> Ash.update!()
 
       chain4 =
         Chain
@@ -500,6 +498,7 @@ defmodule AshNeo4j.Test.Chain do
 
       check_enrichment(chain4, :head, Chain, :head_id, chain1.id)
       check_enrichment(chain4, :tail, Chain, :tail_id, chain3.id)
+
     end
 
     @tag bugged: true
@@ -567,6 +566,7 @@ defmodule AshNeo4j.Test.Chain do
 
       check_enrichment(chain4, :head, Chain, :head_id, chain1.id)
       check_enrichment(chain4, :tail, Chain, :tail_id, chain3.id)
+
     end
 
     test "chain of 3 can have a link replaced via single update" do
