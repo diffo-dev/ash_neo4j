@@ -4,7 +4,8 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @regex ~r/^[A-Z]+(_[A-Z]+)*$/
+  @edge_label_regex ~r/^[A-Z]+(_[A-Z]+)*$/
+  @node_label_regex ~r/^[A-Z][a-zA-Z0-9]*$/
 
   @impl true
   def verify(dsl) do
@@ -14,8 +15,8 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
 
     if length(relate) == length(relationships) do
       case invalid_edge_labels =
-             Enum.reduce(relate, [], fn {_relationship_name, edge_label, _edge_direction}, acc ->
-               if Regex.match?(@regex, Atom.to_string(edge_label)) do
+             Enum.reduce(relate, [], fn {_relationship_name, edge_label, _edge_direction, _destination_label}, acc ->
+               if Regex.match?(@edge_label_regex, Atom.to_string(edge_label)) do
                  acc
                else
                  [to_string(edge_label) | acc]
@@ -26,7 +27,8 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
           relationship_names = Enum.into(relationships, [], &Map.get(&1, :name))
 
           case mismatched_relationship_names =
-                 Enum.reduce(relate, [], fn {relationship_name, _edge_label, _edge_direction}, acc ->
+                 Enum.reduce(relate, [], fn {relationship_name, _edge_label, _edge_direction, _destination_label},
+                                            acc ->
                    if relationship_name in relationship_names do
                      acc
                    else
@@ -35,7 +37,8 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
                  end) do
             [] ->
               case invalid_edge_directions =
-                     Enum.reduce(relate, [], fn {_relationship_name, _edge_label, edge_direction}, acc ->
+                     Enum.reduce(relate, [], fn {_relationship_name, _edge_label, edge_direction, _destination_label},
+                                                acc ->
                        if edge_direction in [:incoming, :outgoing] do
                          acc
                        else
@@ -43,7 +46,27 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
                        end
                      end) do
                 [] ->
-                  :ok
+                  case invalid_destination_labels =
+                         Enum.reduce(relate, [], fn {_relationship_name, _edge_label, _edge_direction,
+                                                     destination_label},
+                                                    acc ->
+                           if Regex.match?(@node_label_regex, Atom.to_string(destination_label)) do
+                             acc
+                           else
+                             [to_string(destination_label) | acc]
+                           end
+                         end) do
+                    [] ->
+                      :ok
+
+                    _ ->
+                      {:error,
+                       DslError.exception(
+                         module: resource,
+                         message:
+                           "relate: destination labels must be PascalCase, invalid destination labels: #{invalid_destination_labels}"
+                       )}
+                  end
 
                 _ ->
                   {:error,
@@ -75,7 +98,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
       {:error,
        DslError.exception(
          module: resource,
-         message: "relate: relate must have an entry for each relationship"
+         message: "relate: relate and relationships have different number of entries"
        )}
     end
   end

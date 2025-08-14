@@ -8,8 +8,8 @@ defmodule AshNeo4j.Test.Resource.Chain do
     label :Chain
 
     relate [
-      {:head, :HEAD_TO_TAIL, :incoming},
-      {:tail, :HEAD_TO_TAIL, :outgoing}
+      {:head, :HEAD_TO_TAIL, :incoming, :Chain},
+      {:tail, :HEAD_TO_TAIL, :outgoing, :Chain}
     ]
 
     translate id: :uuid
@@ -40,6 +40,15 @@ defmodule AshNeo4j.Test.Resource.Chain do
       change manage_relationship(:head_id, :head, type: :append_and_remove)
       change manage_relationship(:tail_id, :tail, type: :append_and_remove)
     end
+
+    update :unrelate do
+      require_atomic? false
+      argument :head_id, :uuid
+      argument :tail_id, :uuid
+
+      change manage_relationship(:head_id, :head, type: :remove)
+      change manage_relationship(:tail_id, :tail, type: :remove)
+    end
   end
 
   attributes do
@@ -56,6 +65,6 @@ defmodule AshNeo4j.Test.Resource.Chain do
   end
 
   preparations do
-    prepare build(sort: [name: :asc], load: [:head_id, :tail_id])
+    prepare build(sort: [name: :asc], load: [:tail_id, :head_id])
   end
 end

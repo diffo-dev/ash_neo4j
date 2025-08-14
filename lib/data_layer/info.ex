@@ -51,16 +51,16 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns a node_relationship that matches the edge label and direction
+  Returns a node_relationship that matches the edge label, edge direction and destination label
   """
-  @spec node_relationship(Ash.Resource.t(), atom(), atom()) :: tuple() | nil
-  def node_relationship(resource, edge_label, direction)
-      when is_atom(resource) and is_atom(edge_label) and is_atom(direction) do
+  @spec node_relationship(Ash.Resource.t(), atom(), atom(), atom()) :: tuple() | nil
+  def node_relationship(resource, edge_label, edge_direction, destination_label)
+      when is_atom(resource) and is_atom(edge_label) and is_atom(edge_direction) and is_atom(destination_label) do
     Enum.find(
       relate(resource),
       fn related ->
         case related do
-          {_, ^edge_label, ^direction} -> true
+          {_, ^edge_label, ^edge_direction, ^destination_label} -> true
           _ -> false
         end
       end
@@ -71,25 +71,12 @@ defmodule AshNeo4j.DataLayer.Info do
   Returns a matching Ash.Resource.Info relationship given edge label, edge direction and destination node label
   """
   @spec relationship(Ash.Resource.t(), atom(), atom(), atom()) :: struct() | nil
-  def relationship(resource, relationship_label, direction, dest_label)
-      when is_atom(resource) and is_atom(relationship_label) and is_atom(direction) and is_atom(dest_label) do
-    relationships =
-      Enum.reduce(relate(resource), [], fn {relationship_name, edge_label, edge_direction}, acc ->
-        relationship = Ash.Resource.Info.relationship(resource, relationship_name)
-        dest_resource = relationship.destination
-        relationship_destination_label = __MODULE__.label(dest_resource)
+  def relationship(resource, edge_label, edge_direction, destination_label)
+      when is_atom(resource) and is_atom(edge_label) and is_atom(edge_direction) and is_atom(destination_label) do
+    node_relationship = node_relationship(resource, edge_label, edge_direction, destination_label)
 
-        if relationship != nil and relationship_label == edge_label and direction == edge_direction and
-             dest_label == relationship_destination_label do
-          acc ++ [relationship]
-        else
-          acc
-        end
-      end)
-
-    case length(relationships) do
-      1 -> hd(relationships)
-      _ -> nil
+    if node_relationship != nil do
+      Ash.Resource.Info.relationship(resource, elem(node_relationship, 0))
     end
   end
 
@@ -98,15 +85,11 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec reverse_node_relationship(Ash.Resource.t(), atom()) :: tuple() | nil
   def reverse_node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
-    node_relationship = node_relationship(resource, name)
+    destination_resource = Ash.Resource.Info.related(resource, name)
+    reverse_relationship_path = Ash.Resource.Info.reverse_relationship(resource, [name])
 
-    case node_relationship do
-      {^name, edge_label, direction} ->
-        relationship = Ash.Resource.Info.relationship(resource, name)
-        node_relationship(relationship.destination, edge_label, reverse(direction))
-
-      nil ->
-        nil
+    if reverse_relationship_path != nil do
+      node_relationship(destination_resource, hd(reverse_relationship_path))
     end
   end
 
@@ -162,7 +145,7 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec preserve_node_relationships(Ash.Resource.t()) :: list(tuple())
   def preserve_node_relationships(resource) when is_atom(resource) do
-    Enum.reduce(relate(resource), guard(resource), fn {name, edge_label, direction}, acc ->
+    Enum.reduce(relate(resource), guard(resource), fn {name, edge_label, edge_direction, destination_label}, acc ->
       relationship = Ash.Resource.Info.relationship(resource, name)
       reverse_node_relationship = reverse_node_relationship(resource, relationship.name)
 
@@ -175,7 +158,7 @@ defmodule AshNeo4j.DataLayer.Info do
             if reverse_relationship.allow_nil? do
               acc
             else
-              [{edge_label, direction, label(relationship.destination)} | acc]
+              [{edge_label, edge_direction, destination_label} | acc]
             end
 
           true ->

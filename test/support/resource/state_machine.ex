@@ -20,7 +20,12 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
   end
 
   actions do
-    defaults [:create, :read, :destroy]
+    defaults [:read, :destroy]
+
+    create :create do
+      primary? true
+      change set_attribute(:operational_state, :initial)
+    end
 
     update :start do
       change transition_state(:started)

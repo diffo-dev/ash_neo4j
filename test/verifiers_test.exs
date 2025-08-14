@@ -57,7 +57,7 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        neo4j do
                          label :Resource
-                         relate [{:resources, :uses, :outgoing}]
+                         relate [{:resources, :uses, :outgoing, :Resource}]
                          translate id: :uuid
                        end
 
@@ -68,36 +68,7 @@ defmodule AshNeo4j.Test.Verifiers do
                        end
 
                        relationships do
-                         has_many :resources, InvalidEdgeLabel
-                       end
-                     end
-                   end
-    end
-
-    test "relate: mismatched relationship names" do
-      assert_raise Spark.Error.DslError,
-                   ~r/relate: relationship names must match the name of a relationship, mismatched relationship names: resourced/,
-                   fn ->
-                     defmodule MismatchedRelationshipNames do
-                       @moduledoc false
-                       use Ash.Resource,
-                         domain: AshNeo4j.Test.Domain,
-                         data_layer: AshNeo4j.DataLayer
-
-                       neo4j do
-                         label :Resource
-                         relate [{:resourced, :USES, :forwards}]
-                         translate id: :uuid
-                       end
-
-                       attributes do
-                         uuid_primary_key :id, writable?: true
-                         attribute :name, :string, public?: true
-                         attribute :resource_id, :uuid, public?: true
-                       end
-
-                       relationships do
-                         has_many :resources, MismatchedRelationshipNames
+                         has_many :resources, AshNeo4j.Test.Resource.Resource
                        end
                      end
                    end
@@ -105,7 +76,7 @@ defmodule AshNeo4j.Test.Verifiers do
 
     test "relate: mismatched relationships" do
       assert_raise Spark.Error.DslError,
-                   ~r/relate: relate must have an entry for each relationship/,
+                   ~r/relate: relate and relationships have different number of entries/,
                    fn ->
                      defmodule MismatchedRelationships do
                        @moduledoc false
@@ -115,7 +86,7 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        neo4j do
                          label :Resource
-                         relate [{:resources, :USES, :forwards}]
+                         relate [{:resourceful, :USES, :outgoing, :MismatchedRelationships}]
                          translate id: :uuid
                        end
 
@@ -123,6 +94,7 @@ defmodule AshNeo4j.Test.Verifiers do
                          uuid_primary_key :id, writable?: true
                          attribute :name, :string, public?: true
                          attribute :resource_id, :uuid, public?: true
+                         attribute :mismatched_relationships_id, :uuid, public?: true
                        end
 
                        relationships do
@@ -145,7 +117,7 @@ defmodule AshNeo4j.Test.Verifiers do
 
                        neo4j do
                          label :Resource
-                         relate [{:resources, :USES, :forwards}]
+                         relate [{:resources, :USES, :forwards, :RelateInvalidEdgeDirection}]
                          translate id: :uuid
                        end
 
@@ -153,10 +125,41 @@ defmodule AshNeo4j.Test.Verifiers do
                          uuid_primary_key :id, writable?: true
                          attribute :name, :string, public?: true
                          attribute :resource_id, :uuid, public?: true
+                         attribute :relate_invalid_edge_direction_id, :uuid, public?: true
                        end
 
                        relationships do
                          has_many :resources, RelateInvalidEdgeDirection
+                       end
+                     end
+                   end
+    end
+
+    test "relate: destination label style" do
+      assert_raise Spark.Error.DslError,
+                   ~r/relate: destination labels must be PascalCase, invalid destination labels: relateInvalidDestinationLabel/,
+                   fn ->
+                     defmodule RelateInvalidDestinationLabel do
+                       @moduledoc false
+                       use Ash.Resource,
+                         domain: AshNeo4j.Test.Domain,
+                         data_layer: AshNeo4j.DataLayer
+
+                       neo4j do
+                         label :Resource
+                         relate [{:resources, :USES, :outgoing, :relateInvalidDestinationLabel}]
+                         translate id: :uuid
+                       end
+
+                       attributes do
+                         uuid_primary_key :id, writable?: true
+                         attribute :name, :string, public?: true
+                         attribute :resource_id, :uuid, public?: true
+                         attribute :relate_invalid_destination_label_id, :uuid, public?: true
+                       end
+
+                       relationships do
+                         has_many :resources, RelateInvalidDestinationLabel
                        end
                      end
                    end

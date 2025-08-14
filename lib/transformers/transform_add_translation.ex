@@ -11,7 +11,6 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
 
   @impl true
   def after?(AshStateMachine.Transformers.AddState), do: true
-  def after?(Ash.Resource.Transformers.DefaultAccept), do: true
   def after?(_), do: false
 
   defp add_translation(dsl) do

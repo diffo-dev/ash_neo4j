@@ -8,9 +8,9 @@ defmodule AshNeo4j.Test.Resource.Post do
     label :Post
 
     relate [
-      {:comments, :BELONGS_TO, :incoming},
-      {:tags, :TAGS, :incoming},
-      {:author, :WROTE, :incoming}
+      {:comments, :BELONGS_TO, :incoming, :Comment},
+      {:tags, :TAGS, :incoming, :Tag},
+      {:author, :WROTE, :incoming, :Author}
     ]
 
     translate id: :uuid

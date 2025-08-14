@@ -8,6 +8,7 @@ defmodule AshNeo4j.Blog.Test do
   alias AshNeo4j.Test.Resource.Comment
   alias AshNeo4j.Test.Resource.Tag
   require Ash.Query
+  import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
   setup_all do
     BoltxHelper.start()
@@ -90,10 +91,7 @@ defmodule AshNeo4j.Blog.Test do
       result = Comment |> Ash.Query.for_read(:read) |> Ash.Query.filter_input(title: [eq: "comment2"]) |> Ash.read!()
       assert length(result) == 1
       comment = hd(result)
-      assert is_struct(comment, Comment)
-      assert comment.title == "comment2"
-      refute comment.post_id
-      assert is_struct(comment.post, Ash.NotLoaded)
+      check_enrichment(comment, :post, nil, :post_id, nil)
     end
 
     test "post comment relationship can be read using ash - post with single comment" do
@@ -485,11 +483,15 @@ defmodule AshNeo4j.Blog.Test do
         |> Ash.Changeset.for_update(:update, add_comments: [comment1.id, comment2.id])
         |> Ash.update()
 
+      related_post
+
       {:ok, unrelated_post} =
         related_post
         |> Ash.Changeset.new()
         |> Ash.Changeset.for_update(:unrelate, remove_comments: [comment2.id])
         |> Ash.update()
+
+      related_post
 
       # the unrelated post should have only the first comment
       assert length(unrelated_post.comments) == 1

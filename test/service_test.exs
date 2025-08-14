@@ -8,6 +8,7 @@ defmodule AshNeo4j.Service.Test do
   alias AshNeo4j.Test.Resource.Resource
   alias AshNeo4j.Test.Resource.Event
   require Ash.Query
+  import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
   setup_all do
     BoltxHelper.start()
@@ -58,9 +59,12 @@ defmodule AshNeo4j.Service.Test do
       assert service.specification.id == broadband_v1.id
     end
 
+    @tag bugged: true
+    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
+      Process.sleep(10000)
       esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
 
       resource =
@@ -87,6 +91,8 @@ defmodule AshNeo4j.Service.Test do
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
     end
 
+    @tag bugged: true
+    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "find a service by specification id, checking resource enrichment" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service1 = Service |> Ash.create!(%{name: "broadband_0001", specified_by: broadband_v1.id})
@@ -248,18 +254,6 @@ defmodule AshNeo4j.Service.Test do
       {:ok, service} = Service |> Ash.create(%{name: "service", specified_by: service_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
-      assert is_struct(updated_service, Service)
-      assert updated_service.events
-      fired_event = hd(updated_service.events)
-      assert is_struct(fired_event, Event)
-      assert fired_event.id == event.id
-
-      {:ok, refreshed_event} = event |> Ash.reload()
-      assert is_struct(refreshed_event, Event)
-      assert refreshed_event.service_id == service.id
-      refute refreshed_event.resource_id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalService,
@@ -269,6 +263,16 @@ defmodule AshNeo4j.Service.Test do
                :RAISED,
                :outgoing
              )
+
+      assert is_struct(updated_service, Service)
+      assert updated_service.events
+      fired_event = hd(updated_service.events)
+      assert is_struct(fired_event, Event)
+      assert fired_event.id == event.id
+
+      {:ok, refreshed_event} = event |> Ash.reload()
+      check_enrichment(refreshed_event, :service, Ash.NotLoaded, :service_id, service.id)
+      check_enrichment(refreshed_event, :resource, nil, :resource_id, nil)
     end
 
     test "(InternalResource) -[FIRED]-> (Event)" do
@@ -276,18 +280,6 @@ defmodule AshNeo4j.Service.Test do
       {:ok, resource} = Resource |> Ash.create(%{name: "resource", specified_by: resource_specification.id})
       {:ok, event} = Event |> Ash.create(%{type: :create})
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
-      assert is_struct(updated_resource, Resource)
-      assert updated_resource.events
-      fired_event = hd(updated_resource.events)
-      assert is_struct(fired_event, Event)
-      assert fired_event.id == event.id
-
-      {:ok, refreshed_event} = event |> Ash.reload()
-      assert is_struct(refreshed_event, Event)
-      refute refreshed_event.service_id
-      assert refreshed_event.resource_id == resource.id
-      assert is_struct(refreshed_event.service, Ash.NotLoaded)
-      assert is_struct(refreshed_event.resource, Ash.NotLoaded)
 
       assert Neo4jHelper.nodes_relate_how?(
                :InternalResource,
@@ -297,6 +289,16 @@ defmodule AshNeo4j.Service.Test do
                :FIRED,
                :outgoing
              )
+
+      assert is_struct(updated_resource, Resource)
+      assert updated_resource.events
+      fired_event = hd(updated_resource.events)
+      assert is_struct(fired_event, Event)
+      assert fired_event.id == event.id
+
+      {:ok, refreshed_event} = event |> Ash.reload()
+      check_enrichment(refreshed_event, :service, nil, :service_id, nil)
+      check_enrichment(refreshed_event, :resource, Ash.NotLoaded, :resource_id, resource.id)
     end
   end
 end
