@@ -746,6 +746,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    label = Info.label(resource)
     properties = properties(resource, attributes)
     relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
@@ -786,22 +787,29 @@ defmodule AshNeo4j.DataLayer do
           )
 
         # create_node_with_relationships
-        case Neo4jHelper.create_node_with_relationships(Info.label(resource), properties, relationships) do
-          {:ok, %Boltx.Response{results: groups}} ->
-            consolidated_groups = consolidate_groups(groups)
-            # return the enriched created resource
-            cond do
-              length(consolidated_groups) == 1 ->
-                query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
-                resource = convert_to_resource(query, hd(consolidated_groups))
-                {:ok, resource}
+        create_node(resource, properties)
+        case Neo4jHelper.relate_nodes(label, properties, relationships) do
+          :ok ->
+            case Neo4jHelper.read_nodes_related(label, properties) do
+              {:ok, %Boltx.Response{results: groups}} ->
+                consolidated_groups = consolidate_groups(groups)
+                # return the enriched created resource
+                cond do
+                  length(consolidated_groups) == 1 ->
+                    query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
+                    resource = convert_to_resource(query, hd(consolidated_groups))
+                    {:ok, resource}
 
-              true ->
-                {:error, "expected groups to consolidate to a single group (resource)"}
+                  true ->
+                    {:error, "expected groups to consolidate to a single group (resource)"}
+                end
+
+              {:error, error} ->
+                {:error, error}
             end
 
-          {:error, error} ->
-            {:error, error}
+          :error ->
+            {:error, "counldn't relate notes"}
         end
     end
   end
