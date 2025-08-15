@@ -324,9 +324,17 @@ defmodule AshNeo4j.Neo4jHelper do
   def relate_nodes(label, properties, relationships)
       when is_atom(label) and is_map(properties) and is_list(relationships) do
     results =
-      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive}, acc ->
+      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive},
+                                              acc ->
         if exclusive do
-          case relate_nodes_unrelating_destination(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
+          case relate_nodes_unrelating_destination(
+                 label,
+                 properties,
+                 dest_label,
+                 dest_properties,
+                 edge_label,
+                 edge_direction
+               ) do
             {:ok, result} ->
               {:cont, [result, acc]}
 

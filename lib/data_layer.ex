@@ -311,6 +311,7 @@ defmodule AshNeo4j.DataLayer do
         else
           # relate
           # example changeset.context: %{changed?: true, accessing_from: %{name: :events, source: AshNeo4j.Test.Resource.Service}}
+          # TODO the relationship may be exclusive, so we may need to delete other source or destination relationships
           object_id = relationship_properties(resource, object_resource, changeset.attributes, object_relationship_name)
 
           case map_size(object_id) do
@@ -371,7 +372,6 @@ defmodule AshNeo4j.DataLayer do
                   _ ->
                     {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
                       subject_node_relationship
-
                     case Neo4jHelper.unrelate_nodes(
                            subject_label,
                            subject_id,
@@ -396,6 +396,7 @@ defmodule AshNeo4j.DataLayer do
                 # relate each argument
                 arg_relate_result =
                   Enum.reduce_while(arguments, nil, fn argument, _acc ->
+
                     object_id = Info.convert_to_properties(object_resource, argument)
 
                     case map_size(object_id) do
@@ -746,14 +747,25 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    label = Info.label(resource)
     properties = properties(resource, attributes)
+
+    case create_node(resource, properties) do
+      {:ok, source_resource} ->
+        relate_nodes(source_resource, resource, attributes)
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp relate_nodes(source_resource, resource, attributes)
+       when is_struct(source_resource) and is_atom(resource) and is_map(attributes) do
     relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
     case Enum.count(relationship_source_attributes) do
       0 ->
-        create_node(resource, properties)
+        {:ok, source_resource}
 
       _ ->
         # accumulate relationships
@@ -777,7 +789,7 @@ defmodule AshNeo4j.DataLayer do
                     acc
                   else
                     dest_id = %{dest_node_property_name => dest_id_value}
-                    exclusive = (relationship.cardinality == :one)
+                    exclusive = Info.destination_exclusive?(resource, name)
                     [{destination_label, dest_id, edge_label, edge_direction, exclusive} | acc]
                   end
 
@@ -787,19 +799,21 @@ defmodule AshNeo4j.DataLayer do
             end
           )
 
-        # create_node_with_relationships
-        create_node(resource, properties)
-        case Neo4jHelper.relate_nodes(label, properties, relationships) do
+        # relate resources, potentially unrelating destination resources
+        label = Info.label(resource)
+        id_properties = id_properties(resource, attributes)
+
+        case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
           :ok ->
-            case Neo4jHelper.read_nodes_related(label, properties) do
+            case Neo4jHelper.read_nodes_related(label, id_properties) do
               {:ok, %Boltx.Response{results: groups}} ->
                 consolidated_groups = consolidate_groups(groups)
                 # return the enriched created resource
                 cond do
                   length(consolidated_groups) == 1 ->
                     query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
-                    resource = convert_to_resource(query, hd(consolidated_groups))
-                    {:ok, resource}
+                    source_resource = convert_to_resource(query, hd(consolidated_groups))
+                    {:ok, source_resource}
 
                   true ->
                     {:error, "expected groups to consolidate to a single group (resource)"}
