@@ -142,4 +142,5 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 * fixed unexpected empty query result
 * fixed has_many enrichment incorrect cypher
+* fixed create with multiple relationships doesn't relate nodes
 

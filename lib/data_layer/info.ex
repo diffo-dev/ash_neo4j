@@ -94,6 +94,47 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Returns whether the relationship is exclusive on the source resource
+  """
+  @spec destination_exclusive?(Ash.Resource.t(), atom()) :: boolean()
+  def source_exclusive?(resource, name) when is_atom(resource) and is_atom(name) do
+    relationship = Ash.Resource.Info.relationship(resource, name)
+    relationship.cardinality == :one
+  end
+
+  @doc """
+  Returns whether the relationship is exclusive on the destination resource, given a source resource and source relationship name
+  """
+  @spec destination_exclusive?(Ash.Resource.t(), atom()) :: boolean()
+  def destination_exclusive?(resource, name) when is_atom(resource) and is_atom(name) do
+    destination_resource = Ash.Resource.Info.related(resource, name)
+
+    if resource == destination_resource do
+      # same resource
+      {^name, edge_label, edge_direction, destination_label} = node_relationship(resource, name)
+
+      reverse_relationship =
+        relationship(destination_resource, edge_label, reverse(edge_direction), destination_label)
+
+      if reverse_relationship != nil do
+        reverse_relationship.cardinality == :one
+      else
+        false
+      end
+    else
+      # different resource
+      reverse_relationship_path = Ash.Resource.Info.reverse_relationship(resource, [name])
+
+      if reverse_relationship_path != nil do
+        reverse_relationship = Ash.Resource.Info.relationship(destination_resource, hd(reverse_relationship_path))
+        reverse_relationship.cardinality == :one
+      else
+        false
+      end
+    end
+  end
+
+  @doc """
   Returns the source node property name given the source resource, dest_resource and destination attribute name, i.e. post_id returns uuid
   """
   @spec source_node_property_name(Ash.Resource.t(), atom(), atom()) :: atom() | nil

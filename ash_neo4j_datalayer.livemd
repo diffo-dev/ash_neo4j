@@ -17,7 +17,7 @@ If already familiar with the [Ash Framework](https://ash-hq.org) in this liveboo
 * Brief Introduction to Neo4j
 * Installing Neo4j and configuring Boltx
 * How to persist your Ash Resources with Neo4j
-* How your Ash Resource and its relationships are stored in Neo4j
+* How your Ash Resources and their relationships are stored in Neo4j
 
 ## Why have an Ash Neo4j DataLayer?
 
@@ -313,7 +313,7 @@ broadband_0001 |> Ash.update!(%{manage_services: [mobile_backup_0001.id]})
 |> Ash.update!(%{use_resources: [nbn_ethernet_0001.id]})
 ```
 
-## How your Ash Resources and its relationships are stored in Neo4j
+## How your Ash Resources and their relationships are stored in Neo4j
 
 We've made some decisions about how Ash attributes and relationships are stored as Neo4j properties:
 
@@ -342,18 +342,17 @@ By default Ash Neo4j simply uses the rightmost `Module.split` of the Ash Resourc
 
 By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use `translate`. Neo4j reserves `id` so you will commonly have `translate id: :uuid`
 
-Relationships are directed, the meaning should follow left to right, such as (Service) OWNS (Service), although with autonomous cars the reverse is also possible....
-
 We use `relate` to direct `relationships` where we don't want AshNeo4j defaults. Earlier on the Service we had:
 
 `relate [
       {:specification, :SPECIFIES, :incoming, :Specification},
       {:resources, :USES, :outgoing, :Resource}
    ]`
+This directs the our Service's 'belongs_To Specification relationship to semantic cypher (:Specification)-[SPECIFIES]->(:Service)
 
 We can use skip to avoid persisting transisent attributes.
 
-Currently Ash Neo4j doesn't support [relationship properties](https://github.com/diffo-dev/ash_neo4j/discussions/4) although we are discussing how to support this.
+Currently Ash Neo4j doesn't support [relationship properties](https://github.com/diffo-dev/ash_neo4j/discussions/4) although we are discussing how to support this. You can of course use a 'connector' resource.
 
 ## What Next?
 

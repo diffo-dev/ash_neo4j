@@ -6,8 +6,8 @@ defmodule AshNeo4j.Test.Resource.Specification do
 
   neo4j do
     guard [
-      {:SPECIFIES, :outgoing, :InternalService},
-      {:SPECIFIES, :outgoing, :InternalResource}
+      {:SPECIFIES, :outgoing, :Service},
+      {:SPECIFIES, :outgoing, :Resource}
     ]
 
     translate id: :uuid

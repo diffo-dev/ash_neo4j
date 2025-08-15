@@ -48,7 +48,6 @@ defmodule AshNeo4j.Blog.Test do
       assert node.properties == %{"title" => "post1", "uuid" => uuid}
     end
 
-    @tag debug: true
     test "comment node can be read using Neo4jHelper" do
       # setup using Neo4jHelper
       uuid = Ash.UUID.generate()
@@ -472,7 +471,6 @@ defmodule AshNeo4j.Blog.Test do
              )
     end
 
-    @tag debug: true
     test "post and comment nodes can be related and unrelated using ash update" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post} = Post |> Ash.Changeset.for_create(:create, %{title: "post7", written_by: author.id}) |> Ash.create()
