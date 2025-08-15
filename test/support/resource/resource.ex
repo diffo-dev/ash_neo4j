@@ -5,8 +5,6 @@ defmodule AshNeo4j.Test.Resource.Resource do
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
-    label :InternalResource
-
     relate [
       {:specification, :SPECIFIES, :incoming, :Specification},
       {:service, :CONFIGURES, :incoming, :Service},
@@ -14,10 +12,6 @@ defmodule AshNeo4j.Test.Resource.Resource do
       {:resources, :USES, :outgoing, :Resource},
       {:events, :FIRED, :outgoing, :Event}
     ]
-
-    skip [:service_id, :resource_id]
-
-    translate id: :uuid
   end
 
   actions do

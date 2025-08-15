@@ -501,9 +501,6 @@ defmodule AshNeo4j.Test.Chain do
       check_enrichment(chain4, :tail, Chain, :tail_id, chain3.id)
     end
 
-    @tag debug1: true
-    # this doesn't work the new link doesn't replace the original link, rather chain2 and chain4 are both linked
-    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "chain of 3 can have a link replaced via create" do
       chain1 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain1"}) |> Ash.create!()
       chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()

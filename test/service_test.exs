@@ -16,8 +16,8 @@ defmodule AshNeo4j.Service.Test do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:InternalService)
-      Neo4jHelper.delete_nodes(:InternalResource)
+      Neo4jHelper.delete_nodes(:Service)
+      Neo4jHelper.delete_nodes(:Resource)
       Neo4jHelper.delete_nodes(:Specification)
       Neo4jHelper.delete_nodes(:Event)
     end)
@@ -59,8 +59,6 @@ defmodule AshNeo4j.Service.Test do
       assert service.specification.id == broadband_v1.id
     end
 
-    @tag bugged: true
-    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "resource node can be created with multiple relationships" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
@@ -90,8 +88,6 @@ defmodule AshNeo4j.Service.Test do
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
     end
 
-    @tag bugged: true
-    # https://github.com/diffo-dev/ash_neo4j/issues/140
     test "find a service by specification id, checking resource enrichment" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service1 = Service |> Ash.create!(%{name: "broadband_0001", specified_by: broadband_v1.id})
@@ -182,27 +178,27 @@ defmodule AshNeo4j.Service.Test do
         parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
+               :Service,
                %{name: "parent_service"},
-               :InternalService,
+               :Service,
                %{name: "child_service"},
                :MANAGES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
+               :Service,
                %{name: "child_service"},
-               :InternalResource,
+               :Resource,
                %{name: "parent_resource"},
                :CONFIGURES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :InternalResource,
+               :Resource,
                %{name: "parent_resource"},
-               :InternalResource,
+               :Resource,
                %{name: "child_resource"},
                :USES,
                :outgoing
@@ -255,7 +251,7 @@ defmodule AshNeo4j.Service.Test do
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
 
       assert Neo4jHelper.nodes_relate_how?(
-               :InternalService,
+               :Service,
                %{name: "service"},
                :Event,
                %{type: :create},
@@ -281,7 +277,7 @@ defmodule AshNeo4j.Service.Test do
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
 
       assert Neo4jHelper.nodes_relate_how?(
-               :InternalResource,
+               :Resource,
                %{name: "resource"},
                :Event,
                %{type: :create},

@@ -73,8 +73,8 @@ defmodule AshNeo4j.Neo4jHelper do
   iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Keira Knightley"})
   iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
   iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Bend it Like Beckham"})
-  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing},
-  ...> {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing}])
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing, false},
+  ...> {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing, false}])
   iex> {result, _} = AshNeo4j.Neo4jHelper.safe_delete_nodes(:Actor, %{name: "Keira Knightley"}, [{:ACTED_IN, :outgoing, :Movie}, {:LIVES_AT, :outgoing, :Place}])
   iex> result
   :error
@@ -288,19 +288,23 @@ defmodule AshNeo4j.Neo4jHelper do
       )
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
+    # cypher is a bit verbose but attempts to not delete/replace existing relationship while avoiding cartesian product
+    # "MATCH (s:Movie {title: 'Bend it Like Beckham'}) WITH s OPTIONAL MATCH (s0:Movie) <-[r0:FAVOURITE]-(d:Fan {name: 'Matt'}) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)<-[r:FAVOURITE]-(d:Fan {name: 'Matt'} RETURN s, r, d"
     ("MATCH " <>
+       Cypher.node(:s, source_label, source_properties) <>
+       " OPTIONAL MATCH " <>
        Cypher.node(:d, dest_label, dest_properties) <>
-       " WITH d OPTIONAL MATCH " <>
+       " WITH s, d OPTIONAL MATCH " <>
        Cypher.node(:s0, source_label, %{}) <>
        Cypher.relationship(:r0, edge_label, edge_direction) <>
-       "(d) DELETE r0 WITH d MATCH " <>
-       Cypher.node(:s, source_label, source_properties) <>
-       " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d")
+       " (d) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)" <>
+       Cypher.relationship(:r, edge_label, edge_direction) <>
+       "(d) RETURN s, r, d")
     |> Cypher.run()
   end
 
   @spec relate_nodes(atom(), map(), list()) ::
-          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          {:error, bitstring()}
           | :ok
   @doc """
   Creates source neo4j node with label, properties and relationships to existing nodes
@@ -313,20 +317,30 @@ defmodule AshNeo4j.Neo4jHelper do
   iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Bend it Like Beckham"})
   iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "The Immitation Game"})
 
-  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}])
-  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}, {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing}])
+  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing, false}])
+  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Keira Knightley"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing, false}, {:Movie, %{title: "Bend it Like Beckham"}, :ACTED_IN, :outgoing, false}])
   ```
   """
   def relate_nodes(label, properties, relationships)
       when is_atom(label) and is_map(properties) and is_list(relationships) do
     results =
-      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction}, acc ->
-        case relate_nodes(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
-          {:ok, result} ->
-            {:cont, [result, acc]}
+      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive}, acc ->
+        if exclusive do
+          case relate_nodes_unrelating_destination(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
+            {:ok, result} ->
+              {:cont, [result, acc]}
 
-          {:error, _error} ->
-            {:halt, :error}
+            {:error, _error} ->
+              {:halt, :error}
+          end
+        else
+          case relate_nodes(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
+            {:ok, result} ->
+              {:cont, [result, acc]}
+
+            {:error, _error} ->
+              {:halt, :error}
+          end
         end
       end)
 
@@ -428,7 +442,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
   iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
-  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing}])
+  iex> :ok = AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, [{:Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing, false}])
   iex> {:ok, %{records: records}} = AshNeo4j.Neo4jHelper.read_nodes_related(:Actor, %{name: "Bill Nighy"})
   iex> length(records)
   1

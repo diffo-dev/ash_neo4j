@@ -777,7 +777,8 @@ defmodule AshNeo4j.DataLayer do
                     acc
                   else
                     dest_id = %{dest_node_property_name => dest_id_value}
-                    [{destination_label, dest_id, edge_label, edge_direction} | acc]
+                    exclusive = (relationship.cardinality == :one)
+                    [{destination_label, dest_id, edge_label, edge_direction, exclusive} | acc]
                   end
 
                 nil ->
@@ -808,8 +809,8 @@ defmodule AshNeo4j.DataLayer do
                 {:error, error}
             end
 
-          :error ->
-            {:error, "counldn't relate notes"}
+          {:error, error} ->
+            {:error, error}
         end
     end
   end
