@@ -3,7 +3,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   require Logger
 
   @struct_name_regex Regex.compile!("%(.*?){")
-  @struct_properties_regex Regex.compile!("%.+{(.*)}")
+  @struct_properties_regex Regex.compile!("{(.*?)}$")
 
   @doc """
   Casts an Ash.Resource.Attribute
@@ -147,8 +147,9 @@ defmodule AshNeo4j.DataLayer.Cast do
             value
 
           name ->
+            IO.inspect(name, label: :cast_struct_name)
             module = Module.concat([name])
-            properties = cast_struct_properties(value)
+            properties = cast_struct_properties(value) |> IO.inspect(label: :cast_struct_properties)
 
             struct(module, properties)
             |> Map.replace(:__meta__, %Ecto.Schema.Metadata{
@@ -163,7 +164,10 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast_struct_properties(value) when is_binary(value) do
-    Regex.run(@struct_properties_regex, value) |> Enum.at(1) |> String.split(",") |> Enum.into([], &cast_property(&1))
+    Regex.run(@struct_properties_regex, value)
+    |> Enum.at(1)
+    |> split_properties()
+    |> Enum.into([], &cast_property(&1))
   end
 
   defp cast_property(property) when is_binary(property) do
@@ -401,5 +405,34 @@ defmodule AshNeo4j.DataLayer.Cast do
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
         value
     end
+  end
+
+  defp split_properties(str) do
+    {parts, buf, _depths, _in_string} =
+      String.graphemes(str)
+      |> Enum.reduce({[], "", %{curly: 0, square: 0}, false}, fn
+        "\"", {acc, buf, depths, in_string} ->
+          {acc, buf <> "\"", depths, !in_string}
+
+        "{", {acc, buf, depths, false} ->
+          {acc, buf <> "{", %{depths | curly: depths.curly + 1}, false}
+
+        "}", {acc, buf, depths, false} ->
+          {acc, buf <> "}", %{depths | curly: depths.curly - 1}, false}
+
+        "[", {acc, buf, depths, false} ->
+          {acc, buf <> "[", %{depths | square: depths.square + 1}, false}
+
+        "]", {acc, buf, depths, false} ->
+          {acc, buf <> "]", %{depths | square: depths.square - 1}, false}
+
+        ",", {acc, buf, %{curly: 0, square: 0}, false} ->
+          {acc ++ [String.trim(buf)], "", %{curly: 0, square: 0}, false}
+
+        ch, {acc, buf, depths, in_string} ->
+          {acc, buf <> ch, depths, in_string}
+      end)
+
+    parts ++ [String.trim(buf)]
   end
 end
