@@ -372,6 +372,7 @@ defmodule AshNeo4j.DataLayer do
                   _ ->
                     {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
                       subject_node_relationship
+
                     case Neo4jHelper.unrelate_nodes(
                            subject_label,
                            subject_id,
@@ -396,7 +397,6 @@ defmodule AshNeo4j.DataLayer do
                 # relate each argument
                 arg_relate_result =
                   Enum.reduce_while(arguments, nil, fn argument, _acc ->
-
                     object_id = Info.convert_to_properties(object_resource, argument)
 
                     case map_size(object_id) do

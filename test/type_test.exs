@@ -5,6 +5,7 @@ defmodule AshNeo4j.Test.Type do
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Money
   alias AshNeo4j.Test.Struct
+  alias AshNeo4j.Test.StructInStruct
 
   use ExUnit.Case, async: false
 
@@ -47,6 +48,7 @@ defmodule AshNeo4j.Test.Type do
     # regex: ~r/foo/iu,
     string: "Hello",
     struct: %Struct{},
+    struct_in_struct: %StructInStruct{},
     term: %{"aEnd" => 1, "zEnd" => 13},
     time: ~T[07:45:41Z],
     time_usec: ~T[07:45:41.429903Z],
@@ -92,6 +94,8 @@ defmodule AshNeo4j.Test.Type do
     # "regex" => "~r/foo/iu",
     "string" => "Hello",
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}",
+    "structInStruct" =>
+      "%AshNeo4j.Test.StructInStruct{struct: %AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}}",
     "term" => "%{\"aEnd\" => 1, \"zEnd\" => 13}",
     "time" => "07:45:41",
     "timeUsec" => "07:45:41.429903",
