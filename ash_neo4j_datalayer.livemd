@@ -3,7 +3,7 @@
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.2.8"}
+    {:ash_neo4j, "~> 0.2.9"}
   ],
   consolidate_protocols: false
 )

@@ -144,3 +144,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * fixed has_many enrichment incorrect cypher
 * fixed create with multiple relationships doesn't relate nodes
 
+## [v0.2.9](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.8...v0.2.9) (2025-08-16)
+
+### Maintenance
+
+* fixed Ash.Error.Unknown when reading structs embedded in structs
+

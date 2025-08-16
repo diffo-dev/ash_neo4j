@@ -147,9 +147,8 @@ defmodule AshNeo4j.DataLayer.Cast do
             value
 
           name ->
-            IO.inspect(name, label: :cast_struct_name)
             module = Module.concat([name])
-            properties = cast_struct_properties(value) |> IO.inspect(label: :cast_struct_properties)
+            properties = cast_struct_properties(value)
 
             struct(module, properties)
             |> Map.replace(:__meta__, %Ecto.Schema.Metadata{
