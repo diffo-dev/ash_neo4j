@@ -2,7 +2,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
-  @struct_name_regex Regex.compile!("%(.+){.*}")
+  @struct_name_regex Regex.compile!("%(.*?){")
   @struct_properties_regex Regex.compile!("%.+{(.*)}")
 
   @doc """

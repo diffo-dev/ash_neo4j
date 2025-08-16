@@ -60,6 +60,7 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :regex, :struct, public?: true
     attribute :string, :string, public?: true
     attribute :struct, :struct, public?: true
+    attribute :struct_in_struct, :struct, public?: true
     attribute :term, :term, public?: true
     attribute :time, :time, public?: true
     attribute :time_usec, :time_usec, public?: true
