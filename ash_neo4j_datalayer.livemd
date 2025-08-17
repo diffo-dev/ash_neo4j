@@ -326,7 +326,7 @@ We've made some decisions about how Ash attributes and relationships are stored 
 * We only support a single 'static' label per resource.
 * Embedded resources are converted the same way, and stored in strings or Neo4j arrays of strings, rather than using json. It is possible to use :string attributes as json, however you'll need to encode/decode to jsonString yourself.
 
-For embedded resources and other or custom `Ash.Type`, you must implement `String.Chars` protocol.
+For embedded resources and other or custom `Ash.Type`, you must implement `String.Chars` protocol using inspect.
 
 <!-- livebook:{"break_markdown":true} -->
 

@@ -7,19 +7,19 @@ defmodule AshNeo4j.Test.Resource.Money do
     attribute :amount, :integer do
       public? true
       allow_nil? false
-      # constraints min: 0
+      constraints [min: 0]
     end
 
     attribute :currency, :atom do
       public? true
       allow_nil? false
-      # constraints one_of: [:aud, :eur, :sek, :usd]
+      constraints [one_of: [:aud, :eur, :sek, :usd]]
     end
   end
 
   defimpl String.Chars do
-    def to_string(v) do
-      "%AshNeo4j.Test.Resource.Money{amount: #{v.amount}, currency: :#{v.currency}}"
+    def to_string(struct) do
+      inspect(Ash.Test.strip_metadata(struct)) |> String.replace(", __meta__: #Ecto.Schema.Metadata<>", "")
     end
   end
 end
