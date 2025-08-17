@@ -109,12 +109,11 @@ The DSL may be used to translate the Ash Resource's attributes to node propertie
   end
 ```
 
-The :id attribute must be translated as it cannot be used as a Neo4j property name.
 Attributes with underscores are translated to camelCase Neo4j properties so don't need to be explicitly listed in translate.
 
 ## Skip
 
-The DSL may be used to skip storing attributes as node properties. This can be useful for 'transient' attributes.
+The DSL may be used to skip storing attributes as node properties. This can be useful for 'transient' attributes, or attributes you want to default using the resource but not store explicitly.
 
 ```elixir
   neo4j do
@@ -183,7 +182,7 @@ Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :u
 
 ## Structs and String.Chars
 
-Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented using the representation common for Elixir structs. This is straightforward whether or not you own the module. Here is an example for a simple embedded resource:
+Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented using the representation common for Elixir structs. This is straightforward whether or not you own the module. For most structs you can simply use inspect(struct), however for an embedded Ash.Resource don't want the metadata in the property value. Here is an example for a simple embedded resource:
 
 ```elixir
 defmodule Money do
@@ -196,11 +195,16 @@ defmodule Money do
   end
 
   defimpl String.Chars do
-    def to_string(v) do
-      "%AshNeo4j.Test.Resource.Money{amount: #{v.amount}, currency: :#{v.currency}}"
+    def to_string(struct) do
+      inspect(Ash.Test.strip_metadata(struct)) |> String.replace(", __meta__: #Ecto.Schema.Metadata<>", "")
     end
   end
 end
+```
+
+Here is a resulting node property value 
+```elixir
+'%AshNeo4j.Test.Resource.Money{amount: 1000, currency: :sek}'
 ```
 
 ## Elixir nil and Neo4j Null
