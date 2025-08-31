@@ -94,9 +94,22 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Returns the reverse relationship given resource and relationship name
+  """
+  @spec reverse_relationship(Ash.Resource.t(), atom()) :: tuple() | nil
+  def reverse_relationship(resource, name) when is_atom(resource) and is_atom(name) do
+    destination_resource = Ash.Resource.Info.related(resource, name)
+    reverse_relationship_path = Ash.Resource.Info.reverse_relationship(resource, [name])
+
+    if reverse_relationship_path != nil do
+      Ash.Resource.Info.relationship(destination_resource, hd(reverse_relationship_path))
+    end
+  end
+
+  @doc """
   Returns whether the relationship is exclusive on the source resource
   """
-  @spec destination_exclusive?(Ash.Resource.t(), atom()) :: boolean()
+  @spec source_exclusive?(Ash.Resource.t(), atom()) :: boolean()
   def source_exclusive?(resource, name) when is_atom(resource) and is_atom(name) do
     relationship = Ash.Resource.Info.relationship(resource, name)
     relationship.cardinality == :one

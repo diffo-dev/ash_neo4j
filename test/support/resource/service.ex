@@ -39,10 +39,12 @@ defmodule AshNeo4j.Test.Resource.Service do
       primary? true
       accept [:name]
       require_atomic? false
+      argument :specified_by, :uuid
       argument :manage_services, {:array, :uuid}
       argument :use_resources, {:array, :uuid}
       argument :fire_event, :uuid
 
+      change manage_relationship(:specified_by, :specification, type: :append_and_remove)
       change manage_relationship(:manage_services, :services, type: :append_and_remove)
       change manage_relationship(:use_resources, :resources, type: :append_and_remove)
       change manage_relationship(:fire_event, :events, type: :append_and_remove)
