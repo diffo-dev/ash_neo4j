@@ -7,13 +7,13 @@ defmodule AshNeo4j.Test.Resource.Money do
     attribute :amount, :integer do
       public? true
       allow_nil? false
-      constraints [min: 0]
+      constraints min: 0
     end
 
     attribute :currency, :atom do
       public? true
       allow_nil? false
-      constraints [one_of: [:aud, :eur, :sek, :usd]]
+      constraints one_of: [:aud, :eur, :sek, :usd]
     end
   end
 

@@ -16,10 +16,11 @@ defmodule AshNeo4j.Service.Test do
 
   setup do
     on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Service)
-      Neo4jHelper.delete_nodes(:Resource)
-      Neo4jHelper.delete_nodes(:Specification)
-      Neo4jHelper.delete_nodes(:Event)
+      # Neo4jHelper.delete_nodes(:Service)
+      # Neo4jHelper.delete_nodes(:Resource)
+      # Neo4jHelper.delete_nodes(:Specification)
+      # Neo4jHelper.delete_nodes(:Event)
+      :ok
     end)
   end
 
@@ -202,6 +203,68 @@ defmodule AshNeo4j.Service.Test do
                %{name: "child_resource"},
                :USES,
                :outgoing
+             )
+    end
+
+    test "service specification update" do
+      {:ok, service_specification1} = Specification |> Ash.create(%{name: "specification1", major_version: 1})
+      {:ok, service_specification2} = Specification |> Ash.create(%{name: "specification2", major_version: 2})
+
+      {:ok, _service1} =
+        Service
+        |> Ash.Changeset.for_create(:create, %{name: "service1", specified_by: service_specification1.id})
+        |> Ash.create()
+
+      {:ok, service2} =
+        Service
+        |> Ash.Changeset.for_create(:create, %{name: "service2", specified_by: service_specification1.id})
+        |> Ash.create()
+
+      {:ok, _service3} =
+        Service
+        |> Ash.Changeset.for_create(:create, %{name: "service3", specified_by: service_specification2.id})
+        |> Ash.create()
+
+      # now update service2 to specification2, and service1 should be still specification1 and service3 should still be specification2
+      {:ok, _service2} =
+        service2
+        |> Ash.Changeset.for_update(:update, %{specified_by: service_specification2.id})
+        |> Ash.update()
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "service1"},
+               :Specification,
+               %{name: "specification1"},
+               :SPECIFIES,
+               :incoming
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "service2"},
+               :Specification,
+               %{name: "specification2"},
+               :SPECIFIES,
+               :incoming
+             )
+
+      assert Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "service3"},
+               :Specification,
+               %{name: "specification2"},
+               :SPECIFIES,
+               :incoming
+             )
+
+      refute Neo4jHelper.nodes_relate_how?(
+               :Service,
+               %{name: "service2"},
+               :Specification,
+               %{name: "specification1"},
+               :SPECIFIES,
+               :incoming
              )
     end
   end

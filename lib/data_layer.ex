@@ -407,13 +407,17 @@ defmodule AshNeo4j.DataLayer do
                         {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
                           subject_node_relationship
 
-                        case Neo4jHelper.relate_nodes_unrelating_destination(
+                        subject_exclusive? = Info.source_exclusive?(resource, relationship_name)
+                        object_exclusive? = Info.destination_exclusive?(resource, relationship_name)
+
+                        case Neo4jHelper.relate_nodes(
                                subject_label,
                                subject_id,
                                object_label,
                                object_id,
                                edge_label,
-                               subject_to_object_direction
+                               subject_to_object_direction,
+                               {subject_exclusive?, object_exclusive?}
                              ) do
                           {:ok, %Boltx.Response{results: []}} ->
                             {:halt, {:error, "no result to relate nodes"}}

@@ -303,6 +303,104 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec relate_nodes_unrelating_source_and_destination(atom(), map(), atom(), map(), atom(), atom()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  @doc """
+  Relates two nodes unrelating the source and destination node from any similar relationships
+   ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Person, %{name: "Marlo"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Person, %{name: "Harry"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Person, %{name: "Marion"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Person, %{name: "Robin"})
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Person, %{name: "Marlo"}, :Person, %{name: "Harry"}, :PARTNER, :outgoing)
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Person, %{name: "Marion"}, :Person, %{name: "Robin"}, :PARTNER, :outgoing)
+  iex> {result, _} = AshNeo4j.Neo4jHelper.relate_nodes_unrelating_source_and_destination(:Person, %{name: "Marlo"}, :Person, %{name: "Robin"}, :PARTNER, :outgoing)
+  iex> result
+  :ok
+  ```
+  """
+  def relate_nodes_unrelating_source_and_destination(
+        source_label,
+        source_properties,
+        dest_label,
+        dest_properties,
+        edge_label,
+        edge_direction
+      )
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+             is_atom(edge_label) and is_atom(edge_direction) do
+    ("MATCH " <>
+       Cypher.node(:s, source_label, source_properties) <>
+       " WITH s OPTIONAL MATCH (s)" <>
+       Cypher.relationship(:r0, edge_label, edge_direction) <>
+       Cypher.node(:d0, dest_label, %{}) <>
+       " DELETE r0 WITH s OPTIONAL MATCH " <>
+       Cypher.node(:d, dest_label, dest_properties) <>
+       " WITH s, d OPTIONAL MATCH " <>
+       Cypher.node(:s0, source_label, %{}) <>
+       Cypher.relationship(:r0, edge_label, edge_direction) <>
+       " (d) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)" <>
+       Cypher.relationship(:r, edge_label, edge_direction) <>
+       "(d) RETURN s, r, d")
+    |> Cypher.run()
+  end
+
+  def relate_nodes(
+        source_label,
+        source_properties,
+        dest_label,
+        dest_properties,
+        edge_label,
+        edge_direction,
+        options
+      )
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+             is_atom(edge_label) and is_atom(edge_direction) and is_tuple(options) do
+    case options do
+      {false, false} ->
+        relate_nodes(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
+
+      {true, false} ->
+        relate_nodes_unrelating_source(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
+
+      {false, true} ->
+        relate_nodes_unrelating_destination(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
+
+      {true, true} ->
+        relate_nodes_unrelating_source_and_destination(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
+    end
+  end
+
   @spec relate_nodes(atom(), map(), list()) ::
           {:error, bitstring()}
           | :ok
