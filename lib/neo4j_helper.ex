@@ -464,7 +464,7 @@ defmodule AshNeo4j.Neo4jHelper do
 
   @spec nodes_relate_how?(atom(), map(), atom(), map(), atom(), atom()) :: :error | false | true
   @doc """
-  Tests if two nodes are related with a relationship type
+  Tests if two nodes are directly related
     ## Examples
   ```
   iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy", born: 1949})
@@ -482,6 +482,46 @@ defmodule AshNeo4j.Neo4jHelper do
         Cypher.node(:s, source_label, source_properties) <>
         Cypher.relationship(:r, edge_label, edge_direction) <>
         Cypher.node(:d, dest_label, dest_properties) <> " RETURN s, r, d"
+
+    case Cypher.run(cypher) do
+      {:ok, %{records: records}} ->
+        length(records) > 0
+
+      {:error, error} ->
+        Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
+        :error
+    end
+  end
+
+  @spec nodes_relate_how?(atom(), map(), atom(), map(), list(tuple())) :: :error | false | true
+  @doc """
+  Tests if two nodes are related by traversal
+    ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Keira Knightley"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Actor, %{name: "Bill Nighy"})
+  iex> AshNeo4j.Neo4jHelper.create_node(:Movie, %{title: "Love Actually"})
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Keira Knightley"}, :Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing)
+  iex> AshNeo4j.Neo4jHelper.relate_nodes(:Actor, %{name: "Bill Nighy"}, :Movie, %{title: "Love Actually"}, :ACTED_IN, :outgoing)
+  iex> AshNeo4j.Neo4jHelper.nodes_relate_how?(:Actor, %{name: "Bill Nighy"}, :Actor, %{name: "Keira Knightley"}, [ACTED_IN: :outgoing, ACTED_IN: :incoming])
+  true
+  ```
+  """
+  def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edges)
+        when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+             is_list(edges) do
+            cypher =
+      "MATCH " <>
+        Cypher.node(:s, source_label, source_properties) <>
+        Enum.reduce(edges, "", fn {edge_label, edge_direction}, acc ->
+          variable = String.to_atom("r#{String.length(acc)}")
+          if acc == "" do
+            acc <> Cypher.relationship(variable, edge_label, edge_direction)
+          else
+            acc <> "()" <> Cypher.relationship(variable, edge_label, edge_direction)
+          end
+        end) <>
+        Cypher.node(:d, dest_label, dest_properties) <> " RETURN s, d"
 
     case Cypher.run(cypher) do
       {:ok, %{records: records}} ->
