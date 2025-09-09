@@ -150,3 +150,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 * fixed Ash.Error.Unknown when reading structs embedded in structs
 
+## [v0.2.10](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.9...v0.2.10) (2025-09-09)
+
+### Maintenance
+
+* fixed update on_lookup relate on has_many exclusivity
+
