@@ -153,15 +153,28 @@ defmodule AshNeo4j.Cypher do
   """
   def relationship(variable, label, direction \\ nil)
       when is_atom(variable) and is_atom(label) and is_atom(direction) do
-    case direction do
-      :outgoing ->
-        "-[#{variable}:#{label}]->"
+    if variable == nil do
+      case direction do
+        :outgoing ->
+          "-[#{label}]->"
 
-      :incoming ->
-        "<-[#{variable}:#{label}]-"
+        :incoming ->
+          "<-[#{label}]-"
 
-      _ ->
-        "-[#{variable}:#{label}]-"
+        _ ->
+          "-[#{label}]-"
+      end
+    else
+      case direction do
+        :outgoing ->
+          "-[#{variable}:#{label}]->"
+
+        :incoming ->
+          "<-[#{variable}:#{label}]-"
+
+        _ ->
+          "-[#{variable}:#{label}]-"
+      end
     end
   end
 
