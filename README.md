@@ -1,8 +1,15 @@
+<!-- 
+SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+
+SPDX-License-Identifier: MIT
+-->
+
 # AshNeo4j
 
 [![Module Version](https://img.shields.io/hexpm/v/ash_neo4j)](https://hex.pm/packages/ash_neo4j)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen)](https://hexdocs.pm/ash_neo4j/)
-[![License](https://img.shields.io/hexpm/l/ash_neo4j)](https://github.com/diffo-dev/ash_neo4j/blob/master/LICENSE.md)
+[![License](https://img.shields.io/hexpm/l/ash_neo4j)](https://github.com/diffo-dev/ash_neo4j/blob/master/LICENSES/MIT.md)
+[![REUSE status](https://api.reuse.software/badge/github.com/diffo-dev/ash_neo4j)](https://api.reuse.software/info/github.com/diffo-dev/ash_neo4j)
 
 Ash DataLayer for Neo4j, configurable using a simple DSL
 
@@ -13,7 +20,7 @@ Add to the deps:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.10"},
+    {:ash_neo4j, "~> 0.2.11"},
   ]
 end
 ```
