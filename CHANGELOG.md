@@ -1,3 +1,9 @@
+<!-- 
+SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Change Log
 
 All notable changes to this project will be documented in this file.
@@ -155,4 +161,10 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Maintenance
 
 * fixed update on_lookup relate on has_many exclusivity
+
+## [v0.2.11](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.10...v0.2.11) (2025-10-13)
+
+### Features
+
+* REUSE compliant
 

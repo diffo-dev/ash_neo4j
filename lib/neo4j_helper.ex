@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshNeo4j.Neo4jHelper do
   require Logger
   alias AshNeo4j.Cypher
@@ -508,13 +512,14 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edges)
-        when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_list(edges) do
-            cypher =
+    cypher =
       "MATCH " <>
         Cypher.node(:s, source_label, source_properties) <>
         Enum.reduce(edges, "", fn {edge_label, edge_direction}, acc ->
           variable = String.to_atom("r#{String.length(acc)}")
+
           if acc == "" do
             acc <> Cypher.relationship(variable, edge_label, edge_direction)
           else

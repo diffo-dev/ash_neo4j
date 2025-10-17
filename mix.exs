@@ -1,8 +1,12 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.2.10"
+  @version "0.2.11"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -62,7 +66,7 @@ defmodule AshNeo4j.MixProject do
       logo: "logos/diffo.jpg",
       extras: [
         "README.md": [title: "Guide"],
-        "LICENSE.md": [title: "License"],
+        "LICENSES/MIT.md": [title: "License"],
         "documentation/dsls/DSL-AshNeo4j.DataLayer.md": [
           title: "DSL: AshNeo4j.DataLayer",
           search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)

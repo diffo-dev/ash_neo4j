@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
