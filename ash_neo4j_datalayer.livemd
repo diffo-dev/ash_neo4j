@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.2.10"}
+    {:ash_neo4j, "~> 0.2.11"}
   ],
   consolidate_protocols: false
 )
