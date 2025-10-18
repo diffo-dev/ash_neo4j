@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 Matthew Graham Beanland
+Copyright (c) 2025 Matthew Graham Beanland and [contributors](https://github.com/diffo-dev/ash_neo4j/graphs/contributors) 
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

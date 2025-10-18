@@ -1,9 +1,15 @@
+<!-- 
+SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Ash Neo4j DataLayer
 
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.2.10"}
+    {:ash_neo4j, "~> 0.2.11"}
   ],
   consolidate_protocols: false
 )

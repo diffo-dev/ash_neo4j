@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshNeo4j.Verifiers.VerifyRelate do
   @moduledoc "Verifies that each relate relates to a relationship, and that the edge labels meets Neo4j conventions"
   use Spark.Dsl.Verifier

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshNeo4j.Verifiers.VerifyGuard do
   @moduledoc "Verifies that each guard is a node relationship meeting Neo4j conventions"
   use Spark.Dsl.Verifier

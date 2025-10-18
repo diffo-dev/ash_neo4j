@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
 spark_locals_without_parens = [
   label: 1,
   relate: 1,
