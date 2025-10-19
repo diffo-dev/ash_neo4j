@@ -96,7 +96,7 @@ defmodule AshNeo4j.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ash, ash_version("~> 3.5")},
+      {:ash, ash_version("~> 3.0 and >= 3.6.2")},
       {:ash_state_machine, "~> 0.2.11", only: [:dev, :test]},
       {:boltx, ">= 0.0.6"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
