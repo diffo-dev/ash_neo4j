@@ -168,3 +168,8 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 * REUSE compliant
 
+### Fixes
+
+* updated ash dependency for CVE-2025-48043 fix
+
+
