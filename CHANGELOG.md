@@ -172,4 +172,10 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 * updated ash dependency for CVE-2025-48043 fix
 
+## [v0.2.12](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.11...v0.2.12) (2025-11-18)
+
+### Fixes
+
+* fixed relationship source_attribute filtering
+
 
