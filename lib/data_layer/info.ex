@@ -94,6 +94,18 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Returns the relationship from the source attribute, if any
+  """
+  @spec relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
+  def relationship(resource, source_attribute) when is_atom(resource) and is_atom(source_attribute) do
+    List.keyfind(relationship_attributes(resource), source_attribute, 0)
+  end
+
+  def relationship(resource, source_attribute) when is_atom(resource) and is_bitstring(source_attribute) do
+    List.keyfind(relationship_attributes(resource), String.to_atom(source_attribute), 0)
+  end
+
+  @doc """
   Returns a matching Ash.Resource.Info relationship given edge label, edge direction and destination node label
   """
   @spec relationship(Ash.Resource.t(), atom(), atom(), atom()) :: struct() | nil
