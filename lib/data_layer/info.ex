@@ -43,7 +43,7 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns a node_relationship that matches the source attribute name
+  Returns a node_relationship that matches the relationship name
   """
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
   def node_relationship(resource, name) when is_atom(resource) and is_atom(name) do
@@ -69,6 +69,18 @@ defmodule AshNeo4j.DataLayer.Info do
         end
       end
     )
+  end
+
+  @doc """
+  Returns the relationship from the source attribute, if any
+  """
+  @spec relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
+  def relationship(resource, source_attribute) when is_atom(resource) and is_atom(source_attribute) do
+    List.keyfind(relationship_attributes(resource), source_attribute, 0)
+  end
+
+  def relationship(resource, source_attribute) when is_atom(resource) and is_bitstring(source_attribute) do
+    List.keyfind(relationship_attributes(resource), String.to_atom(source_attribute), 0)
   end
 
   @doc """
