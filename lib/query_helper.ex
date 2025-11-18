@@ -55,12 +55,9 @@ defmodule AshNeo4j.QueryHelper do
             if Map.has_key?(predicate, :operator) do
               operator = convert_operator(predicate.operator)
               property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-              relationship_name = String.split(property_name, "_") |> List.first()
-              node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-              relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+              relationship = Info.relationship(ash_query.resource, property_name)
 
-              if (operator == "in" or operator == "=") and node_relationship != nil and relationship != nil and
-                   to_string(relationship.source_attribute) == property_name do
+              if (operator == "in" or operator == "=") and relationship != nil do
                 [predicate | acc]
               else
                 acc
@@ -83,9 +80,9 @@ defmodule AshNeo4j.QueryHelper do
             operator = convert_operator(predicate.operator)
             property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
             property_value = convert_value(predicate.right)
-            relationship_name = String.split(property_name, "_") |> List.first()
-            node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
+            relationship_name = elem(Info.relationship(ash_query.resource, property_name), 1)
             relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
+            node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
             dest_label = Info.label(relationship.destination)
 
             dest_property_name =
