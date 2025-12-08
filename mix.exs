@@ -19,10 +19,6 @@ defmodule AshNeo4j.MixProject do
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.github": :test
-      ],
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: &docs/0,
       dialyzer: [plt_add_apps: [:jason, :poison, :mix], ignore_warnings: ".dialyzer_ignore.exs"],
@@ -50,6 +46,15 @@ defmodule AshNeo4j.MixProject do
           "GitHub" => @github_url,
           "Author's home page" => "https://www.diffo.dev"
         }
+      ]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.github": :test
       ]
     ]
   end
