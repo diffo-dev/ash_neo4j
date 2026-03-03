@@ -101,14 +101,14 @@ defmodule AshNeo4j.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ash, ash_version("~> 3.0 and >= 3.6.2")},
-      {:ash_state_machine, "~> 0.2.11", only: [:dev, :test]},
+      {:ash, ash_version("~> 3.0 and >= 3.19.1")},
+      {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
       {:boltx, ">= 0.0.6"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},
       {:git_ops, "~> 2.7", only: [:dev], runtime: false},
-      {:credo, ">= 1.7.3", only: [:dev, :test], runtime: false},
+      {:credo, ">= 1.7.16", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.4.3", only: [:dev, :test], runtime: false},
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18.0", only: [:dev, :test]},
