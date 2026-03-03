@@ -151,12 +151,14 @@ defmodule AshNeo4j.Test.Type do
   end
 
   describe "Ash Read Type tests" do
+    @tag debug: true
     test "type node can be read using ash" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
       Neo4jHelper.create_node([:Type], properties)
       type = Ash.read_one!(Type)
       Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
-      # TODO compare durations
+      # note the duration returned is not exactly the same due to weeks being converted to days
+      assert type.duration == %Duration{year: 1, month: 2, day: 4 + 3*7, hour: 5, minute: 6, second: 7, microsecond: {8, 6}}
     end
 
     test "type node has metadata on read" do
