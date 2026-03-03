@@ -24,4 +24,12 @@ defmodule AshNeo4j.Test.Util do
     assert output =~ String.trim_leading("#{module}", "Elixir.")
     assert output =~ message
   end
+
+  @spec durations_equal(Duration.t(), Duration.t()) :: boolean()
+  def durations_equal(%Duration{} = d1, %Duration{} = d2) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    dt1 = DateTime.shift(now, d1)
+    dt2 = DateTime.shift(now, d2)
+    DateTime.compare(dt1, dt2) == :eq
+  end
 end

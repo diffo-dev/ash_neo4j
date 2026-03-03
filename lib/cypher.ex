@@ -7,7 +7,6 @@ defmodule AshNeo4j.Cypher do
   AshNeo4j Cypher
   """
 
-  alias AshNeo4j.BoltxHelper
   require Logger
 
   @doc """
@@ -51,7 +50,6 @@ defmodule AshNeo4j.Cypher do
       _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
       _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Boltx.Types.Duration) -> wrap(BoltxHelper.to_cypher(v), wrap)
       _ when is_struct(v, MapSet) -> wrap("#{inspect(v)}", wrap)
       # following assumes embedded structs will implement to_string protocol
       _ when is_struct(v) -> wrap("#{to_string(v)}", wrap)
