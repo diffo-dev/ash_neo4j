@@ -21,7 +21,7 @@ defmodule AshNeo4j.MixProject do
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: &docs/0,
-      dialyzer: [plt_add_apps: [:jason, :poison, :mix], ignore_warnings: ".dialyzer_ignore.exs"],
+      dialyzer: [plt_add_apps: [:jason, :mix], ignore_warnings: ".dialyzer_ignore.exs"],
       test_coverage: [
         tool: ExCoveralls,
         summary: [
@@ -103,7 +103,9 @@ defmodule AshNeo4j.MixProject do
     [
       {:ash, ash_version("~> 3.0 and >= 3.19.1")},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:boltx, ">= 0.0.6"},
+      #{:boltx, ">= 0.0.6"},
+      {:boltx, github: "matt-beanland/boltx", branch: "dev"},
+      {:jason, "~> 1.4"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},

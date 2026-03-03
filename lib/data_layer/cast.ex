@@ -66,7 +66,7 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_datetime(value)
 
           Ash.Type.Duration ->
-            AshNeo4j.BoltxHelper.to_elixir_duration(value)
+            cast_duration(value)
 
           Ash.Type.UtcDatetimeUsec ->
             cast_datetime(value)
@@ -193,6 +193,7 @@ defmodule AshNeo4j.DataLayer.Cast do
     end
   end
 
+  ## TODO is this working since wouldn't we expect an Ash.Type.DateTime?
   defp cast_datetime(value) when is_bitstring(value) do
     case DateTime.from_iso8601(value) do
       {:ok, datetime, 0} ->
@@ -200,6 +201,17 @@ defmodule AshNeo4j.DataLayer.Cast do
 
       {:error, _message} ->
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as DateTime")
+        value
+    end
+  end
+
+  defp cast_duration(value) do
+    case Ash.Type.Duration.cast_input(value, []) do
+      {:ok, duration} ->
+        duration
+
+      {:error, _message} ->
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Duration")
         value
     end
   end
