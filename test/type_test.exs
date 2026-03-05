@@ -10,6 +10,7 @@ defmodule AshNeo4j.Test.Type do
   alias AshNeo4j.Test.Resource.Money
   alias AshNeo4j.Test.Struct
   alias AshNeo4j.Test.StructInStruct
+  alias AshNeo4j.Test.Util
 
   use ExUnit.Case, async: false
 
@@ -83,7 +84,7 @@ defmodule AshNeo4j.Test.Type do
     "date" => "2025-05-11",
     "datetime" => "2025-05-11T07:45:41Z",
     "decimal" => "Decimal.new(\"4.2\")",
-    "duration" => "P1Y2M25DT5H6M7.000008S",
+    "duration" => "P1Y2M3W4DT5H6M7.000008S",
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
@@ -155,8 +156,7 @@ defmodule AshNeo4j.Test.Type do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
       Neo4jHelper.create_node(:Type, properties)
       type = Ash.read_one!(Type)
-      Enum.each(Map.drop(@type_attributes, [:duration]), fn {key, value} -> assert Map.get(type, key) == value end)
-      # TODO compare durations
+      Enum.each(@type_attributes, fn {key, value} -> assert Map.get(type, key) == value end)
     end
 
     test "type node has metadata on read" do
@@ -183,7 +183,9 @@ defmodule AshNeo4j.Test.Type do
     test "type node can be created using ash with properties" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url
-      Enum.each(Map.drop(@type_attributes, [:url]), fn {key, value} -> assert Map.get(type, key) == value end)
+      Enum.each(Map.drop(@type_attributes, [:url, :duration]), fn {key, value} -> assert Map.get(type, key) == value end)
+      # note the duration returned is equivalent, but differs in days and weeks (neo4j doesn't represent weeks and days separately)
+      assert Util.durations_equal(type.duration, @type_attributes.duration)
     end
 
     test "type node can be created using ash with embedded resource property" do
