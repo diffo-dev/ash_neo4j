@@ -182,7 +182,7 @@ defmodule AshNeo4j.Test.Type do
     end
 
     test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create() |> IO.inspect(label: "Created Type")
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url
       Enum.each(Map.drop(@type_attributes, [:url, :duration]), fn {key, value} -> assert Map.get(type, key) == value end)
       # note the duration returned is equivalent, but differs in days and weeks (neo4j doesn't represent weeks and days separately)
