@@ -42,12 +42,12 @@ defmodule AshNeo4j.Cypher do
       _ when is_float(v) -> "#{v}"
       _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
       _ when is_function(v) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, Date) -> wrap(Date.to_iso8601(v), wrap)
-      _ when is_struct(v, DateTime) -> wrap(DateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, Date) -> "date(" <> wrap(Date.to_iso8601(v), wrap) <> ")"
+      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(DateTime.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Decimal) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, NaiveDateTime) -> wrap(NaiveDateTime.to_iso8601(v), wrap)
+      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, Time) -> wrap(Time.to_iso8601(v), wrap)
+      _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, MapSet) -> wrap("#{inspect(v)}", wrap)
