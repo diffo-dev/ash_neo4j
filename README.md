@@ -180,13 +180,13 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | \{:array, :term\}     | -                         | List               | [%MyApp.Struct\{a: :a, s: "Hello"\}]                     | ["%MyApp.Struct\{a: :a, s: \"Hello\"\}"]                 | LIST           |
 | :date               | Ash.Type.Date             | Date               | ~D[2025-02-25]                                         | 2025-05-11                                             | DATE           |
 | :datetime           | Ash.Type.DateTime         | DateTime           | ~U[2025-02-25 11:59:00Z]                               | 2025-05-11T07:45:41Z                                   | ZONED_DATETIME |
-| :utc_datetime_usec  | Ash.Type.UtcDateTimeUsec  | DateTime           | ~U[2025-02-25 11:59:00.123456Z]                        | 2025-05-11T07:45:41.429903Z                            | ZONED_DATETIME |
+| :utc_datetime_usec  | Ash.Type.UtcDateTimeUsec  | DateTime           | ~U[2025-02-25 11:59:00.123456Z]                        | 2025-05-11T07:45:41.429903000Z                         | ZONED_DATETIME |
 | :naive_datetime     | Ash.Type.NaiveDateTime    | NaiveDateTime      | ~N[2025-05-11 07:45:41]                                | 2025-05-11T07:45:41                                    | LOCAL_DATETIME |
-| :time               | Ash.Type.Time             | Time               | ~T[07:45:41Z]                                          | 07:45:41                                               | TIME           |
-| :time_usec          | Ash.Type.TimeUsec         | Time               | ~T[07:45:41.429903Z]                                   | 07:45:41.429903                                        | TIME           |
+| :time               | Ash.Type.Time             | Time               | ~T[07:45:41Z]                                          | 07:45:41Z                                              | TIME           |
+| :time_usec          | Ash.Type.TimeUsec         | Time               | ~T[07:45:41.429903Z]                                   | 07:45:41.429903000Z                                    | TIME           |
 | :duration           | Ash.Type.Duration         | Duration           | %Duration{month: 2}                                    | PT2H                                                   | DURATION       |
 
-Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Note that :time_usec requires ash ~> 3.5.10 (to be released).
+Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision.
 
 ## Structs and String.Chars
 
