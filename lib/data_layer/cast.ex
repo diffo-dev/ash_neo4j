@@ -6,6 +6,8 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
+  alias AshNeo4j.BoltxHelper
+
   @struct_name_regex Regex.compile!("%(.*?){")
   @struct_properties_regex Regex.compile!("{(.*?)}$")
 
@@ -57,28 +59,28 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_atom(value)
 
           Ash.Type.Date ->
-            Date.from_iso8601!(value)
+            cast_date(value)
 
           Ash.Type.DateTime ->
-            cast_datetime(value)
+            cast_datetime(value, [])
 
           Ash.Type.UtcDatetime ->
-            cast_datetime(value)
+            cast_datetime(value, [precision: :microsecond])
 
           Ash.Type.Duration ->
             cast_duration(value)
 
           Ash.Type.UtcDatetimeUsec ->
-            cast_datetime(value)
+            cast_datetime(value, [precision: :microsecond])
 
           Ash.Type.NaiveDatetime ->
-            NaiveDateTime.from_iso8601!(value)
+            cast_naivedatetime(value)
 
           Ash.Type.Time ->
-            Time.from_iso8601!(value)
+            cast_time(value, [])
 
           Ash.Type.TimeUsec ->
-            Time.from_iso8601!(value)
+            cast_time(value, [precision: :microsecond])
 
           Ash.Type.Map ->
             cast_map(value)
@@ -193,25 +195,65 @@ defmodule AshNeo4j.DataLayer.Cast do
     end
   end
 
-  ## TODO is this working since wouldn't we expect an Ash.Type.DateTime?
-  defp cast_datetime(value) when is_bitstring(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, datetime, 0} ->
+  defp cast_date(value) do
+    case Ash.Type.Date.cast_input(value, []) do
+      {:ok, date} ->
+        date
+
+      _ ->
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Date")
+        value
+    end
+  end
+
+  defp cast_datetime(value, opts) when is_struct(value, Boltx.Types.DateTimeWithTZOffset) do
+    datetime = BoltxHelper.convert_from_datetime_with_tz_offset(value)
+    cast_datetime(datetime, opts)
+  end
+
+  defp cast_datetime(value, opts) do
+    case Ash.Type.DateTime.cast_input(value, opts) do
+      {:ok, datetime} ->
         datetime
 
-      {:error, _message} ->
+      _ ->
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as DateTime")
         value
     end
   end
 
   defp cast_duration(value) do
-    case Ash.Type.Duration.cast_input(value, []) do
+    case Ash.Type.Duration.cast_input(value, [precision: :microsecond]) do
       {:ok, duration} ->
         duration
 
-      {:error, _message} ->
+      _ ->
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Duration")
+        value
+    end
+  end
+
+  defp cast_naivedatetime(value) do
+    case Ash.Type.NaiveDatetime.cast_input(value, [precision: :microsecond]) do
+      {:ok, naivedatetime} ->
+        naivedatetime
+      _ ->
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as NaiveDateTime")
+        value
+    end
+  end
+
+  defp cast_time(value, opts) when is_struct(value, Boltx.Types.TimeWithTZOffset) do
+    time = BoltxHelper.convert_from_time_with_tz_offset(value)
+    cast_time(time, opts)
+  end
+
+  defp cast_time(value, opts) do
+    case Ash.Type.Time.cast_input(value, opts) do
+      {:ok, time} ->
+        time
+      _ ->
+        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Time")
         value
     end
   end
