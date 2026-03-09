@@ -10,7 +10,6 @@ defmodule AshNeo4j.Test.Resource.Author do
 
   neo4j do
     relate [{:posts, :WROTE, :outgoing, :Post}]
-    translate id: :uuid
     skip [:post_id]
   end
 

@@ -15,8 +15,6 @@ defmodule AshNeo4j.Test.Resource.Chain do
       {:head, :HEAD_TO_TAIL, :incoming, :Chain},
       {:tail, :HEAD_TO_TAIL, :outgoing, :Chain}
     ]
-
-    translate id: :uuid
   end
 
   actions do

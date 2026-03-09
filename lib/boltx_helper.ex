@@ -47,7 +47,17 @@ defmodule AshNeo4j.BoltxHelper do
 
   """
   def convert_to_datetime_with_tz_offset(datetime) when is_struct(datetime, DateTime) do
-    %DateTime{year: year, month: month, day: day, hour: hour, minute: minute, second: second, microsecond: microsecond, utc_offset: utc_offset} = datetime
+    %DateTime{
+      year: year,
+      month: month,
+      day: day,
+      hour: hour,
+      minute: minute,
+      second: second,
+      microsecond: microsecond,
+      utc_offset: utc_offset
+    } = datetime
+
     naive_datetime = NaiveDateTime.new!(year, month, day, hour, minute, second, microsecond, Calendar.ISO)
     Boltx.Types.DateTimeWithTZOffset.create(naive_datetime, utc_offset || 0)
   end
@@ -64,7 +74,8 @@ defmodule AshNeo4j.BoltxHelper do
       ~U[2026-01-01T10:29:59Z]
 
   """
-  def convert_from_datetime_with_tz_offset(datetime_with_tz_offset) when is_struct(datetime_with_tz_offset, Boltx.Types.DateTimeWithTZOffset) do
+  def convert_from_datetime_with_tz_offset(datetime_with_tz_offset)
+      when is_struct(datetime_with_tz_offset, Boltx.Types.DateTimeWithTZOffset) do
     datetime = DateTime.from_naive!(datetime_with_tz_offset.naive_datetime, "Etc/UTC")
     DateTime.shift(datetime, second: datetime_with_tz_offset.timezone_offset)
   end
@@ -94,5 +105,4 @@ defmodule AshNeo4j.BoltxHelper do
   def convert_from_time_with_tz_offset(time) when is_struct(time, Boltx.Types.TimeWithTZOffset) do
     time.time
   end
-
 end

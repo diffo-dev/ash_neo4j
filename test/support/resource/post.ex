@@ -17,8 +17,6 @@ defmodule AshNeo4j.Test.Resource.Post do
       {:author, :WROTE, :incoming, :Author}
     ]
 
-    translate id: :uuid
-
     skip [:tag_id]
   end
 

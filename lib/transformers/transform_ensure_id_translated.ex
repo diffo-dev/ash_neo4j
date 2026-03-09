@@ -19,9 +19,9 @@ defmodule AshNeo4j.Transformers.TransformEnsureIdTranslated do
   def after?(_), do: false
 
   defp ensure_id_translated(dsl) do
-    translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
+    translation = Verifier.get_option(dsl, [:neo4j], :translation, [])
 
-    if Keyword.get(translate, :id) == nil do
+    if Keyword.get(translation, :id) == :id do
       attributes = Verifier.get_entities(dsl, [:attributes])
 
       id_attribute =
