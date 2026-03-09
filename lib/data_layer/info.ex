@@ -38,11 +38,6 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :skip, [], true)
   end
 
-  @spec translate(Ash.Resource.t()) :: keyword() | nil
-  def translate(resource) do
-    Extension.get_opt(resource, [:neo4j], :translate, [], true)
-  end
-
   @spec translation(Ash.Resource.t()) :: keyword() | nil
   def translation(resource) do
     Extension.get_opt(resource, [:neo4j], :translation, [], true)

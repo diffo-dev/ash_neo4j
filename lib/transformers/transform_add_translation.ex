@@ -21,17 +21,30 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
   defp add_translation(dsl) do
     source_attributes =
       Verifier.get_entities(dsl, [:relationships])
-      |> Enum.into([], &Map.get(&1, :source_attribute))
+      |> Enum.reduce([], fn relationship, acc ->
+        case relationship do
+          %{source_attribute: source_attribute, cardinality: :one} when not is_nil(source_attribute) ->
+            [source_attribute | acc]
 
-    attributes =
+          _ ->
+            acc
+        end
+      end)
+
+    translation =
       Verifier.get_entities(dsl, [:attributes])
-      |> Enum.into([], &Map.get(&1, :name))
-      |> Enum.reject(fn name -> name in source_attributes end)
-      |> Enum.reject(fn name -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
+      |> Enum.into([], fn attribute ->
+        source = Map.get(attribute, :source)
 
-    translate = Verifier.get_option(dsl, [:neo4j], :translate, [])
-    direct = Enum.into(attributes, [], fn attribute -> {attribute, to_camel_case(attribute)} end)
-    translation = Keyword.merge(direct, translate)
+        if source == attribute.name || source == nil do
+          {attribute.name, to_camel_case(attribute.name)}
+        else
+          {attribute.name, source}
+        end
+      end)
+      |> Enum.reject(fn {name, _} -> name in source_attributes end)
+      |> Enum.reject(fn {name, _} -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
+
     Transformer.set_option(dsl, [:neo4j], :translation, translation)
   end
 end

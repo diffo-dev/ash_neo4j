@@ -16,7 +16,6 @@ defmodule AshNeo4j.Test.Resource.Event do
       {:resource, :FIRED, :incoming, :Resource}
     ]
 
-    translate id: :uuid
     skip [:service_id, :resource_id]
   end
 

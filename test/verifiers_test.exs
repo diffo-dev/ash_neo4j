@@ -21,7 +21,6 @@ defmodule AshNeo4j.Test.Verifiers do
 
             neo4j do
               label :comment
-              translate id: :uuid
             end
 
             attributes do
@@ -47,7 +46,6 @@ defmodule AshNeo4j.Test.Verifiers do
             neo4j do
               label :Resource
               relate [{:resources, :uses, :outgoing, :Resource}]
-              translate id: :uuid
             end
 
             attributes do
@@ -78,7 +76,6 @@ defmodule AshNeo4j.Test.Verifiers do
             neo4j do
               label :Resource
               relate [{:resourceful, :USES, :outgoing, :MismatchedRelationships}]
-              translate id: :uuid
             end
 
             attributes do
@@ -111,7 +108,6 @@ defmodule AshNeo4j.Test.Verifiers do
             neo4j do
               label :Resource
               relate [{:resources, :USES, :forwards, :RelateInvalidEdgeDirection}]
-              translate id: :uuid
             end
 
             attributes do
@@ -143,7 +139,6 @@ defmodule AshNeo4j.Test.Verifiers do
             neo4j do
               label :Resource
               relate [{:resources, :USES, :outgoing, :relateInvalidDestinationLabel}]
-              translate id: :uuid
             end
 
             attributes do
@@ -254,12 +249,12 @@ defmodule AshNeo4j.Test.Verifiers do
       )
     end
 
-    test "property style - translate" do
+    test "property style - attribute source" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,
         "neo4j: neo4j property names must be camelCase",
         fn ->
-          defmodule InvalidTranslateProperty do
+          defmodule InvalidSourceAttribute do
             @moduledoc false
             use Ash.Resource,
               domain: AshNeo4j.Test.Domain,
@@ -267,12 +262,11 @@ defmodule AshNeo4j.Test.Verifiers do
 
             neo4j do
               label :Resource
-              translate name: :_name
             end
 
             attributes do
               uuid_primary_key :id, writable?: true
-              attribute :name, :string, public?: true
+              attribute :name, :string, public?: true, source: :_name
             end
           end
         end

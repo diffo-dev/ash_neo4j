@@ -65,13 +65,13 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_datetime(value, [])
 
           Ash.Type.UtcDatetime ->
-            cast_datetime(value, [precision: :microsecond])
+            cast_datetime(value, precision: :microsecond)
 
           Ash.Type.Duration ->
             cast_duration(value)
 
           Ash.Type.UtcDatetimeUsec ->
-            cast_datetime(value, [precision: :microsecond])
+            cast_datetime(value, precision: :microsecond)
 
           Ash.Type.NaiveDatetime ->
             cast_naivedatetime(value)
@@ -80,7 +80,7 @@ defmodule AshNeo4j.DataLayer.Cast do
             cast_time(value, [])
 
           Ash.Type.TimeUsec ->
-            cast_time(value, [precision: :microsecond])
+            cast_time(value, precision: :microsecond)
 
           Ash.Type.Map ->
             cast_map(value)
@@ -223,7 +223,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast_duration(value) do
-    case Ash.Type.Duration.cast_input(value, [precision: :microsecond]) do
+    case Ash.Type.Duration.cast_input(value, precision: :microsecond) do
       {:ok, duration} ->
         duration
 
@@ -234,9 +234,10 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   defp cast_naivedatetime(value) do
-    case Ash.Type.NaiveDatetime.cast_input(value, [precision: :microsecond]) do
+    case Ash.Type.NaiveDatetime.cast_input(value, precision: :microsecond) do
       {:ok, naivedatetime} ->
         naivedatetime
+
       _ ->
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as NaiveDateTime")
         value
@@ -252,6 +253,7 @@ defmodule AshNeo4j.DataLayer.Cast do
     case Ash.Type.Time.cast_input(value, opts) do
       {:ok, time} ->
         time
+
       _ ->
         Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Time")
         value

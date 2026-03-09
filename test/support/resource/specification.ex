@@ -13,8 +13,6 @@ defmodule AshNeo4j.Test.Resource.Specification do
       {:SPECIFIES, :outgoing, :Service},
       {:SPECIFIES, :outgoing, :Resource}
     ]
-
-    translate id: :uuid
   end
 
   actions do
@@ -44,9 +42,9 @@ defmodule AshNeo4j.Test.Resource.Specification do
     attribute :href, :string, public?: true
     attribute :name, :string, public?: true
     attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
-    attribute :major_version, :integer, default: 1, public?: true
-    attribute :minor_version, :integer, default: 0, public?: true
-    attribute :patch_version, :integer, default: 0, public?: true
+    attribute :major_version, :integer, default: 1, public?: true, source: :versionMajor
+    attribute :minor_version, :integer, default: 0, public?: true, source: :versionMinor
+    attribute :patch_version, :integer, default: 0, public?: true, source: :versionPatch
     attribute :tmf_version, :integer, default: 4, public?: true
   end
 

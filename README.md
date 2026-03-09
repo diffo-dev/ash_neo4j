@@ -54,7 +54,6 @@ defmodule Blog.Comment do
   neo4j do
     label :Comment
     relate [{:post, :BELONGS_TO, :outgoing, :Post}]
-    translate id: :uuid
   end
 
   actions do
@@ -65,6 +64,7 @@ defmodule Blog.Comment do
   attributes do
     uuid_primary_key :id
     attribute :title, :string, public?: true
+    attribute :date_created, :date, source: :dateCreated
   end
 
   relationships do
@@ -108,17 +108,6 @@ The DSL may be used to guard destroy actions, in the form {edge_label, edge_dire
 Guard is useful where the resource has no explicit relationships, but other resources expect the resource to exist while they are related.
 Guard can also be used where the underlying node has other edges which should prevent resource destruction.
 
-## Translate
-
-The DSL may be used to translate the Ash Resource's attributes to node properties. By default the id attribute will be translated according to the 'short name' of the type, such that the following declaration is unneccessary for an Ash.Type.UUID primary key.
-```elixir
-  neo4j do
-    translate id: :uuid
-  end
-```
-
-Attributes with underscores are translated to camelCase Neo4j properties so don't need to be explicitly listed in translate.
-
 ## Skip
 
 The DSL may be used to skip storing attributes as node properties. This can be useful for 'transient' attributes, or attributes you want to default using the resource but not store explicitly.
@@ -128,6 +117,14 @@ The DSL may be used to skip storing attributes as node properties. This can be u
     skip [:other_id]
   end
 ```
+
+## Translate
+
+Translation of resource attributes to/from Neo4j node properties is done without explicit Ash Neo4j DSL.
+
+For convenience Ash Neo4j translates attributes with underscores to camelCase Neo4j properties. Neo4j uses the node property 'id' internally, so Ash Neo4j will translate the 'id' attribute using the camelCased short name of the type, e.g. an 'id' attribute of :uuid type is translated to the 'uuid' node property.
+
+Ash Neo4j also supports the source field in Ash.Resource.Attribute DSL - if present this will be used for the node property. 
 
 ## Verifiers
 
@@ -144,9 +141,11 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 
 ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.
 
-Your Ash application needs to configure, start and supervise [boltx](https://github.com/sagastume/boltx), see [boltx documentation](https://hexdocs.pm/boltx/). Make sure to configure any required authorisation.
+ash_neo4j reluctantly uses a fork of [boltx](https://github.com/sagastume/boltx), currently [boltx](https://github.com/matt-beanland/boltx/tree/dev), pending merge of various PRs.
 
-I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (boltx limits to bolt 5.4) and any version in between *should* work. To connect to Neo4j 4.4 using boltx I needed to also set the environment variable ```BOLT_VERSIONS="4.4"``` to steer [bolt protocol handshake] (https://neo4j.com/docs/bolt/current/bolt/handshake).  I've raised [negotiate range](https://github.com/sagastume/boltx/pull/125) on boltx to improve version negotiation so that this won't be necessary.
+Your Ash application needs to configure, start and supervise boltx see [boltx documentation](https://hexdocs.pm/boltx/). Make sure to configure any required authorisation.
+
+I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (boltx limits to bolt 5.4) and any version in between *should* work. 
 
 ## Elixir, Ash and Neo4j Types
 
@@ -186,7 +185,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :time_usec          | Ash.Type.TimeUsec         | Time               | ~T[07:45:41.429903Z]                                   | 07:45:41.429903000Z                                    | TIME           |
 | :duration           | Ash.Type.Duration         | Duration           | %Duration{month: 2}                                    | PT2H                                                   | DURATION       |
 
-Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision.
+Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. Neo4j doesn't store the timezone, just the offset so timezone information is lost.
 
 ## Structs and String.Chars
 
