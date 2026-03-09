@@ -346,7 +346,7 @@ Explore the nodes and relationships. We strictly enforce [Neo4j naming conventio
 
 By default Ash Neo4j simply uses the rightmost `Module.split` of the Ash Resource name as the label. If this doesn't suit you can use `label` to provide an atom that will be inspected to produce the label, such as `label :InternalService`
 
-By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use `translate`. Neo4j reserves `id` so you will commonly have `translate id: :uuid`
+By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use :source from `attribute` dsl to directly specify the property name in Neo4j. Neo4j reserves `id` for an internal node property so Ash Neo4j will translate `:id` to `:uuid`
 
 We use `relate` to direct `relationships` where we don't want AshNeo4j defaults. Earlier on the Service we had:
 

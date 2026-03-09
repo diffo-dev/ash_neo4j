@@ -17,9 +17,30 @@ defmodule AshNeo4j.Test.Transformers do
       assert Keyword.get(translation, :title) == :title
     end
 
+    test "explicit translations are left alone" do
+      translation = AshNeo4j.DataLayer.Info.translation(AshNeo4j.Test.Resource.Specification)
+      assert Keyword.get(translation, :major_version) == :versionMajor
+      assert Keyword.get(translation, :minor_version) == :versionMinor
+      assert Keyword.get(translation, :patch_version) == :versionPatch
+    end
+
+    test "implicit translations are camelCased" do
+      translation = AshNeo4j.DataLayer.Info.translation(AshNeo4j.Test.Resource.Event)
+      assert Keyword.get(translation, :inserted_at) == :insertedAt
+      assert Keyword.get(translation, :updated_at) == :updatedAt
+    end
+
     test "relationship_attributes are added" do
       relationship_attributes = AshNeo4j.DataLayer.Info.relationship_attributes(AshNeo4j.Test.Resource.Comment)
       assert Keyword.get(relationship_attributes, :post_id) == :post
+    end
+
+    test "author has correct translations" do
+      translation =
+        AshNeo4j.DataLayer.Info.translation(AshNeo4j.Test.Resource.Author)
+
+      assert Keyword.get(translation, :id) == :uuid
+      assert Keyword.get(translation, :name) == :name
     end
   end
 end

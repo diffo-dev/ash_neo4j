@@ -46,7 +46,6 @@ defmodule AshNeo4j.DataLayer do
       neo4j do
         label :Comment
         relate [{:post, :BELONGS_TO, :outgoing}]
-        translate id: :uuid
       end
       """
     ],
@@ -65,11 +64,6 @@ defmodule AshNeo4j.DataLayer do
       guard: [
         type: {:list, {:tuple, [:atom, :atom, :atom]}},
         doc: "Optional list of node relationships, as tuples of {edge_label, edge_direction, destination_label}",
-        required: false
-      ],
-      translate: [
-        type: :non_empty_keyword_list,
-        doc: "Optional list of attribute to node property translations",
         required: false
       ],
       skip: [
@@ -670,7 +664,8 @@ defmodule AshNeo4j.DataLayer do
 
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
-          source_property = Info.convert_to_property_name(relationship.source, relationship.source_attribute)
+          source_property =
+            Info.convert_to_property_name(relationship.source, relationship.source_attribute)
 
           [
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc

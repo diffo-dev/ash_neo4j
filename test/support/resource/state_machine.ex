@@ -19,10 +19,6 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
     end
   end
 
-  neo4j do
-    translate id: :uuid
-  end
-
   actions do
     defaults [:read, :destroy]
 

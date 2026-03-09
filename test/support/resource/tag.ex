@@ -11,7 +11,6 @@ defmodule AshNeo4j.Test.Resource.Tag do
   neo4j do
     label :Tag
     relate [{:posts, :TAGS, :outgoing, :Post}]
-    translate id: :uuid
     skip [:post_id]
   end
 

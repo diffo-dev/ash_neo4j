@@ -103,7 +103,7 @@ defmodule AshNeo4j.MixProject do
     [
       {:ash, ash_version("~> 3.0 and >= 3.19.1")},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      #{:boltx, ">= 0.0.6"},
+      # {:boltx, ">= 0.0.6"},
       {:boltx, github: "matt-beanland/boltx", branch: "dev"},
       {:jason, "~> 1.4"},
       {:igniter, "~> 0.5", only: [:dev, :test]},
