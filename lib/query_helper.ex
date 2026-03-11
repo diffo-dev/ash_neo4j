@@ -34,7 +34,7 @@ defmodule AshNeo4j.QueryHelper do
 
     if ash_query.filter == nil do
       # there is no filter, but we want related nodes to simulate foreign keys
-      "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+      "MATCH " <> Cypher.node(:s, [label]) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
     else
       # will a simple filter work?
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
@@ -43,7 +43,7 @@ defmodule AshNeo4j.QueryHelper do
       if predicates == [] do
         # simple filter didn't work
         Logger.warning("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
-        "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+        "MATCH " <> Cypher.node(:s, [label]) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
       else
         # need to sort out which predicates are source property related, and which are relationship related
         relationship_predicates =
@@ -88,16 +88,16 @@ defmodule AshNeo4j.QueryHelper do
               Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
             "MATCH " <>
-              Cypher.node(:s, label) <>
+              Cypher.node(:s, [label]) <>
               Cypher.relationship(node_relationship) <>
-              Cypher.node(:d, dest_label) <>
+              Cypher.node(:d, [dest_label]) <>
               " WHERE " <>
               Cypher.expression(:d, dest_property_name, operator, property_value) <>
               " WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
 
           true ->
             Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
-            "MATCH " <> Cypher.node(:s, label) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+            "MATCH " <> Cypher.node(:s, [label]) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
         end
       end
     end

@@ -4,7 +4,7 @@ defmodule AshNeo4j.Verifiers.VerifyPropertiesCamelCase do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @regex ~r/^[a-z][a-zA-Z0-9]*$/
+  import AshNeo4j.Util
 
   @impl true
   def verify(dsl) do
@@ -18,7 +18,7 @@ defmodule AshNeo4j.Verifiers.VerifyPropertiesCamelCase do
         :ok
 
       true ->
-        if !Enum.all?(property_names, &Regex.match?(@regex, Atom.to_string(&1))) do
+        if !Enum.all?(property_names, &is_valid_property_name?(&1)) do
           {:error,
            DslError.exception(
              module: resource,

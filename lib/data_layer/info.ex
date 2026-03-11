@@ -3,6 +3,17 @@ defmodule AshNeo4j.DataLayer.Info do
 
   alias Spark.Dsl.Extension
 
+  @spec domain_label(Ash.Resource.t()) :: atom() | nil
+  @doc """
+  The domain label is the PascalCase short name of the domain's Elixir Module name, which is used as a Neo4j label for all nodes of resources in the domain.
+  """
+  def domain_label(domain) do
+    Extension.get_opt(domain, [:neo4j], :domain_label, nil, true)
+  end
+
+  @doc """
+  The label is the PascalCase short name of the resource's Elixir Module name by default, but can be overridden by setting the :label option in the DSL. It is used as a Neo4j label for all nodes of the resource.
+  """
   @spec label(Ash.Resource.t()) :: atom() | nil
   def label(resource) do
     Extension.get_opt(resource, [:neo4j], :label, nil, true)
@@ -39,7 +50,18 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
-  Returns a node_relationship that matches the source attribute name
+  Returns the list of labels for the resource, including the domain label and the resource label, if they exist
+   The domain label is the PascalCase short name of the domain module, and the resource label is the PascalCase short name of the resource module by default, but can be overridden by setting the :label option in the DSL.
+  """
+  @spec labels(Ash.Resource.t()) :: list(atom()) | nil
+  def labels(resource) do
+    [domain_label(resource), label(resource)]
+    |> Enum.uniq()
+    |> Enum.filter(& &1)
+  end
+
+  @doc """
+  Returns a node_relationship that matches the relationship name
   """
   @spec node_relationship(Ash.Resource.t(), atom() | String.t()) :: tuple() | nil
   def node_relationship(resource, name) when is_atom(resource) and is_atom(name) do

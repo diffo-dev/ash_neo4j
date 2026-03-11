@@ -120,24 +120,27 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Converts a node variable, label and optional properties to cypher node.
+  Converts a node variable, labels and optional properties to cypher node.
 
   ## Examples
   ```
-  iex> AshNeo4j.Cypher.node(:s, :Actor)
+  iex> AshNeo4j.Cypher.node(:s, [:Actor])
   "(s:Actor)"
-  iex> AshNeo4j.Cypher.node(:s, :Actor, %{name: "Bill Nighy"})
-  "(s:Actor {name: 'Bill Nighy'})"
+  iex> AshNeo4j.Cypher.node(:s, [:Cinema, :Actor], %{name: "Bill Nighy"})
+  "(s:Cinema:Actor {name: 'Bill Nighy'})"
   ```
   """
-  def node(variable, label, properties \\ %{}) when is_atom(variable) and is_atom(label) and is_map(properties) do
+  def node(variable, labels, properties \\ %{}) when is_atom(variable) and is_list(labels) and is_map(properties) do
+    label_string = Enum.join(labels, ":")
+
     if properties == %{} do
-      "(#{variable}:#{label})"
+      "(#{variable}:#{label_string})"
     else
-      "(#{variable}:#{label} " <> properties(properties) <> ")"
+      "(#{variable}:#{label_string} " <> properties(properties) <> ")"
     end
   end
 
+  @spec relationship(atom(), atom()) :: <<_::32, _::_*8>>
   @doc """
   Converts a relationship variable, label and optional direction to cypher relationship.
 

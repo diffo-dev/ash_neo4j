@@ -4,7 +4,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelPascalCase do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @regex ~r/^[A-Z][a-zA-Z0-9]*$/
+  import AshNeo4j.Util
 
   @impl true
   def verify(dsl) do
@@ -20,7 +20,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelPascalCase do
            message: "label: missing"
          )}
 
-      Regex.match?(@regex, Atom.to_string(label)) ->
+      is_valid_node_label?(label) ->
         :ok
 
       true ->
