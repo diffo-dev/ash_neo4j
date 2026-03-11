@@ -130,9 +130,9 @@ Ash Neo4j also supports the source field in Ash.Resource.Attribute DSL - if pres
 
 The DSL is verified against misconfiguration and violation of accepted neo4j conventions providing compile time errors:
 
-* neo4j label must be PascalCase
+* neo4j labels must be PascalCase
 * neo4j property names must be camelCase
-* edge label must be upper case and may have an underscore
+* edge label must be MACRO_CASE
 * edge direction must be in [:incoming, :outgoing]
 * relate: relationship_name must match the name of a relationship
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique

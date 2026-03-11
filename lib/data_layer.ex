@@ -114,6 +114,7 @@ defmodule AshNeo4j.DataLayer do
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
+      AshNeo4j.Transformers.TransformAddDomainLabel,
       AshNeo4j.Transformers.TransformEnsureIdTranslated,
       AshNeo4j.Transformers.TransformDefaultRelate,
       AshNeo4j.Transformers.TransformAddTranslation,
@@ -833,7 +834,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
-    case Info.label(resource) |> Neo4jHelper.create_node(properties) do
+    case Info.labels(resource) |> Neo4jHelper.create_node(properties) do
       {:ok, %Boltx.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         {:ok, convert_node_to_resource(resource, node)}

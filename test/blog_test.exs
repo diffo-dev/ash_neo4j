@@ -37,7 +37,7 @@ defmodule AshNeo4j.Blog.Test do
     test "post node can be read using Neo4jHelper" do
       # setup using Neo4jHelper
       uuid = Ash.UUID.generate()
-      Neo4jHelper.create_node(:Post, %{title: "post1", uuid: uuid})
+      Neo4jHelper.create_node([:Post], %{title: "post1", uuid: uuid})
       # read using Neo4jHelper
       assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Post, %{title: "post1"})
       assert length(records) == 1
@@ -55,7 +55,7 @@ defmodule AshNeo4j.Blog.Test do
     test "comment node can be read using Neo4jHelper" do
       # setup using Neo4jHelper
       uuid = Ash.UUID.generate()
-      Neo4jHelper.create_node(:Comment, %{title: "comment1", uuid: uuid})
+      Neo4jHelper.create_node([:Comment], %{title: "comment1", uuid: uuid})
       # read using Neo4jHelper
       assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Comment, %{title: "comment1"})
       assert length(records) == 1
@@ -685,10 +685,15 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   defp create_post_nodes(count) when is_integer(count) do
-    Neo4jHelper.create_node(:Author, %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+    Neo4jHelper.create_node([:Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
 
     for i <- 1..count do
-      Neo4jHelper.create_node(:Post, %{title: "post#{i}", score: i, public: true, uuid: post_uuid = Ash.UUID.generate()})
+      Neo4jHelper.create_node([:Post], %{
+        title: "post#{i}",
+        score: i,
+        public: true,
+        uuid: post_uuid = Ash.UUID.generate()
+      })
 
       Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
     end
@@ -696,19 +701,19 @@ defmodule AshNeo4j.Blog.Test do
 
   defp create_comment_nodes(count) when is_integer(count) do
     for i <- 1..count do
-      Neo4jHelper.create_node(:Comment, %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+      Neo4jHelper.create_node([:Comment], %{title: "comment#{i}", uuid: Ash.UUID.generate()})
     end
   end
 
   defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
-    Neo4jHelper.create_node(:Author, %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+    Neo4jHelper.create_node([:Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
 
     for post <- 1..posts do
-      Neo4jHelper.create_node(:Post, %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
+      Neo4jHelper.create_node([:Post], %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
       Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
 
       for comment <- 1..comments do
-        Neo4jHelper.create_node(:Comment, %{
+        Neo4jHelper.create_node([:Comment], %{
           title: "comment#{post}.#{comment}",
           uuid: comment_uuid = Ash.UUID.generate()
         })

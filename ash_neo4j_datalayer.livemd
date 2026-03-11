@@ -344,7 +344,8 @@ Explore the nodes and relationships. We strictly enforce [Neo4j naming conventio
 * node properties are camelCase
 * relationships are UPPER_CASE
 
-By default Ash Neo4j simply uses the rightmost `Module.split` of the Ash Resource name as the label. If this doesn't suit you can use `label` to provide an atom that will be inspected to produce the label, such as `label :InternalService`
+By default Ash Neo4j labels each node with the rightmost `Module.split` of the Ash Domain and Resource names. The label derived from the resource name can be overridden using the DSL `label` to provide an atom that will be inspected to produce the label, such as `label :InternalService`. 
+All labels are verified to be PascalCase.
 
 By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use :source from `attribute` dsl to directly specify the property name in Neo4j. Neo4j reserves `id` for an internal node property so Ash Neo4j will translate `:id` to `:uuid`
 

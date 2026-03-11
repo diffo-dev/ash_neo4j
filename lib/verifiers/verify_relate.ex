@@ -8,8 +8,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @edge_label_regex ~r/^[A-Z]+(_[A-Z]+)*$/
-  @node_label_regex ~r/^[A-Z][a-zA-Z0-9]*$/
+  import AshNeo4j.Util
 
   @impl true
   def verify(dsl) do
@@ -20,7 +19,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
     if length(relate) == length(relationships) do
       case invalid_edge_labels =
              Enum.reduce(relate, [], fn {_relationship_name, edge_label, _edge_direction, _destination_label}, acc ->
-               if Regex.match?(@edge_label_regex, Atom.to_string(edge_label)) do
+               if is_valid_edge_label?(edge_label) do
                  acc
                else
                  [to_string(edge_label) | acc]
@@ -54,7 +53,7 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
                          Enum.reduce(relate, [], fn {_relationship_name, _edge_label, _edge_direction,
                                                      destination_label},
                                                     acc ->
-                           if Regex.match?(@node_label_regex, Atom.to_string(destination_label)) do
+                           if is_valid_node_label?(destination_label) do
                              acc
                            else
                              [to_string(destination_label) | acc]

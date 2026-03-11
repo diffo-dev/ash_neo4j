@@ -113,14 +113,14 @@ defmodule AshNeo4j.Test.Type do
 
   describe "Neo4jHelper Type tests" do
     test "type node without properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, %{})
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], %{})
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
     end
 
     test "type node without properties can be read using Neo4jHelper" do
-      Neo4jHelper.create_node(:Type, %{})
+      Neo4jHelper.create_node([:Type], %{})
       assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{})
       assert length(records) == 1
       node = records |> List.first() |> List.first()
@@ -129,7 +129,7 @@ defmodule AshNeo4j.Test.Type do
     end
 
     test "type node with properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node(:Type, @type_node_properties)
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], @type_node_properties)
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
@@ -143,7 +143,7 @@ defmodule AshNeo4j.Test.Type do
     end
 
     test "type node with properties can be read using Neo4jHelper" do
-      Neo4jHelper.create_node(:Type, @type_node_properties)
+      Neo4jHelper.create_node([:Type], @type_node_properties)
       assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{string: "Hello"})
       assert length(records) == 1
       node = records |> List.first() |> List.first()
@@ -154,20 +154,21 @@ defmodule AshNeo4j.Test.Type do
   describe "Ash Read Type tests" do
     test "type node can be read using ash" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node(:Type, properties)
+      Neo4jHelper.create_node([:Type], properties)
       type = Ash.read_one!(Type)
       Enum.each(@type_attributes, fn {key, value} -> assert Map.get(type, key) == value end)
     end
 
     test "type node has metadata on read" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node(:Type, properties)
+      Neo4jHelper.create_node([:Domain, :Type], properties)
       type = Ash.read_one!(Type)
       assert is_struct(type.__meta__, Ecto.Schema.Metadata)
       assert type.__meta__.state == :loaded
       assert type.__metadata__
       assert type.__metadata__.data_layer == AshNeo4j.DataLayer
-      assert type.__metadata__.labels == ["Type"]
+      assert "Type" in type.__metadata__.labels
+      assert "Domain" in type.__metadata__.labels
       assert is_integer(type.__metadata__.node_id)
     end
   end
@@ -212,7 +213,8 @@ defmodule AshNeo4j.Test.Type do
       assert type.__meta__.state == :loaded
       assert type.__metadata__
       assert type.__metadata__.data_layer == AshNeo4j.DataLayer
-      assert type.__metadata__.labels == ["Type"]
+      assert "Type" in type.__metadata__.labels
+      assert "Domain" in type.__metadata__.labels
       assert is_integer(type.__metadata__.node_id)
     end
   end

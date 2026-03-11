@@ -8,8 +8,7 @@ defmodule AshNeo4j.Verifiers.VerifyGuard do
 
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
-  @edge_label_regex ~r/^[A-Z]+(_[A-Z]+)*$/
-  @node_label_regex ~r/^[A-Z][a-zA-Z0-9]*$/
+  import AshNeo4j.Util
   @valid_edge_directions [:incoming, :outgoing, :any]
 
   @impl true
@@ -19,7 +18,7 @@ defmodule AshNeo4j.Verifiers.VerifyGuard do
 
     case invalid_edge_labels =
            Enum.reduce(guard, [], fn {edge_label, _edge_direction, _destination_label}, acc ->
-             if Regex.match?(@edge_label_regex, Atom.to_string(edge_label)) do
+             if is_valid_edge_label?(edge_label) do
                acc
              else
                [edge_label | acc]
@@ -37,7 +36,7 @@ defmodule AshNeo4j.Verifiers.VerifyGuard do
           [] ->
             case invalid_destination_labels =
                    Enum.reduce(guard, [], fn {_edge_label, _edge_direction, destination_label}, acc ->
-                     if Regex.match?(@node_label_regex, Atom.to_string(destination_label)) do
+                     if is_valid_node_label?(destination_label) do
                        acc
                      else
                        [destination_label | acc]
