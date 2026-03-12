@@ -6,7 +6,7 @@ defmodule AshNeo4j.Service.Test do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Test.Resource.Specification
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
@@ -15,7 +15,7 @@ defmodule AshNeo4j.Service.Test do
   import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do
@@ -24,9 +24,9 @@ defmodule AshNeo4j.Service.Test do
     end)
   end
 
-  describe "Boltx configuration tests" do
+  describe "Bolty configuration tests" do
     test "neo4j is running" do
-      assert BoltxHelper.is_connected()
+      assert BoltyHelper.is_connected()
     end
   end
 

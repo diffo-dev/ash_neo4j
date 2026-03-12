@@ -6,7 +6,7 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
 
   @struct_name_regex Regex.compile!("%(.*?){")
   @struct_properties_regex Regex.compile!("{(.*?)}$")
@@ -206,8 +206,8 @@ defmodule AshNeo4j.DataLayer.Cast do
     end
   end
 
-  defp cast_datetime(value, opts) when is_struct(value, Boltx.Types.DateTimeWithTZOffset) do
-    datetime = BoltxHelper.convert_from_datetime_with_tz_offset(value)
+  defp cast_datetime(value, opts) when is_struct(value, Bolty.Types.DateTimeWithTZOffset) do
+    datetime = BoltyHelper.convert_from_datetime_with_tz_offset(value)
     cast_datetime(datetime, opts)
   end
 
@@ -244,8 +244,8 @@ defmodule AshNeo4j.DataLayer.Cast do
     end
   end
 
-  defp cast_time(value, opts) when is_struct(value, Boltx.Types.TimeWithTZOffset) do
-    time = BoltxHelper.convert_from_time_with_tz_offset(value)
+  defp cast_time(value, opts) when is_struct(value, Bolty.Types.TimeWithTZOffset) do
+    time = BoltyHelper.convert_from_time_with_tz_offset(value)
     cast_time(time, opts)
   end
 

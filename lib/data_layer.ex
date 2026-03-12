@@ -253,10 +253,10 @@ defmodule AshNeo4j.DataLayer do
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) do
         # update properties
         case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_properties) do
-          {:ok, %Boltx.Response{results: []}} ->
+          {:ok, %Bolty.Response{results: []}} ->
             {:error, "no result to update node"}
 
-          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+          {:ok, %Bolty.Response{results: [node_map | _]}} ->
             node = Map.get(node_map, "n")
             {:ok, convert_node_to_resource(resource, node)}
 
@@ -296,10 +296,10 @@ defmodule AshNeo4j.DataLayer do
                      edge_label,
                      Info.reverse(object_to_subject_direction)
                    ) do
-                {:ok, %Boltx.Response{results: []}} ->
+                {:ok, %Bolty.Response{results: []}} ->
                   {:error, "no result to unrelate nodes"}
 
-                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                {:ok, %Bolty.Response{results: [node_map | _]}} ->
                   node = Map.get(node_map, "s")
                   {:ok, convert_node_to_resource(resource, node)}
 
@@ -328,10 +328,10 @@ defmodule AshNeo4j.DataLayer do
                      edge_label,
                      Info.reverse(object_to_subject_direction)
                    ) do
-                {:ok, %Boltx.Response{results: []}} ->
+                {:ok, %Bolty.Response{results: []}} ->
                   {:error, "no result to relate nodes"}
 
-                {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                {:ok, %Bolty.Response{results: [node_map | _]}} ->
                   node = Map.get(node_map, "s")
                   {:ok, convert_node_to_resource(resource, node)}
 
@@ -380,10 +380,10 @@ defmodule AshNeo4j.DataLayer do
                            edge_label,
                            subject_to_object_direction
                          ) do
-                      {:ok, %Boltx.Response{results: []}} ->
+                      {:ok, %Bolty.Response{results: []}} ->
                         {:halt, {:error, "no result to unrelate nodes"}}
 
-                      {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                      {:ok, %Bolty.Response{results: [node_map | _]}} ->
                         node = Map.get(node_map, "s")
                         {:cont, {:ok, convert_node_to_resource(resource, node)}}
 
@@ -418,10 +418,10 @@ defmodule AshNeo4j.DataLayer do
                                subject_to_object_direction,
                                {subject_exclusive?, object_exclusive?}
                              ) do
-                          {:ok, %Boltx.Response{results: []}} ->
+                          {:ok, %Bolty.Response{results: []}} ->
                             {:halt, {:error, "no result to relate nodes"}}
 
-                          {:ok, %Boltx.Response{results: [node_map | _]}} ->
+                          {:ok, %Bolty.Response{results: [node_map | _]}} ->
                             node = Map.get(node_map, "s")
                             {:cont, {:ok, convert_node_to_resource(resource, node)}}
 
@@ -810,7 +810,7 @@ defmodule AshNeo4j.DataLayer do
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
           :ok ->
             case Neo4jHelper.read_nodes_related(label, id_properties) do
-              {:ok, %Boltx.Response{results: groups}} ->
+              {:ok, %Bolty.Response{results: groups}} ->
                 consolidated_groups = consolidate_groups(groups)
                 # return the enriched created resource
                 cond do
@@ -835,7 +835,7 @@ defmodule AshNeo4j.DataLayer do
 
   defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
     case Info.labels(resource) |> Neo4jHelper.create_node(properties) do
-      {:ok, %Boltx.Response{results: [node_map | _]}} ->
+      {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         {:ok, convert_node_to_resource(resource, node)}
 

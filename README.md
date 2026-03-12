@@ -137,15 +137,15 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 * relate: relationship_name must match the name of a relationship
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
 
-## Installing Neo4j and Configuring Boltx
+## Installing Neo4j and Configuring Bolty
 
 ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.
 
-ash_neo4j reluctantly uses a fork of [boltx](https://github.com/sagastume/boltx), currently [boltx](https://github.com/matt-beanland/boltx/tree/dev), pending merge of various PRs.
+ash_neo4j uses [bolty](https://github./com/diffo-dev/bolty), a reluctant fork of [boltx](https://github.com/sagastume/boltx)
 
-Your Ash application needs to configure, start and supervise boltx see [boltx documentation](https://hexdocs.pm/boltx/). Make sure to configure any required authorisation.
+Your Ash application needs to configure, start and supervise bolty see [bolty documentation](https://hexdocs.pm/bolty/). Make sure to configure any required authorisation.
 
-I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (boltx limits to bolt 5.4) and any version in between *should* work. 
+I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (bolty limits to bolt 5.4) and any version in between *should* work. 
 
 ## Elixir, Ash and Neo4j Types
 

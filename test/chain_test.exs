@@ -5,13 +5,13 @@
 defmodule AshNeo4j.Test.Chain do
   @moduledoc false
   use ExUnit.Case
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Chain
   import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do

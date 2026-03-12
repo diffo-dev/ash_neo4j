@@ -5,12 +5,12 @@
 defmodule AshNeo4j.Test.Doc do
   @moduledoc false
   use ExUnit.Case
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Cypher
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do
@@ -20,7 +20,7 @@ defmodule AshNeo4j.Test.Doc do
   end
 
   describe "doctests" do
-    doctest BoltxHelper
+    doctest BoltyHelper
     doctest Neo4jHelper
     doctest Cypher
   end

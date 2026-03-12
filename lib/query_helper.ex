@@ -25,7 +25,7 @@ defmodule AshNeo4j.QueryHelper do
       |> limit(ash_query)
 
     case Cypher.run(cypher) do
-      {:ok, %Boltx.Response{results: results}} ->
+      {:ok, %Bolty.Response{results: results}} ->
         {:ok, results}
 
       {:error, _} ->

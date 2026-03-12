@@ -21,7 +21,7 @@ If already familiar with the [Ash Framework](https://ash-hq.org) in this liveboo
 
 * Why have an Ash Neo4j DataLayer?
 * Brief Introduction to Neo4j
-* Installing Neo4j and configuring Boltx
+* Installing Neo4j and configuring Bolty
 * How to persist your Ash Resources with Neo4j
 * How your Ash Resources and their relationships are stored in Neo4j
 
@@ -51,9 +51,9 @@ We can relate them with the cypher `MATCH (s:Actor {name: 'Bill Nighy'}), (d:Mov
 
 Cypher is not meant as a graphical language, but has an ASCII art influence and is fairly expressive in that `(s) -[r:ACTED_IN]-> (d)`, which mirrors how these nodes could look related in a browser. Cypher influenced international standard [GQL](https://www.gqlstandards.org) and is being aligned, however to maintain back compatibility with Neo4j 4.x we use Cypher.
 
-We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/docs/bolt/current/bolt/). Ash Neo4j uses [boltx](https://github.com/sagastume/boltx) which is a fork of the inactive [bolt-sips](https://github.com/florinpatrascu/bolt_sips).
+We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/docs/bolt/current/bolt/). Ash Neo4j uses [bolty](https://github.com/diffo-dev/bolty) which is a fork of the inactive [bolt-sips](https://github.com/florinpatrascu/bolt_sips).
 
-## Installing Neo4j and Configuring Boltx
+## Installing Neo4j and Configuring Bolty
 
 While [Neo4j community edition](https://github.com/neo4j/neo4j) is open source and you can build from source it is likely that you'll use an installation.
 
@@ -77,24 +77,16 @@ config = [
 ]
 ```
 
-Boltx needs a process in your supervision tree, this will start one with the config if not already running:
+Bolty needs a process in your supervision tree, this will start one with the config if not already running:
 
 ```elixir
-AshNeo4j.BoltxHelper.start(config)
+AshNeo4j.BoltyHelper.start(config)
 ```
 
-Skip for Neo4j 5:
-
-If you are stuck on Neo4j community 4.x boltx you'll need to set the the BOLT_VERSIONS environment variable, in this case it needs to be available to livebook. If you are running livebook desktop on Mac or Windows you can set this using `export BOLT_VERSIONS="4.4"` in a file named ~/.livebookdesktop.sh on macOS or %USERPROFILE%\.livebookdesktop.bat on Windows.  Do this and restart livebook until you can successfully fetch the `BOLT_VERSIONS` from your livebook environment.
+Now you should be able to verify that Ash Neo4j is connected to Neo4j using Bolty:
 
 ```elixir
-bolt_versions = System.get_env("BOLT_VERSIONS")
-```
-
-Now you should be able to verify that Ash Neo4j is connected to Neo4j using Boltx:
-
-```elixir
-AshNeo4j.BoltxHelper.is_connected()
+AshNeo4j.BoltyHelper.is_connected()
 ```
 
 You can get all nodes related to other nodes the following query:

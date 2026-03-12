@@ -4,10 +4,10 @@
 
 import Config
 
-config :boltx, Bolt,
+config :bolty, Bolt,
   uri: "bolt://localhost:7687",
   auth: [username: "neo4j", password: "password"],
-  user_agent: "boltxTest/1",
+  user_agent: "boltyTest/1",
   pool_size: 15,
   max_overflow: 3,
   prefix: :default,
