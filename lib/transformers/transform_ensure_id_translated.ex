@@ -15,13 +15,13 @@ defmodule AshNeo4j.Transformers.TransformEnsureIdTranslated do
   end
 
   @impl true
-  def after?(AshNeo4j.Transformers.TransformAddTranslation), do: true
+  def after?(AshNeo4j.Transformers.TransformAddTranslations), do: true
   def after?(_), do: false
 
   defp ensure_id_translated(dsl) do
-    translation = Verifier.get_option(dsl, [:neo4j], :translation, [])
+    translations = Verifier.get_option(dsl, [:neo4j], :translations, [])
 
-    if Keyword.get(translation, :id) == :id do
+    if Keyword.get(translations, :id) == :id do
       attributes = Verifier.get_entities(dsl, [:attributes])
 
       id_attribute =
@@ -35,9 +35,9 @@ defmodule AshNeo4j.Transformers.TransformEnsureIdTranslated do
       if id_attribute do
         # translate id using 'short' type converted to camelCase neo4j property style
         short_type = String.to_atom(List.last(Module.split(id_attribute.type)))
-        translation = Verifier.get_option(dsl, [:neo4j], :translation, [])
-        transformation = translation |> Keyword.put(:id, to_camel_case(short_type))
-        Transformer.set_option(dsl, [:neo4j], :translation, transformation)
+        translations = Verifier.get_option(dsl, [:neo4j], :translations, [])
+        transformation = translations |> Keyword.put(:id, to_camel_case(short_type))
+        Transformer.set_option(dsl, [:neo4j], :translations, transformation)
       else
         dsl
       end
