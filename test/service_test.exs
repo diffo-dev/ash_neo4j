@@ -75,15 +75,14 @@ defmodule AshNeo4j.Service.Test do
       assert resource.service_id == service.id
     end
 
-    test "service can be created with fired events using ash" do
+    test "service can be created with fired event using ash" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
 
       {:ok, event} = Event |> Ash.create(%{type: :create})
 
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id, fire_event: event.id})
 
-      assert length(service.events) == 1
-      fired_event = hd(service.events)
+      fired_event = service.event
       assert is_struct(fired_event, Event)
       assert DateTime.compare(fired_event.inserted_at, event.inserted_at) == :eq
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
@@ -130,7 +129,7 @@ defmodule AshNeo4j.Service.Test do
       assert updated_service.name == "my broadband"
     end
 
-    test "service events can be fired using ash" do
+    test "service event can be fired using ash" do
       broadband_v1 = Specification |> Ash.create!(%{name: "broadband"})
       service = Service |> Ash.create!(%{name: "broadband_0000", specified_by: broadband_v1.id})
 
@@ -138,8 +137,7 @@ defmodule AshNeo4j.Service.Test do
 
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
 
-      assert length(updated_service.events) == 1
-      fired_event = hd(updated_service.events)
+      fired_event = updated_service.event
       assert is_struct(fired_event, Event)
       assert DateTime.compare(fired_event.inserted_at, event.inserted_at) == :eq
       assert DateTime.after?(fired_event.updated_at, event.updated_at)
@@ -323,8 +321,7 @@ defmodule AshNeo4j.Service.Test do
              )
 
       assert is_struct(updated_service, Service)
-      assert updated_service.events
-      fired_event = hd(updated_service.events)
+      fired_event = updated_service.event
       assert is_struct(fired_event, Event)
       assert fired_event.id == event.id
 
@@ -349,8 +346,7 @@ defmodule AshNeo4j.Service.Test do
              )
 
       assert is_struct(updated_resource, Resource)
-      assert updated_resource.events
-      fired_event = hd(updated_resource.events)
+      fired_event = updated_resource.event
       assert is_struct(fired_event, Event)
       assert fired_event.id == event.id
 
