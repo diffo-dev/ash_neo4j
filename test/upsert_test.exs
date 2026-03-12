@@ -5,12 +5,12 @@
 defmodule AshNeo4j.Test.Upsert do
   @moduledoc false
   use ExUnit.Case
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Upsert
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do

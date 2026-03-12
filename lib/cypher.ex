@@ -216,24 +216,24 @@ defmodule AshNeo4j.Cypher do
     AshNeo4.Cypher: run(#{cypher})
     """)
 
-    boltx_result = Boltx.query(Bolt, cypher)
+    bolty_result = Bolty.query(Bolt, cypher)
 
-    if elem(boltx_result, 0) == :ok do
+    if elem(bolty_result, 0) == :ok do
       Logger.debug("""
-      AshNeo4j.Cypher: run result #{inspect(elem(boltx_result, 1).results)}
+      AshNeo4j.Cypher: run result #{inspect(elem(bolty_result, 1).results)}
       """)
     end
 
-    boltx_result
+    bolty_result
   end
 
   def run_expecting_deletions(cypher) when is_bitstring(cypher) do
     Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
 
-    boltx_result = Boltx.query(Bolt, cypher)
+    bolty_result = Bolty.query(Bolt, cypher)
 
-    if elem(boltx_result, 0) == :ok do
-      response = elem(boltx_result, 1)
+    if elem(bolty_result, 0) == :ok do
+      response = elem(bolty_result, 1)
 
       deleted_nodes =
         case response.stats do
@@ -249,10 +249,10 @@ defmodule AshNeo4j.Cypher do
         {:error, "nothing deleted"}
       else
         Logger.debug("AshNeo4j.Cypher: run_expecting_deletions deleted #{deleted_nodes} nodes")
-        boltx_result
+        bolty_result
       end
     else
-      boltx_result
+      bolty_result
     end
   end
 end

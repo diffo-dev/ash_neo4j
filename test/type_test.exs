@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.Test.Type do
   @moduledoc false
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Money
@@ -15,7 +15,7 @@ defmodule AshNeo4j.Test.Type do
   use ExUnit.Case, async: false
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do

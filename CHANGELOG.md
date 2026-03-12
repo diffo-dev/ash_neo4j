@@ -189,7 +189,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ### Maintenance
 
-* uses boltx fork at https://github.com/matt-beanland/boltx/tree/dev incorporating version negotiation PR and duration PR
+* uses bolty at https://github.com/diffo-dev/bolty, a reluctant fork of boltx
 * updated deps and tool versions
 * improved info documenation
 

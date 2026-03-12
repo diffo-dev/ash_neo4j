@@ -6,12 +6,12 @@ defmodule AshNeo4j.StateMachine.Test do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper
-  alias AshNeo4j.BoltxHelper
+  alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Test.Resource.StateMachine
   require Ash.Query
 
   setup_all do
-    BoltxHelper.start()
+    BoltyHelper.start()
   end
 
   setup do
