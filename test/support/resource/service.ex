@@ -14,7 +14,7 @@ defmodule AshNeo4j.Test.Resource.Service do
       {:parent_service, :MANAGES, :incoming, :Service},
       {:services, :MANAGES, :outgoing, :Service},
       {:resources, :CONFIGURES, :outgoing, :Resource},
-      {:events, :RAISED, :outgoing, :Event}
+      {:event, :RAISED, :outgoing, :Event}
     ]
   end
 
@@ -36,7 +36,7 @@ defmodule AshNeo4j.Test.Resource.Service do
       change manage_relationship(:specified_by, :specification, type: :append_and_remove)
       change manage_relationship(:manage_services, :services, type: :append_and_remove)
       change manage_relationship(:use_resources, :resources, type: :append_and_remove)
-      change manage_relationship(:fire_event, :events, type: :append_and_remove)
+      change manage_relationship(:fire_event, :event, type: :append_and_remove)
     end
 
     update :update do
@@ -51,7 +51,7 @@ defmodule AshNeo4j.Test.Resource.Service do
       change manage_relationship(:specified_by, :specification, type: :append_and_remove)
       change manage_relationship(:manage_services, :services, type: :append_and_remove)
       change manage_relationship(:use_resources, :resources, type: :append_and_remove)
-      change manage_relationship(:fire_event, :events, type: :append_and_remove)
+      change manage_relationship(:fire_event, :event, type: :append_and_remove)
     end
   end
 
@@ -68,7 +68,7 @@ defmodule AshNeo4j.Test.Resource.Service do
     belongs_to :parent_service, AshNeo4j.Test.Resource.Service, public?: true, source_attribute: :service_id
     has_many :services, AshNeo4j.Test.Resource.Service
     has_many :resources, AshNeo4j.Test.Resource.Resource
-    has_many :events, AshNeo4j.Test.Resource.Event
+    has_one :event, AshNeo4j.Test.Resource.Event
   end
 
   calculations do

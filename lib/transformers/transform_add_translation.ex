@@ -19,11 +19,12 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
   def after?(_), do: false
 
   defp add_translation(dsl) do
+    # collect source attributes from 1:1 belongs_to relationships to avoid translating them
     source_attributes =
       Verifier.get_entities(dsl, [:relationships])
       |> Enum.reduce([], fn relationship, acc ->
         case relationship do
-          %{source_attribute: source_attribute, cardinality: :one} when not is_nil(source_attribute) ->
+          %{source_attribute: source_attribute, type: :belongs_to, cardinality: :one} when not is_nil(source_attribute) ->
             [source_attribute | acc]
 
           _ ->
