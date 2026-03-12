@@ -24,7 +24,8 @@ defmodule AshNeo4j.Transformers.TransformAddTranslation do
       Verifier.get_entities(dsl, [:relationships])
       |> Enum.reduce([], fn relationship, acc ->
         case relationship do
-          %{source_attribute: source_attribute, type: :belongs_to, cardinality: :one} when not is_nil(source_attribute) ->
+          %{source_attribute: source_attribute, type: :belongs_to, cardinality: :one}
+          when not is_nil(source_attribute) ->
             [source_attribute | acc]
 
           _ ->

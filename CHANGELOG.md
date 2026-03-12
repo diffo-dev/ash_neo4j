@@ -176,6 +176,21 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ### Fixes
 
-* fixed relationship source_attribute filtering
+## [v0.2.13](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.12...v0.2.13) (2026-03-12)
+
+### Features
+
+* translate using attribute source (translate DSL removed)
+* nodes are also labelled with domain label
+
+### Fixes
+
+* fixed dates and times not native
+
+### Maintenance
+
+* uses boltx fork at https://github.com/matt-beanland/boltx/tree/dev incorporating version negotiation PR and duration PR
+* updated deps and tool versions
+* improved info documenation
 
 
