@@ -14,8 +14,8 @@ defmodule AshNeo4j.Verifiers.VerifyPropertiesCamelCase do
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
 
-    translation = Verifier.get_option(dsl, [:neo4j], :translation, [])
-    property_names = Keyword.values(translation)
+    translations = Verifier.get_option(dsl, [:neo4j], :translations, [])
+    property_names = Keyword.values(translations)
 
     cond do
       property_names == [] ->

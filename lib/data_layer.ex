@@ -117,7 +117,7 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Transformers.TransformAddDomainLabel,
       AshNeo4j.Transformers.TransformEnsureIdTranslated,
       AshNeo4j.Transformers.TransformDefaultRelate,
-      AshNeo4j.Transformers.TransformAddTranslation,
+      AshNeo4j.Transformers.TransformAddTranslations,
       AshNeo4j.Transformers.TransformAddRelationshipAttributes
     ]
 
@@ -714,7 +714,7 @@ defmodule AshNeo4j.DataLayer do
       end)
 
     fields =
-      Enum.into(Info.translation(resource), enriched, fn {resource_field, node_field} ->
+      Enum.into(Info.translations(resource), enriched, fn {resource_field, node_field} ->
         property_value = Map.get(node.properties, to_string(node_field))
         {resource_field, Cast.cast(resource, resource_field, property_value)}
       end)
@@ -785,7 +785,7 @@ defmodule AshNeo4j.DataLayer do
               case node_relationship do
                 {^name, edge_label, edge_direction, destination_label} ->
                   dest_node_property_name =
-                    Keyword.get(Info.translation(dest_resource), relationship.destination_attribute)
+                    Keyword.get(Info.translations(dest_resource), relationship.destination_attribute)
 
                   dest_id_value = Map.get(relationship_source_attributes, source_attribute)
 
@@ -846,8 +846,8 @@ defmodule AshNeo4j.DataLayer do
 
   defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
     primary_keys = Ash.Resource.Info.primary_key(resource)
-    translation = Info.translation(resource)
-    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translation, key, key), Map.get(map, key)} end)
+    translations = Info.translations(resource)
+    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translations, key, key), Map.get(map, key)} end)
   end
 
   defp relationship_properties(source_resource, dest_resource, source_map, dest_relationship_name)
@@ -876,7 +876,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp properties(resource, map) when is_atom(resource) and is_map(map) do
-    Info.translation(resource)
+    Info.translations(resource)
     |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
     |> Map.reject(fn {_k, v} -> v == nil end)
   end
@@ -884,7 +884,7 @@ defmodule AshNeo4j.DataLayer do
   defp remove_properties(resource, map) when is_atom(resource) and is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(Info.translation(resource), field, nil) end)
+    |> Enum.into([], fn {field, _} -> Keyword.get(Info.translations(resource), field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
   end
 end

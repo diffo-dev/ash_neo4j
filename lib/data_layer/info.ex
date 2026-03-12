@@ -16,6 +16,7 @@ defmodule AshNeo4j.DataLayer.Info do
   end
 
   @doc """
+  Returns the label DSL of the resource.
   The label is the PascalCase short name of the resource's Elixir Module name by default, but can be overridden by setting the :label option in the DSL. It is used as a Neo4j label for all nodes of the resource.
   """
   @spec label(Ash.Resource.t()) :: atom() | nil
@@ -23,34 +24,51 @@ defmodule AshNeo4j.DataLayer.Info do
     Extension.get_opt(resource, [:neo4j], :label, nil, true)
   end
 
+  @doc """
+  Returns the relate DSL of the resource
+  """
   @spec relate(Ash.Resource.t()) :: list(tuple()) | nil
   def relate(resource) do
     Extension.get_opt(resource, [:neo4j], :relate, [], true)
   end
 
+  @doc """
+  Returns the guard DSL of the resource
+  """
   @spec guard(Ash.Resource.t()) :: list(tuple()) | nil
   def guard(resource) do
     Extension.get_opt(resource, [:neo4j], :guard, [], true)
   end
 
+  @doc """
+  Returns the skip DSL of the resource.
+  The skip DSL is a list of attribute names which are not translated to node properties, either because they are transient or because they will be stored as relationships rather than properties.
+  By default, all attributes which are the source of a 1:1 belongs_to relationship are skipped, but additional attributes can be skipped by setting the :skip option in the DSL.
+  """
   @spec skip(Ash.Resource.t()) :: list() | nil
   def skip(resource) do
     Extension.get_opt(resource, [:neo4j], :skip, [], true)
   end
 
-  @spec translation(Ash.Resource.t()) :: keyword() | nil
-  def translation(resource) do
-    Extension.get_opt(resource, [:neo4j], :translation, [], true)
+  @doc """
+  Returns the list of attribute translations for the resource.
+  """
+  @spec translations(Ash.Resource.t()) :: keyword() | nil
+  def translations(resource) do
+    Extension.get_opt(resource, [:neo4j], :translations, [], true)
   end
 
+  @doc """
+  Returns the relationship attributes for the resource.
+  """
   @spec relationship_attributes(Ash.Resource.t()) :: keyword() | nil
   def relationship_attributes(resource) do
     Extension.get_opt(resource, [:neo4j], :relationship_attributes, [], true)
   end
 
   @doc """
-  Returns the list of labels for the resource, including the domain label and the resource label, if they exist
-   The domain label is the PascalCase short name of the domain module, and the resource label is the PascalCase short name of the resource module by default, but can be overridden by setting the :label option in the DSL.
+  Returns the list of labels for the resource. This will consist of any domain label then resource label.
+  The domain label is the PascalCase short name of the domain module, and the resource label is the PascalCase short name of the resource module by default, but can be overridden by setting the :label option in the DSL.
   """
   @spec labels(Ash.Resource.t()) :: list(atom()) | nil
   def labels(resource) do
@@ -190,7 +208,7 @@ defmodule AshNeo4j.DataLayer.Info do
     dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
     attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
 
-    translation(source_resource)
+    translations(source_resource)
     |> Keyword.get(attribute_name, attribute_name)
   end
 
@@ -207,7 +225,7 @@ defmodule AshNeo4j.DataLayer.Info do
 
   @spec convert_to_property_name(Ash.Resource.t(), atom()) :: String.t() | nil
   def convert_to_property_name(resource, attribute_name) when is_atom(resource) and is_atom(attribute_name) do
-    translation(resource)
+    translations(resource)
     |> Keyword.get(attribute_name, attribute_name)
     |> to_string()
   end
@@ -217,10 +235,10 @@ defmodule AshNeo4j.DataLayer.Info do
   """
   @spec convert_to_properties(Ash.Resource.t(), map()) :: map()
   def convert_to_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    translation = translation(resource)
+    translations = translations(resource)
 
     Enum.reduce(attributes, %{}, fn {attribute_name, value}, acc ->
-      property_name = Keyword.get(translation, attribute_name, attribute_name)
+      property_name = Keyword.get(translations, attribute_name, attribute_name)
       Map.put(acc, property_name, value)
     end)
   end

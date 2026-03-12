@@ -135,13 +135,13 @@ defmodule AshNeo4j.QueryHelper do
         cypher
 
       _ ->
-        translation = AshNeo4j.DataLayer.Info.translation(ash_query.resource)
+        translations = AshNeo4j.DataLayer.Info.translations(ash_query.resource)
 
         terms =
           Enum.map_join(ash_query.sort, ", ", fn {name, order} ->
             case order do
-              :desc -> "s.#{Keyword.get(translation, name, name)} DESC"
-              _ -> "s.#{Keyword.get(translation, name, name)} ASC"
+              :desc -> "s.#{Keyword.get(translations, name, name)} DESC"
+              _ -> "s.#{Keyword.get(translations, name, name)} ASC"
             end
           end)
 
