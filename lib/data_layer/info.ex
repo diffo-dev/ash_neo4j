@@ -106,6 +106,31 @@ defmodule AshNeo4j.DataLayer.Info do
     )
   end
 
+  @spec node_relationship(Ash.Resource.t(), atom(), atom(), list(atom())) :: tuple() | nil
+  def node_relationship(resource, edge_label, edge_direction, destination_labels)
+      when is_atom(resource) and is_atom(edge_label) and is_atom(edge_direction) and is_list(destination_labels) do
+    destination_labels = List.delete(destination_labels, domain_label(resource))
+
+    Enum.reduce_while(destination_labels, nil, fn destination_label, acc ->
+      node_relationship =
+        Enum.find(
+          relate(resource),
+          fn related ->
+            case related do
+              {_, ^edge_label, ^edge_direction, ^destination_label} -> true
+              _ -> false
+            end
+          end
+        )
+
+      if node_relationship do
+        {:halt, node_relationship}
+      else
+        {:cont, acc}
+      end
+    end)
+  end
+
   @doc """
   Returns the relationship from the source attribute, if any
   """
@@ -125,6 +150,16 @@ defmodule AshNeo4j.DataLayer.Info do
   def relationship(resource, edge_label, edge_direction, destination_label)
       when is_atom(resource) and is_atom(edge_label) and is_atom(edge_direction) and is_atom(destination_label) do
     node_relationship = node_relationship(resource, edge_label, edge_direction, destination_label)
+
+    if node_relationship != nil do
+      Ash.Resource.Info.relationship(resource, elem(node_relationship, 0))
+    end
+  end
+
+  @spec relationship(Ash.Resource.t(), atom(), atom(), list(atom())) :: struct() | nil
+  def relationship(resource, edge_label, edge_direction, destination_labels)
+      when is_atom(resource) and is_atom(edge_label) and is_atom(edge_direction) and is_list(destination_labels) do
+    node_relationship = node_relationship(resource, edge_label, edge_direction, destination_labels)
 
     if node_relationship != nil do
       Ash.Resource.Info.relationship(resource, elem(node_relationship, 0))
