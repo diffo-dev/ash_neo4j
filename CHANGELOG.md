@@ -193,4 +193,8 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 * updated deps and tool versions
 * improved info documenation
 
+## [v0.2.14](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.13...v0.2.14) (2026-03-19)
 
+### Fixes
+
+* fix relationship enrichment inconsistent across neo4j versions
