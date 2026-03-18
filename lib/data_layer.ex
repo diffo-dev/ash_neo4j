@@ -635,12 +635,12 @@ defmodule AshNeo4j.DataLayer do
 
   defp enrichments(resource, acc, {edge, dest_node})
        when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
-    dest_label = String.to_atom(List.first(dest_node.labels))
+    dest_labels = Enum.into(dest_node.labels, [], &String.to_atom(&1))
     edge_label = String.to_atom(edge.type)
     edge_direction = edge_direction(edge, dest_node)
 
     relationship =
-      Info.relationship(resource, edge_label, edge_direction, dest_label)
+      Info.relationship(resource, edge_label, edge_direction, dest_labels)
 
     if relationship != nil do
       reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
