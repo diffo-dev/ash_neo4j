@@ -198,3 +198,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Fixes
 
 * fix relationship enrichment inconsistent across neo4j versions
+
+## [v0.2.15](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.14...v0.2.15) (2026-03-19)
+
+### Fixes
+
+* fix domain label incorrect
