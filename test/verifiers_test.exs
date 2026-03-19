@@ -16,7 +16,7 @@ defmodule AshNeo4j.Test.Verifiers do
         fn ->
           defmodule InvalidLabel do
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -40,7 +40,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule InvalidEdgeLabel do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -70,7 +70,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule MismatchedRelationships do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -102,7 +102,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule RelateInvalidEdgeDirection do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -133,7 +133,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule RelateInvalidDestinationLabel do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -164,7 +164,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule GuardInvalidEdgeLabel do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -187,7 +187,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule GuardInvalidEdgeDirection do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -210,7 +210,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule GuardInvalidDestinationLabel do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -233,7 +233,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule InvalidStoreProperty do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
@@ -257,7 +257,7 @@ defmodule AshNeo4j.Test.Verifiers do
           defmodule InvalidSourceAttribute do
             @moduledoc false
             use Ash.Resource,
-              domain: AshNeo4j.Test.Domain,
+              domain: AshNeo4j.Test.SRM,
               data_layer: AshNeo4j.DataLayer
 
             neo4j do

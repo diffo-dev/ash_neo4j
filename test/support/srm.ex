@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Domain do
+defmodule AshNeo4j.Test.SRM do
   @moduledoc false
   use Ash.Domain
 

@@ -5,7 +5,7 @@
 defmodule AshNeo4j.Test.Resource.Comment do
   @moduledoc false
   use Ash.Resource,
-    domain: AshNeo4j.Test.Domain,
+    domain: AshNeo4j.Test.SRM,
     data_layer: AshNeo4j.DataLayer
 
   actions do
