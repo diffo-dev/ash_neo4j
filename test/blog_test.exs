@@ -130,7 +130,6 @@ defmodule AshNeo4j.Blog.Test do
       Enum.each(post.comments, &assert(is_struct(&1, Comment)))
     end
 
-    @tag debug: true
     test "comment post relationship can be read using ash" do
       create_posts_with_comments(1, 2)
 

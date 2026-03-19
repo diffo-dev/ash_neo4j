@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.2.14"}
+    {:ash_neo4j, "~> 0.2.15"}
   ],
   consolidate_protocols: false
 )
@@ -133,7 +133,7 @@ For the Specfication resource we simply declare the data_layer when using Ash.Re
 ```elixir
 defmodule Specification do
   use Ash.Resource,
-    domain: Domain,
+    domain: Servo,
     data_layer: AshNeo4j.DataLayer
 
   actions do
@@ -169,7 +169,7 @@ Next we define an Ash Resource for Resource, using the AshNeo4j datalayer. A Res
 defmodule Resource do
   @moduledoc false
   use Ash.Resource,
-    domain: Domain,
+    domain: Servo,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
@@ -229,7 +229,7 @@ We also need to declare a Service, also defined by a Specification and can manag
 defmodule Service do
   @moduledoc false
   use Ash.Resource,
-    domain: Domain,
+    domain: Servo,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do

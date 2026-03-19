@@ -214,7 +214,7 @@ defmodule AshNeo4j.Test.Type do
       assert type.__metadata__
       assert type.__metadata__.data_layer == AshNeo4j.DataLayer
       assert "Type" in type.__metadata__.labels
-      assert "Domain" in type.__metadata__.labels
+      assert "Srm" in type.__metadata__.labels
       assert is_integer(type.__metadata__.node_id)
     end
   end

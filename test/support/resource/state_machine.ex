@@ -5,7 +5,7 @@
 defmodule AshNeo4j.Test.Resource.StateMachine do
   @moduledoc false
   use Ash.Resource,
-    domain: AshNeo4j.Test.Domain,
+    domain: AshNeo4j.Test.SRM,
     extensions: [AshStateMachine],
     data_layer: AshNeo4j.DataLayer
 

@@ -15,7 +15,7 @@ defmodule AshNeo4j.Transformers.TransformAddDomainLabel do
   end
 
   defp add_domain_label(dsl) do
-    domain_module = Verifier.get_persisted(dsl, [:env], :domain)
+    domain_module = Verifier.get_persisted(dsl, :domain, :Domain)
     domain_label = short_name(domain_module) |> to_pascal_case()
 
     Transformer.set_option(dsl, [:neo4j], :domain_label, domain_label)
