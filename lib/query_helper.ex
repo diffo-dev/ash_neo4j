@@ -185,5 +185,10 @@ defmodule AshNeo4j.QueryHelper do
   defp convert_value(values) when is_struct(values, MapSet),
     do: "[#{Enum.map(values, fn value -> convert_value(value) end) |> Enum.join(",")}]"
 
+  defp convert_value(value) when is_struct(value, Ash.CiString), do: "'#{Ash.CiString.value(value)}'"
+
+  # Ash expression functions that need runtime evaluation
+  defp convert_value(%Ash.Query.Function.Now{}), do: "datetime('#{DateTime.to_iso8601(DateTime.utc_now())}')"
+
   defp convert_value(value), do: value
 end
