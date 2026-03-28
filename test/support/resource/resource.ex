@@ -67,4 +67,19 @@ defmodule AshNeo4j.Test.Resource.Resource do
     has_many :resources, AshNeo4j.Test.Resource.Resource
     has_one :event, AshNeo4j.Test.Resource.Event
   end
+
+  calculations do
+    calculate :href,
+              :string,
+              AshNeo4j.Test.Resource.Calculation.Href do
+      description "the inventory href of the resource"
+    end
+  end
+
+  preparations do
+    prepare build(
+              load: [:specification, :resources],
+              sort: [id: :asc]
+            )
+  end
 end
