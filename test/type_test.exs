@@ -19,9 +19,10 @@ defmodule AshNeo4j.Test.Type do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Type)
-    end)
+    # on_exit(fn ->
+    #  Neo4jHelper.delete_nodes(:Type)
+    # end)
+    :ok
   end
 
   @type_attributes %{
@@ -198,6 +199,7 @@ defmodule AshNeo4j.Test.Type do
       assert type.money.currency == :sek
     end
 
+    @tag debug: true
     test "type node can be created using ash with array embedded resource property" do
       {:ok, money1} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
       {:ok, money2} = Money |> Ash.Changeset.for_create(:create, %{amount: 200, currency: :aud}) |> Ash.create()

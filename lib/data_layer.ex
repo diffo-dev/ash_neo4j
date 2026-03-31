@@ -245,14 +245,14 @@ defmodule AshNeo4j.DataLayer do
     subject_id = id_properties(resource, changeset.data)
     subject_label = Info.label(resource)
 
-    update_properties = properties(resource, changeset.attributes)
+    update_properties = dump_properties(resource, changeset.attributes)
 
-    remove_properties = remove_properties(resource, changeset.attributes)
+    remove_property_names = remove_property_names(resource, changeset.attributes)
 
     property_update_result =
-      if !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) do
+      if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
         # update properties
-        case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_properties) do
+        case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_property_names) do
           {:ok, %Bolty.Response{results: []}} ->
             {:error, "no result to update node"}
 
@@ -751,7 +751,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    properties = properties(resource, attributes)
+    properties = dump_properties(resource, attributes)
 
     case create_node(resource, properties) do
       {:ok, source_resource} ->
@@ -875,16 +875,79 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp properties(resource, map) when is_atom(resource) and is_map(map) do
-    Info.translations(resource)
-    |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
-    |> Map.reject(fn {_k, v} -> v == nil end)
-  end
+  # defp properties(resource, map) when is_atom(resource) and is_map(map) do
+  #  Info.translations(resource)
+  #  |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
+  #  |> Map.reject(fn {_k, v} -> v == nil end)
+  # end
 
-  defp remove_properties(resource, map) when is_atom(resource) and is_map(map) do
+  defp remove_property_names(resource, map) when is_atom(resource) and is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
     |> Enum.into([], fn {field, _} -> Keyword.get(Info.translations(resource), field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
+  end
+
+  defp neo4j_native?(type) do
+    type in [
+      Ash.Type.UUID,
+      Ash.Type.UUIDv7,
+      Ash.Type.String,
+      Ash.Type.Integer,
+      Ash.Type.Float,
+      Ash.Type.Boolean,
+      Ash.Type.Date,
+      Ash.Type.Datetime,
+      Ash.Type.LocalDatetime,
+      Ash.Type.Time,
+      Ash.Type.Duration
+    ]
+  end
+
+  defp to_neo4j(type, value, constraints) do
+    cond do
+      neo4j_native?(type) ->
+        # pass through, since Neo4j Bolt driver will handle conversion of native types
+        value
+
+      true ->
+        case type do
+          {:array, inner_type} ->
+            if neo4j_native?(inner_type) do
+              value
+            else
+              Enum.map(value, &to_neo4j(inner_type, &1, constraints))
+            end
+
+          _ ->
+            case Ash.Type.dump_to_native(type, value, constraints) do
+              {:ok, native} ->
+                if is_map(native) and type != Ash.Type.Map do
+                  Map.put(native, :__struct__, type)
+                else
+                  native
+                end
+
+              :error ->
+                raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native"
+            end
+        end
+    end
+  end
+
+  defp dump_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    Info.translations(resource)
+    |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
+      value = Map.get(attributes, key)
+
+      if value != nil do
+        attribute = Ash.Resource.Info.attribute(resource, key)
+        attribute_module =
+          Ash.Type.get_type!(attribute.type)
+        Map.put(acc, translated_key, to_neo4j(attribute_module, value, attribute.constraints))
+      else
+        acc
+      end
+    end)
   end
 end

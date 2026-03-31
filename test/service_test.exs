@@ -19,9 +19,10 @@ defmodule AshNeo4j.Service.Test do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_all()
-    end)
+    # on_exit(fn ->
+    #  Neo4jHelper.delete_all()
+    # end)
+    :ok
   end
 
   describe "Bolty configuration tests" do

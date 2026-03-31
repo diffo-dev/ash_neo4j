@@ -19,12 +19,13 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Author)
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_nodes(:Tag)
-    end)
+    # on_exit(fn ->
+    #  Neo4jHelper.delete_nodes(:Author)
+    #  Neo4jHelper.delete_nodes(:Post)
+    #  Neo4jHelper.delete_nodes(:Comment)
+    #  Neo4jHelper.delete_nodes(:Tag)
+    # end)
+    :ok
   end
 
   describe "Bolty configuration tests" do

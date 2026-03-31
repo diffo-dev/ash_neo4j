@@ -5,6 +5,9 @@
 defmodule AshNeo4j.Cypher do
   @moduledoc """
   AshNeo4j Cypher
+  Functions for converting Elixir data structures to Cypher query components and running Cypher queries against a Neo4j database.
+  Ideally has no specific knowledge of Ash
+
   """
 
   require Logger
@@ -32,33 +35,38 @@ defmodule AshNeo4j.Cypher do
     "#{k}: " <> value(v, "'")
   end
 
+  # This function converts Elixir values to their corresponding Cypher representations.
   defp value(v, wrap \\ nil) do
     case v do
       nil -> "null"
+      _ when is_bitstring(v) -> wrap(":#{v}", wrap)
       _ when is_boolean(v) -> "#{v}"
       # atom must be after boolean
       _ when is_atom(v) -> wrap(":#{v}", wrap)
       _ when is_integer(v) -> "#{v}"
       _ when is_float(v) -> "#{v}"
       _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
-      _ when is_function(v) -> wrap("#{inspect(v)}", wrap)
       _ when is_struct(v, Date) -> "date(" <> wrap(Date.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, DateTime) -> "datetime(" <> wrap(DateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Decimal) -> wrap("#{inspect(v)}", wrap)
       _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
       _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, MapSet) -> wrap("#{inspect(v)}", wrap)
       # following assumes embedded structs will implement to_string protocol
-      _ when is_struct(v) -> wrap("#{to_string(v)}", wrap)
+      _ when is_struct(v) -> wrap(v, wrap)
       # map must be after struct
       _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
       _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
       # no specific property value format, requires String.Chars protocol
-      _ -> wrap("#{v}", wrap)
+      _ -> wrap("#{v}", wrap) |> Logger.warning("relied on String.Chars for value: #{v}")
     end
+  end
+
+  defp wrap(v, wrap) when is_struct(v) do
+    %name{} = v
+    map = Map.from_struct(v)
+    map_string = inspect(map)
+    struct_string = String.replace_leading(map_string, "%{", "%#{name}{")
+    wrap(struct_string, wrap)
   end
 
   defp wrap(v, nil) when is_nil(nil) do
@@ -70,7 +78,7 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Converts a list into a remove properties string.
+  Converts a list of property names into a remove properties string.
   The list is converted to a string in the format `n.key1, n.key2`.
 
   ## Examples
@@ -79,9 +87,9 @@ defmodule AshNeo4j.Cypher do
   "n.born, n.bafta_winner"
   ```
   """
-  def remove_properties(label, list) when is_atom(label) and is_list(list) do
-    list
-    |> Enum.map_join(", ", fn property -> "#{label}.#{property}" end)
+  def remove_properties(label, names) when is_atom(label) and is_list(names) do
+    names
+    |> Enum.map_join(", ", fn name -> "#{label}.#{name}" end)
   end
 
   @doc """

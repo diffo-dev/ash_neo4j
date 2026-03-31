@@ -116,4 +116,21 @@ defmodule AshNeo4j.Util do
     name = Atom.to_string(atom)
     Regex.match?(~r/^[A-Z]+(_[A-Z]+)*$/, name)
   end
+
+  @doc """
+  Whether the given module uses Ash.TypedStruct
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Util.typed_struct?(Ash.TypedStruct)
+  true
+  iex> AshNeo4j.Util.typed_struct?(List)
+  false
+  ```
+  """
+  def typed_struct?(module) do
+    Spark.Dsl.is?(module, Ash.TypedStruct)
+  rescue
+    _ -> false
+  end
 end

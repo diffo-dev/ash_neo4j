@@ -6,132 +6,72 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
-  alias AshNeo4j.BoltyHelper
-
   @struct_name_regex Regex.compile!("%(.*?){")
   @struct_properties_regex Regex.compile!("{(.*?)}$")
 
   @doc """
-  Casts an Ash.Resource.Attribute
+  Casts an Ash.Resource.Attribute, needs to handle single values and arrays of values.
+  Values may be Elixir native types, Neo4j native types, or string representations of either.
   """
-  def cast(resource, name, value) do
+  def cast(_resource, _name, nil) do
+    nil
+  end
+
+  def cast(resource, name, value) when is_atom(resource) and is_atom(name) do
     attribute = Ash.Resource.Info.attribute(resource, name)
-
-    if value == nil do
-      nil
+    if attribute == nil do
+      Logger.warning("AshNeo4j.Cast: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value")
+      value
     else
-      if attribute == nil do
-        Logger.warning(
-          "AshNeo4j.Cast: cannot cast as name #{name} is not an attribute of resource #{inspect(resource)}"
-        )
-
-        value
-      else
-        case attribute.type do
-          Ash.Type.Atom ->
-            cast_atom(value)
-
-          Ash.Type.String ->
-            cast_string(value)
-
-          Ash.Type.UUID ->
-            cast_string(value)
-
-          Ash.Type.Boolean ->
-            value
-
-          Ash.Type.Integer ->
-            value
-
-          Ash.Type.Float ->
-            value
-
-          Ash.Type.Binary ->
-            value
-
-          Ash.Type.CiString ->
-            value
-
-          Ash.Type.Function ->
-            cast_function(value)
-
-          Ash.Type.Module ->
-            cast_atom(value)
-
-          Ash.Type.Date ->
-            cast_date(value)
-
-          Ash.Type.DateTime ->
-            cast_datetime(value, [])
-
-          Ash.Type.UtcDatetime ->
-            cast_datetime(value, precision: :microsecond)
-
-          Ash.Type.Duration ->
-            cast_duration(value)
-
-          Ash.Type.UtcDatetimeUsec ->
-            cast_datetime(value, precision: :microsecond)
-
-          Ash.Type.NaiveDatetime ->
-            cast_naivedatetime(value)
-
-          Ash.Type.Time ->
-            cast_time(value, [])
-
-          Ash.Type.TimeUsec ->
-            cast_time(value, precision: :microsecond)
-
-          Ash.Type.Map ->
-            cast_map(value)
-
-          Ash.Type.Struct ->
-            cast_struct(value)
-
-          Ash.Type.Keyword ->
-            cast_list(value)
-
-          Ash.Type.Tuple ->
-            cast_tuple(value)
-
-          Ash.Type.Decimal ->
-            cast_decimal(value)
-
-          Ash.Type.Term ->
-            cast(value)
-
-          Ash.Type.Union ->
-            cast(value)
-
-          Ash.Type.UrlEncodedBinary ->
-            cast_string(value)
-
-          {:array, _} ->
-            cast_list(value)
-
-          _name ->
-            cast(value)
-        end
-      end
+      cast_attribute(attribute.type, value, attribute.constraints)
     end
   end
 
-  defp cast_atom(nil) when is_nil(nil) do
+  defp cast_attribute(_type, nil, _constraints) do
     nil
+  end
+
+  defp cast_attribute({:array, inner_type}, value, constraints) when is_list(value) do
+    Enum.map(value, &cast_attribute(inner_type, &1, constraints))
+  end
+
+  defp cast_attribute(type, value, constraints) do
+    ash_type = Ash.Type.get_type!(type)
+    is_resource = Ash.Resource.Info.resource?(ash_type)
+
+    prepared_attribute_value =
+      if ash_type in [Ash.Type.Struct] or is_resource do
+        cast_struct(value)
+      else
+        value
+      end
+
+    case ash_type do
+      Ash.Type.UUID ->
+        prepared_attribute_value
+
+      _ ->
+        cast_ash_type(ash_type, prepared_attribute_value, constraints)
+    end
+  end
+
+  defp cast_ash_type(type, value, constraints) do
+    case Ash.Type.cast_stored(type, value, constraints) do
+      {:ok, casted} ->
+        casted
+
+      _ ->
+        Logger.warning(
+          "AshNeo4j.Cast: cannot cast using Ash.Type.cast_stored for type #{inspect(type)} and value #{inspect(value)}, returning original value"
+        )
+
+        value
+    end
   end
 
   defp cast_atom(value) when is_binary(value) do
     String.to_atom(String.replace_leading(value, ":", ""))
   end
-
-  defp cast_function(value) when is_binary(value) do
-    [module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
-    module_function_splits = String.split(module_function, ".")
-    function = List.last(module_function_splits)
-    module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse())
-    Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
-  end
-
   defp cast_struct(nil) when is_nil(nil) do
     nil
   end
@@ -192,71 +132,6 @@ defmodule AshNeo4j.DataLayer.Cast do
         key = hd(splits)
         value = Enum.map_join(tl(splits), ":", &String.trim(&1))
         {String.to_atom(key), cast(value)}
-    end
-  end
-
-  defp cast_date(value) do
-    case Ash.Type.Date.cast_input(value, []) do
-      {:ok, date} ->
-        date
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Date")
-        value
-    end
-  end
-
-  defp cast_datetime(value, opts) when is_struct(value, Bolty.Types.DateTimeWithTZOffset) do
-    datetime = BoltyHelper.convert_from_datetime_with_tz_offset(value)
-    cast_datetime(datetime, opts)
-  end
-
-  defp cast_datetime(value, opts) do
-    case Ash.Type.DateTime.cast_input(value, opts) do
-      {:ok, datetime} ->
-        datetime
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as DateTime")
-        value
-    end
-  end
-
-  defp cast_duration(value) do
-    case Ash.Type.Duration.cast_input(value, precision: :microsecond) do
-      {:ok, duration} ->
-        duration
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Duration")
-        value
-    end
-  end
-
-  defp cast_naivedatetime(value) do
-    case Ash.Type.NaiveDatetime.cast_input(value, precision: :microsecond) do
-      {:ok, naivedatetime} ->
-        naivedatetime
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as NaiveDateTime")
-        value
-    end
-  end
-
-  defp cast_time(value, opts) when is_struct(value, Bolty.Types.TimeWithTZOffset) do
-    time = BoltyHelper.convert_from_time_with_tz_offset(value)
-    cast_time(time, opts)
-  end
-
-  defp cast_time(value, opts) do
-    case Ash.Type.Time.cast_input(value, opts) do
-      {:ok, time} ->
-        time
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Time")
-        value
     end
   end
 
