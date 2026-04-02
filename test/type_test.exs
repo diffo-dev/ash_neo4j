@@ -32,10 +32,7 @@ defmodule AshNeo4j.Test.Type do
     array_boolean: [true, true, false],
     array_map: [%{a: "a"}, %{b: "b"}],
     array_struct: [%Struct{}],
-    # note neo4j arrays must all be same neo4j type (in this case all strings)
-    array_term: [:a, "a", %Struct{}],
     atom: :a,
-    binary: <<1, 2, 3>>,
     boolean: true,
     ci_string: "HELLO",
     date: ~D[2025-05-11],
@@ -48,14 +45,12 @@ defmodule AshNeo4j.Test.Type do
     json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
     keyword: [a: :atom, s: "string"],
     map: %{a: "a", b: 1, c: false, d: nil},
-    mapset: MapSet.new([1, :two, false]),
     module: AshNeo4j.DataLayer,
     naive_datetime: ~N[2025-05-11 07:45:41],
     # regex: ~r/foo/iu,
     string: "Hello",
     struct: %Struct{s: "Wow"},
     struct_in_struct: %StructInStruct{struct: %Struct{s: "Wow"}},
-    term: %{"aEnd" => 1, "zEnd" => 13},
     time: ~T[07:45:41Z],
     time_usec: ~T[07:45:41.429903Z],
     tuple: {:a, 1, false},
@@ -70,13 +65,7 @@ defmodule AshNeo4j.Test.Type do
     "arrayBoolean" => [true, true, false],
     "arrayMap" => ["%{a: \"a\"}", "%{b: \"b\"}"],
     "arrayStruct" => [
-      "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
-    ],
-    # note neo4j arrays must all be same neo4j type (in this case all strings)
-    "arrayTerm" => [
-      ":a",
-      "a",
-      "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Hello\"}"
+      "%AshNeo4j.Test.Struct{a: :a, b: false, d: nil, f: 1.2, i: 0, n: nil, s: \"Hello\"}"
     ],
     "atom" => ":a",
     "binary" => "\x01\x02\x03",
@@ -93,8 +82,6 @@ defmodule AshNeo4j.Test.Type do
     "keyword" => ["{:a, :atom}", "{:s, string}"],
     # serialisation order indeterminate
     "map" => "%{a: \"a\", b: 1, c: false, d: nil}",
-    # serialisation order indeterminate
-    "mapset" => "MapSet.new([1, :two, false])",
     "module" => ":Elixir.AshNeo4j.DataLayer",
     "naiveDatetime" => "2025-05-11T07:45:41",
     # "regex" => "~r/foo/iu",
@@ -102,7 +89,6 @@ defmodule AshNeo4j.Test.Type do
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}",
     "structInStruct" =>
       "%AshNeo4j.Test.StructInStruct{struct: %AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}}",
-    "term" => "%{\"aEnd\" => 1, \"zEnd\" => 13}",
     "time" => "07:45:41",
     "timeUsec" => "07:45:41.429903",
     "tuple" => "{:a, 1, false}",
@@ -126,19 +112,17 @@ defmodule AshNeo4j.Test.Type do
       assert length(records) == 1
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
-      Enum.each(@type_node_properties, fn {key, _value} -> assert Map.get(node.properties, "#{key}") == nil end)
+      assert Enum.empty?(node.properties)
     end
 
     test "type node with properties can be created using Neo4jHelper" do
       assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], @type_node_properties)
       assert length(records) == 1
-      node = records |> List.first() |> List.first()
+      node = records |> List.first() |> List.first() |> IO.inspect(label: "read type node without properties")
       assert node.labels == ["Type"]
-      # map and mapset have indeterminate order so we don't check them exactly
+      # map has indeterminate order so we don't check them exactly
       refute Map.get(node.properties, "map") == nil
-      refute Map.get(node.properties, "mapset") == nil
-
-      Enum.each(Map.drop(@type_node_properties, ["map", "mapset"]), fn {key, value} ->
+      Enum.each(Map.drop(@type_node_properties, ["map"]), fn {key, value} ->
         assert Map.get(node.properties, "#{key}") == value
       end)
     end
@@ -182,6 +166,7 @@ defmodule AshNeo4j.Test.Type do
       Enum.each(Map.drop(@type_attributes, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
     end
 
+    @tag debug: true
     test "type node can be created using ash with properties" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url
@@ -199,7 +184,6 @@ defmodule AshNeo4j.Test.Type do
       assert type.money.currency == :sek
     end
 
-    @tag debug: true
     test "type node can be created using ash with array embedded resource property" do
       {:ok, money1} = Money |> Ash.Changeset.for_create(:create, %{amount: 1000, currency: :sek}) |> Ash.create()
       {:ok, money2} = Money |> Ash.Changeset.for_create(:create, %{amount: 200, currency: :aud}) |> Ash.create()

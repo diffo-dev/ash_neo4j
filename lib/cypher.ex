@@ -35,48 +35,31 @@ defmodule AshNeo4j.Cypher do
     "#{k}: " <> value(v, "'")
   end
 
-  # This function converts Elixir values to their corresponding Cypher representations.
-  defp value(v, wrap \\ nil) do
+  # This function converts Neo4j compatible Elixir values to their corresponding Cypher representations.
+  # TODO use parameters to avoid injection risks, and to handle escaping of strings, rather than converting to Cypher literals directly in this function.
+  defp value(v, wrap) do
+    IO.inspect(v, label: "value to convert to Cypher")
     case v do
       nil -> "null"
-      _ when is_bitstring(v) -> wrap(":#{v}", wrap)
+      _ when is_bitstring(v) -> wrap(v, wrap)
       _ when is_boolean(v) -> "#{v}"
-      # atom must be after boolean
-      _ when is_atom(v) -> wrap(":#{v}", wrap)
       _ when is_integer(v) -> "#{v}"
       _ when is_float(v) -> "#{v}"
       _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
       _ when is_struct(v, Date) -> "date(" <> wrap(Date.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(DateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
+      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap)  <> ")"
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
-      # following assumes embedded structs will implement to_string protocol
-      _ when is_struct(v) -> wrap(v, wrap)
-      # map must be after struct
-      _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
-      _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
-      # no specific property value format, requires String.Chars protocol
-      _ -> wrap("#{v}", wrap) |> Logger.warning("relied on String.Chars for value: #{v}")
-    end
-  end
-
-  defp wrap(v, wrap) when is_struct(v) do
-    %name{} = v
-    map = Map.from_struct(v)
-    map_string = inspect(map)
-    struct_string = String.replace_leading(map_string, "%{", "%#{name}{")
-    wrap(struct_string, wrap)
-  end
-
-  defp wrap(v, nil) when is_nil(nil) do
-    v
+      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap)  <> ")"
+      _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
+      _ -> raise "AshNeo4j.DataLayer Error converting value to Cypher, unsupported type for value: #{inspect(v)}"
+    end |> IO.inspect(label: "value converted to Cypher")
   end
 
   defp wrap(v, wrap) when is_bitstring(wrap) do
     wrap <> v <> wrap
   end
 
+  @spec remove_properties(atom(), maybe_improper_list()) :: binary()
   @doc """
   Converts a list of property names into a remove properties string.
   The list is converted to a string in the format `n.key1, n.key2`.

@@ -890,48 +890,111 @@ defmodule AshNeo4j.DataLayer do
 
   defp neo4j_native?(type) do
     type in [
-      Ash.Type.UUID,
-      Ash.Type.UUIDv7,
-      Ash.Type.String,
-      Ash.Type.Integer,
-      Ash.Type.Float,
       Ash.Type.Boolean,
       Ash.Type.Date,
       Ash.Type.Datetime,
+      Ash.Type.Duration,
+      Ash.Type.Float,
+      Ash.Type.Integer,
       Ash.Type.LocalDatetime,
+      Ash.Type.String,
       Ash.Type.Time,
-      Ash.Type.Duration
+      Ash.Type.UUID,
+      Ash.Type.UUIDv7,
     ]
   end
 
+  defp unsupported?(type) do
+    type in [
+      Ash.Type.Binary,
+      Ash.Type.MapSet,
+      Ash.Type.Term
+    ]
+  end
+
+  defp ash_type_json?(type) do
+    type in [
+      Ash.Type.Decimal,
+      Ash.Type.Function,
+      Ash.Type.Keyword,
+      Ash.Type.Map,
+      Ash.Type.Struct,
+      Ash.Type.Tuple,
+      Ash.Type.Union
+    ]
+  end
+
+  defp array?(type) do
+    case type do
+      {:array, _} -> true
+      _ -> false
+    end
+  end
+
+  defp neo4j_native_array?(type) do
+    array?(type) and neo4j_native?(type)
+  end
+
+  defp ash_type_array?(type) do
+    array?(type) and Ash.Type.ash_type?(elem(type, 1))
+  end
+
   defp to_neo4j(type, value, constraints) do
+    IO.inspect({type, value, constraints}, label: "to_neo4j params")
     cond do
+      unsupported?(type) ->
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native, unsupported type"
+
+      neo4j_native_array?(type) and is_list(value)->
+        # pass through, since Neo4j Bolt driver will handle conversion of native array types
+        value
+
+      ash_type_array?(type) and is_list(value) ->
+        # ash type arrays must be dumped to native arrays before encoding, since the encoding may differ based on the inner type
+        {:array, inner_type} = type
+        Enum.into(value, [], &dump_ash_type(inner_type, &1, constraints))
+        |> Jason.encode!
+
+      array?(type) and is_list(value)->
+        # non-native arrays are json encoded
+        value
+        |> Jason.encode!(value)
+
       neo4j_native?(type) ->
         # pass through, since Neo4j Bolt driver will handle conversion of native types
         value
 
+      ash_type_json?(type)->
+        # ash values that are dumped and jason encoded
+        dump_ash_type(type, value, constraints)
+        |> Jason.encode!
+
+      Ash.Type.ash_type?(type) ->
+        # other ash types are just dumped for Neo4j to handle
+        dump_ash_type(type, value, constraints)
+
       true ->
-        case type do
-          {:array, inner_type} ->
-            if neo4j_native?(inner_type) do
-              value
-            else
-              Enum.map(value, &to_neo4j(inner_type, &1, constraints))
-            end
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native, unhandled type"
+    end
+    |> IO.inspect(label: "to_neo4j result")
+  end
 
-          _ ->
-            case Ash.Type.dump_to_native(type, value, constraints) do
-              {:ok, native} ->
-                if is_map(native) and type != Ash.Type.Map do
-                  Map.put(native, :__struct__, type)
-                else
-                  native
-                end
+  defp dump_ash_type(Ash.Type.Function, value, _constraints) do
+    info = Function.info(value)
+    "&" <> Atom.to_string(info[:module]) <> "." <> Atom.to_string(info[:name]) <> "/" <> Integer.to_string(info[:arity])
+  end
 
-              :error ->
-                raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native"
-            end
-        end
+  defp dump_ash_type(Ash.Type.Struct, value, constraints) do
+    dump_ash_type(Ash.Type.Map, value, constraints)
+  end
+
+  defp dump_ash_type(type, value, constraints) do
+    case Ash.Type.dump_to_native(type, value, constraints) do
+      {:ok, native} ->
+        native
+
+      _ ->
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native"
     end
   end
 
@@ -942,9 +1005,11 @@ defmodule AshNeo4j.DataLayer do
 
       if value != nil do
         attribute = Ash.Resource.Info.attribute(resource, key)
-        attribute_module =
+
+        attribute_type =
           Ash.Type.get_type!(attribute.type)
-        Map.put(acc, translated_key, to_neo4j(attribute_module, value, attribute.constraints))
+
+        Map.put(acc, translated_key, to_neo4j(attribute_type, value, attribute.constraints))
       else
         acc
       end

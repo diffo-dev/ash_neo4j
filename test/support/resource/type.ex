@@ -20,8 +20,8 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :array_integer, {:array, :integer}, public?: true
     attribute :array_string, {:array, :string}, public?: true
     attribute :array_map, {:array, :map}, public?: true
-    attribute :array_struct, {:array, :struct}, public?: true
-    attribute :array_term, {:array, :term}, public?: true
+    attribute :array_struct, {:array, :struct}, public?: true, constraints: [instance_of: AshNeo4j.Test.Struct]
+    attribute :array_typed_struct, {:array, AshNeo4j.Test.TypedStruct}, public?: true
 
     attribute :atom, :atom do
       public? true
@@ -29,7 +29,6 @@ defmodule AshNeo4j.Test.Resource.Type do
       constraints one_of: [:a, :b]
     end
 
-    attribute :binary, :binary, public?: true
     attribute :boolean, :boolean, public?: true
 
     attribute :ci_string, :ci_string do
@@ -56,16 +55,14 @@ defmodule AshNeo4j.Test.Resource.Type do
     end
 
     attribute :map, :map, public?: true
-    attribute :mapset, :struct, public?: true
     attribute :module, :module, public?: true
     attribute :money, AshNeo4j.Test.Resource.Money, public?: true
     attribute :array_money, {:array, AshNeo4j.Test.Resource.Money}, public?: true
     attribute :naive_datetime, :naive_datetime, public?: true
     attribute :regex, :struct, public?: true
     attribute :string, :string, public?: true
-    attribute :struct, :struct, public?: true
-    attribute :struct_in_struct, :struct, public?: true
-    attribute :term, :term, public?: true
+    attribute :struct, :struct, public?: true, constraints: [instance_of: AshNeo4j.Test.Struct]
+    attribute :struct_in_struct, :struct, public?: true, constraints: [instance_of: AshNeo4j.Test.StructInStruct]
     attribute :time, :time, public?: true
     attribute :time_usec, :time_usec, public?: true
 
@@ -79,6 +76,7 @@ defmodule AshNeo4j.Test.Resource.Type do
                   ]
     end
 
+    attribute :typed_struct, AshNeo4j.Test.TypedStruct, public?: true
     attribute :url, :url_encoded_binary, public?: true
     attribute :utc_datetime_usec, :utc_datetime_usec, public?: true
   end
