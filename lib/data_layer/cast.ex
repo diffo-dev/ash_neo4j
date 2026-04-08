@@ -6,56 +6,57 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
+  alias AshNeo4j.DataLayer.TypeClassifier
+
   @doc """
-  Casts an Ash.Resource.Attribute, needs to handle single values and arrays of values.
-  Values may be Elixir native types, Neo4j native types, or string representations of either.
+  Casts an Ash.Resource.Attribute, handles single values and arrays of values.
+  Values may be Elixir native types, Neo4j native types
   """
-  def cast(_resource, _name, nil) do
+  def cast(type, value, constraints \\ [])
+
+  def cast(_type, nil, _constraints) do
     nil
   end
 
-  def cast(resource, name, value) when is_atom(resource) and is_atom(name) do
-    attribute = Ash.Resource.Info.attribute(resource, name)
+  def cast({:array, inner_type}, value, constraints) when is_list(value) do
+    Enum.map(value, &cast(inner_type, &1, constraints))
+  end
 
-    if attribute == nil do
-      Logger.warning(
-        "AshNeo4j.Cast: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value"
-      )
+  def cast(type, value, constraints) do
+    case TypeClassifier.classify(type) do
+      {:ok, :native, _type} ->
+        value
 
-      value
-    else
-      cast_attribute(attribute.type, value, attribute.constraints)
+      {:ok, :ash_json, ash_type} ->
+        with {:ok, decoded} <- Jason.decode(value), do: cast_ash_type(ash_type, decoded, constraints)
+
+      {:ok, :ash, ash_type} ->
+        cast_ash_type(ash_type, value, constraints)
     end
   end
 
-  defp cast_attribute(_type, nil, _constraints) do
-    nil
+  defp cast_ash_type(Ash.Type.Function, value, _constraints) when is_bitstring(value) do
+    [module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
+    module_function_splits = String.split(module_function, ".")
+    function = List.last(module_function_splits)
+    module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse())
+    Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
   end
 
-  defp cast_attribute({:array, inner_type}, value, constraints) when is_list(value) do
-    Enum.map(value, &cast_attribute(inner_type, &1, constraints))
-  end
-
-  defp cast_attribute(type, value, constraints) do
-    ash_type = Ash.Type.get_type!(type)
-    # is_resource = Ash.Resource.Info.resource?(ash_type)
-
-    cast_ash_type(ash_type, value, constraints)
+  defp cast_ash_type(Ash.Type.Keyword, value, constraints) when is_bitstring(value) do
+    with {:ok, decoded_value} <- Jason.decode!(value) do
+      Ash.Type.cast_stored(Ash.Type.Keyword, decoded_value, constraints)
+    end
   end
 
   defp cast_ash_type(type, value, constraints) do
     case Ash.Type.cast_stored(type, value, constraints) do
       {:ok, casted} ->
-        if is_struct(value) and !is_struct(casted) do
-          # if the value was a struct we want to add a __type__ key to the map so that we can reconstruct the struct later
-          Map.put(casted, :__type__, value.__struct__) |> IO.inspect(label: "casted value with __type__ added")
-        else
-          casted
-        end
+        casted
 
       _ ->
         Logger.warning(
-          "AshNeo4j.Cast: cannot cast using Ash.Type.cast_stored for type #{inspect(type)} and value #{inspect(value)}, returning original value"
+          "AshNeo4j.DataLayer.Cast: cannot cast using Ash.Type.cast_stored for type #{inspect(type)} and value #{inspect(value)}, returning original value"
         )
 
         value

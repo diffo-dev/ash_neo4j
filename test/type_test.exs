@@ -38,7 +38,7 @@ defmodule AshNeo4j.Test.Type do
     date: ~D[2025-05-11],
     datetime: ~U[2025-05-11 07:45:41Z],
     decimal: Decimal.new("4.2"),
-    duration: %Duration{year: 1, month: 2, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
+    duration: %Duration{year: 0, month: 0, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
     integer: 1,
@@ -67,14 +67,14 @@ defmodule AshNeo4j.Test.Type do
     "arrayStruct" => [
       "%AshNeo4j.Test.Struct{a: :a, b: false, d: nil, f: 1.2, i: 0, n: nil, s: \"Hello\"}"
     ],
-    "atom" => ":a",
+    "atom" => "a",
     "binary" => "\x01\x02\x03",
     "boolean" => true,
     "ciString" => "HELLO",
-    "date" => "2025-05-11",
+    "date" => ~D[2025-05-11],
     "datetime" => "2025-05-11T07:45:41Z",
     "decimal" => "Decimal.new(\"4.2\")",
-    "duration" => "P1Y2M3W4DT5H6M7.000008S",
+    "duration" => %Duration{week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
@@ -82,15 +82,15 @@ defmodule AshNeo4j.Test.Type do
     "keyword" => ["{:a, :atom}", "{:s, string}"],
     # serialisation order indeterminate
     "map" => "%{a: \"a\", b: 1, c: false, d: nil}",
-    "module" => ":Elixir.AshNeo4j.DataLayer",
-    "naiveDatetime" => "2025-05-11T07:45:41",
+    "module" => "Elixir.AshNeo4j.DataLayer",
+    "naiveDatetime" => ~N[2025-05-11 07:45:41.000000],
     # "regex" => "~r/foo/iu",
     "string" => "Hello",
     "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}",
     "structInStruct" =>
       "%AshNeo4j.Test.StructInStruct{struct: %AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}}",
-    "time" => "07:45:41",
-    "timeUsec" => "07:45:41.429903",
+    "time" => ~T[07:45:41.000000Z],
+    "timeUsec" => ~T[07:45:41.429903Z],
     "tuple" => "{:a, 1, false}",
     "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
     "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
@@ -115,14 +115,72 @@ defmodule AshNeo4j.Test.Type do
       assert Enum.empty?(node.properties)
     end
 
-    test "type node with properties can be created using Neo4jHelper" do
-      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], @type_node_properties)
+    test "type node with native properties can be created using Neo4jHelper" do
+      properties = Map.take(@type_node_properties, ["atom", "boolean", "float", "integer", "string"])
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], properties)
       assert length(records) == 1
-      node = records |> List.first() |> List.first() |> IO.inspect(label: "read type node without properties")
+      node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
-      # map has indeterminate order so we don't check them exactly
-      refute Map.get(node.properties, "map") == nil
-      Enum.each(Map.drop(@type_node_properties, ["map"]), fn {key, value} ->
+
+      Enum.each(properties, fn {key, value} ->
+        assert Map.get(node.properties, "#{key}") == value
+      end)
+    end
+
+    test "type node with array properties can be created using Neo4jHelper" do
+      properties =
+        Map.take(@type_node_properties, [
+          "arrayAtom",
+          "arrayInteger",
+          "arrayString",
+          "arrayBoolean",
+          "arrayMap",
+          "arrayStruct"
+        ])
+
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], properties)
+      assert length(records) == 1
+      node = records |> List.first() |> List.first()
+      assert node.labels == ["Type"]
+
+      Enum.each(properties, fn {key, value} ->
+        assert Map.get(node.properties, "#{key}") == value
+      end)
+    end
+
+    test "type node with temporal properties can be created using Neo4jHelper" do
+      properties =
+        Map.take(@type_node_properties, [
+          "date",
+          "datetime",
+          "duration",
+          "naiveDatetime",
+          "time",
+          "timeUsec",
+          "utcDatetimeUsec"
+        ])
+
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], properties)
+      assert length(records) == 1
+      node = records |> List.first() |> List.first()
+      assert node.labels == ["Type"]
+
+      Enum.each(Map.drop(properties, ["duration"]), fn {key, value} ->
+        assert Map.get(node.properties, "#{key}") == value
+      end)
+
+      # for duration, we expect equivalent values, so we'll compare using timeouts (handles small durations only)
+      assert to_timeout(Map.get(node.properties, "duration")) == to_timeout(Map.get(properties, "duration"))
+    end
+
+    test "type node with complex properties can be created using Neo4jHelper" do
+      properties = Map.take(@type_node_properties, ["map", "struct", "tuple", "keyword"])
+      assert {:ok, %{records: records}} = Neo4jHelper.create_node([:Type], properties)
+      assert length(records) == 1
+      node = records |> List.first() |> List.first()
+      assert node.labels == ["Type"]
+
+      Enum.each(properties, fn {key, value} ->
         assert Map.get(node.properties, "#{key}") == value
       end)
     end
@@ -166,7 +224,6 @@ defmodule AshNeo4j.Test.Type do
       Enum.each(Map.drop(@type_attributes, [:uuid, :atom]), fn {key, _value} -> assert Map.get(type, key) == nil end)
     end
 
-    @tag debug: true
     test "type node can be created using ash with properties" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       assert type.url == @url

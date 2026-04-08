@@ -38,7 +38,7 @@ defmodule AshNeo4j.Cypher do
   # This function converts Neo4j compatible Elixir values to their corresponding Cypher representations.
   # TODO use parameters to avoid injection risks, and to handle escaping of strings, rather than converting to Cypher literals directly in this function.
   defp value(v, wrap) do
-    IO.inspect(v, label: "value to convert to Cypher")
+
     case v do
       nil -> "null"
       _ when is_bitstring(v) -> wrap(v, wrap)
@@ -47,12 +47,12 @@ defmodule AshNeo4j.Cypher do
       _ when is_float(v) -> "#{v}"
       _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
       _ when is_struct(v, Date) -> "date(" <> wrap(Date.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap)  <> ")"
+      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap)  <> ")"
+      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
       _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
       _ -> raise "AshNeo4j.DataLayer Error converting value to Cypher, unsupported type for value: #{inspect(v)}"
-    end |> IO.inspect(label: "value converted to Cypher")
+    end
   end
 
   defp wrap(v, wrap) when is_bitstring(wrap) do
@@ -133,6 +133,33 @@ defmodule AshNeo4j.Cypher do
     end
   end
 
+  @doc """
+  Converts a node variable, labels and optional property keys to parameterized cypher node
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.parameterized_node(:s, [:Actor])
+  {"(s:Actor)", %{}}
+  iex> AshNeo4j.Cypher.parameterized_node(:s, [:Cinema, :Actor], %{name: "Bill Nighy"})
+  {"(s:Cinema:Actor {name: $name})", %{name: "Bill Nighy"}}
+  ```
+   Note: the properties map is converted to parameter names by prefixing the keys with `$`, and the original values are returned in a separate map for use as query parameters.
+  """
+  def parameterized_node(variable, labels, properties \\ %{})
+      when is_atom(variable) and is_list(labels) and is_map(properties) do
+    label_string = Enum.join(labels, ":")
+
+    if properties == %{} do
+      {"(#{variable}:#{label_string})", %{}}
+    else
+      parameterized_properties =
+        properties
+        |> Enum.map_join(", ", fn {k, _v} -> "#{k}: $#{k}" end)
+
+      {"(#{variable}:#{label_string} {#{parameterized_properties}})", properties}
+    end
+  end
+
   @spec relationship(atom(), atom()) :: <<_::32, _::_*8>>
   @doc """
   Converts a relationship variable, label and optional direction to cypher relationship.
@@ -200,14 +227,19 @@ defmodule AshNeo4j.Cypher do
   iex> {result, _} = AshNeo4j.Cypher.run(cypher)
   iex> result
   :ok
+  iex> cypher = "MATCH (n:Actor {name: $name}) RETURN n"
+  iex> params = %{name: "Bill Nighy"}
+  iex> {result, _} = AshNeo4j.Cypher.run(cypher, params)
+  iex> result
+  :ok
   ```
   """
-  def run(cypher) when is_bitstring(cypher) do
+  def run(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("""
-    AshNeo4.Cypher: run(#{cypher})
+    AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
     """)
 
-    bolty_result = Bolty.query(Bolt, cypher)
+    bolty_result = Bolty.query(Bolt, cypher, params)
 
     if elem(bolty_result, 0) == :ok do
       Logger.debug("""

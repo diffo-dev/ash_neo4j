@@ -21,8 +21,11 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def create_node(labels, properties) when is_list(labels) and is_map(properties) do
-    ("CREATE " <> Cypher.node(:n, labels, properties) <> " RETURN n")
-    |> Cypher.run()
+    {node_cypher, parameters} =
+      Cypher.parameterized_node(:n, labels, properties)
+
+    ("CREATE " <> node_cypher <> " RETURN n")
+    |> Cypher.run(parameters)
   end
 
   @spec delete_all() ::
