@@ -133,4 +133,50 @@ defmodule AshNeo4j.Util do
   rescue
     _ -> false
   end
+
+  @doc """
+  Encodes json, encoding maps which aren't structs with keys in sorted order, even in lists
+  ## Examples
+  ```
+  iex> AshNeo4j.Util.json_encode(%{name: "Henry", age: 8, breed: :groodle})
+  "{:ok, {\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}}"
+  iex> AshNeo4j.Util.json_encode([%{currency: :aud, amount: 100}, %{currency: :sek, amount: 650}])
+  "{:ok, [{\"amount\":100,\"currency\":\"aud\"},{\"amount\":650,\"currency\":\"sek\"}]}"
+
+  """
+
+  def json_encode(struct) when is_struct(struct), do: Jason.encode(struct)
+
+  def json_encode(map) when is_map(map) do
+    map
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Jason.OrderedObject.new()
+    |> json_encode()
+  end
+
+  def json_encode(list) when is_list(list) do
+    list
+    |> Enum.reduce_while(
+      "",
+      fn item, acc ->
+        case json_encode(item) do
+          {:ok, encoded} ->
+            if acc == "" do
+              {:cont, "[" <> encoded}
+            else
+              {:cont, acc <> "," <> encoded}
+            end
+
+          {:error, reason} ->
+            {:halt, {:error, reason}}
+        end
+      end
+    )
+    |> case do
+      {:error, reason} -> {:error, reason}
+      encoded -> {:ok, encoded <> "]"}
+    end
+  end
+
+  def json_encode(value), do: Jason.encode(value)
 end

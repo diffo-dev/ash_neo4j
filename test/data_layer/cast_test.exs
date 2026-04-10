@@ -6,8 +6,11 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.DataLayer.Cast
-  alias AshNeo4j.Test.Struct
-  alias AshNeo4j.Test.StructInStruct
+  alias AshNeo4j.Test.Resource.Money
+  alias AshNeo4j.Test.Type.DogMap
+  alias AshNeo4j.Test.Type.DogStruct
+  alias AshNeo4j.Test.Type.DogTypedStruct
+  alias AshNeo4j.Test.Util
 
   describe "cast native types" do
     test "using Ash.Type alias" do
@@ -43,7 +46,7 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     end
 
     test "time" do
-      value_unchanged(Ash.Type.Time, ~T[07:45:41.000000Z])
+      value_unchanged(Ash.Type.Time, ~T[07:45:41], precision: :second)
     end
 
     test "time usec" do
@@ -72,6 +75,10 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
       value_changed(Ash.Type.DateTime, "2025-05-11T07:45:41Z", ~U[2025-05-11 07:45:41Z])
     end
 
+    test "decimal" do
+      value_changed(Ash.Type.Decimal, "4.2", Decimal.new("4.2"))
+    end
+
     test "duration name" do
       value_changed(Ash.Type.DurationName, "day", :day)
     end
@@ -89,44 +96,89 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     end
 
     test "utc date time" do
-      value_changed(Ash.Type.UtcDatetime, "2025-05-11T07:45:41Z", ~U[2025-05-11 07:45:41Z], [precision: :second])
+      value_changed(Ash.Type.UtcDatetime, "2025-05-11T07:45:41Z", ~U[2025-05-11 07:45:41Z], precision: :second)
     end
 
     test "utc date time usec" do
-      value_changed(Ash.Type.UtcDatetimeUsec, "2025-05-11T07:45:41.429903Z", ~U[2025-05-11 07:45:41.429903Z], [precision: :microsecond])
+      value_changed(Ash.Type.UtcDatetimeUsec, "2025-05-11T07:45:41.429903Z", ~U[2025-05-11 07:45:41.429903Z],
+        precision: :microsecond
+      )
     end
   end
 
   describe "cast ash json types" do
-    test "decimal" do
-      value_changed(Ash.Type.Decimal, "\"4.2\"", Decimal.new("4.2"))
+    test "map" do
+      value_changed(
+        DogMap,
+        "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
+        %{name: "Henry", age: 8, breed: :groodle},
+        Util.constraints(DogMap)
+      )
     end
 
-    test "map with string keys" do
-      value_changed(Ash.Type.Map, "{\"name\":\"Henry\",\"born\":2018,\"desexed\": true}", %{
-        "name" => "Henry",
-        "born" => 2018,
-        "desexed" => true
-      })
+    test "struct" do
+      value_changed(
+        DogStruct,
+        "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
+        %DogStruct{name: "Henry", age: 8, breed: :groodle},
+        Util.constraints(DogStruct)
+      )
     end
 
-    test "struct using Ash.Type" do
-      value_changed(Struct, "{\"s\":\"Hello\"}", %Struct{s: "Hello"})
+    test "typed struct" do
+      value_changed(
+        DogTypedStruct,
+        "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
+        %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+        Util.constraints(DogTypedStruct)
+      )
     end
 
-    test "struct in struct using Ash.Type" do
-      value_changed(StructInStruct, "{\"struct\": {\"s\":\"Hello\"}}", %StructInStruct{struct: %Struct{s: "Hello"}})
+    test "embedded resource" do
+      value_changed(Money, "{\"currency\":\"aud\",\"amount\":100}", %Money{amount: 100, currency: :aud})
     end
-
   end
 
-  defp value_unchanged(type, value) do
-    assert Cast.cast(type, value) == value
+  describe "cast arrays" do
+    test "array of atoms" do
+      value_changed({:array, Ash.Type.Atom}, ["a", "b"], [:a, :b])
+    end
+
+    test "array of booleans" do
+      value_unchanged({:array, Ash.Type.Boolean}, [true, false])
+    end
+
+    test "array of maps" do
+      value_changed({:array, Ash.Type.Map}, "[{\"a\":\"a\"},{\"b\":\"b\"}]", [%{"a" => "a"}, %{"b" => "b"}])
+    end
+
+    test "array of embedded resources" do
+      value_changed({:array, Money}, "[{\"currency\":\"aud\",\"amount\":100},{\"currency\":\"sek\",\"amount\":650}]", [
+        %Money{amount: 100, currency: :aud},
+        %Money{amount: 650, currency: :sek}
+      ])
+    end
   end
 
-  defp value_changed(type, value, expected, constraints \\ [])
+  describe "errors" do
+    test "not an Ash.Type" do
+      raises(Ash.Resource, "fred")
+    end
 
-  defp value_changed(type, value, expected, constraints) do
+    test "not valid json" do
+      raises(Ash.Type.Map, "{name:\"Henry\"")
+    end
+  end
+
+  defp raises(type, value, constraints \\ []) do
+    assert_raise RuntimeError, fn -> Cast.cast(type, value, constraints) end
+  end
+
+  defp value_unchanged(type, value, constraints \\ []) do
+    assert Cast.cast(type, value, constraints) == value
+  end
+
+  defp value_changed(type, value, expected, constraints \\ []) do
     casted = Cast.cast(type, value, constraints)
     assert casted == expected
   end

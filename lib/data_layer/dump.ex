@@ -6,6 +6,7 @@ defmodule AshNeo4j.DataLayer.Dump do
   @moduledoc "Dumping for AshNeo4j.DataLayer"
 
   alias AshNeo4j.DataLayer.TypeClassifier
+  alias AshNeo4j.Util
 
   @doc """
   Dumps an Ash.Resource.Attribute, needs to handle single values and arrays of values.
@@ -22,7 +23,7 @@ defmodule AshNeo4j.DataLayer.Dump do
       {:ok, :ash_json, ash_type} ->
         # ash values that are dumped and jason encoded
         dump_ash_type(ash_type, value, constraints)
-        |> Jason.encode!()
+        |> json_encode()
 
       {:ok, :ash, ash_type} ->
         # other ash types are just dumped for Neo4j to handle
@@ -32,30 +33,39 @@ defmodule AshNeo4j.DataLayer.Dump do
         # pass through, since Neo4j Bolt driver will handle conversion of native array types
         value
 
-      {:ok, :array, {:ok, :ash_type, inner_type}} ->
+      {:ok, :array, {:ok, :ash, inner_type}} ->
+        # ash type arrays are each dumped into a list
+        Enum.into(value, [], &dump_ash_type(inner_type, &1, constraints))
+
+      {:ok, :array, {:ok, :ash_json, inner_type}} ->
         # ash type arrays must be dumped to native arrays before encoding, since the encoding may differ based on the inner type
         Enum.into(value, [], &dump_ash_type(inner_type, &1, constraints))
-        |> Jason.encode!()
+        |> json_encode()
 
       {:ok, :array, {:ok, _classification, _inner_type}} ->
         # non-native arrays are json encoded
         value
-        |> Jason.encode!(value)
+        |> json_encode()
 
       {:ok, :array, {:error, reason, _}} ->
-        raise "AshNeo4j.DataLayer.Dump Error dumping value #{inspect(value)} of array type #{inspect(type)}, #{reason}"
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of array type #{inspect(type)}, #{reason}"
 
       {:error, reason, _} ->
-        raise "AshNeo4j.DataLayer.Dump Error dumping value #{inspect(value)} of type #{inspect(type)}, #{reason}"
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)}, #{reason}"
 
       _ ->
-        raise "AshNeo4j.DataLayer.Dump Error dumping value #{inspect(value)} of type #{inspect(type)}"
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)}"
     end
   end
 
   defp dump_ash_type(Ash.Type.DateTime, value, constraints) do
     {:ok, dumped_value} = Ash.Type.dump_to_native(Ash.Type.DateTime, value, constraints)
     DateTime.to_iso8601(dumped_value)
+  end
+
+  defp dump_ash_type(Ash.Type.Decimal, value, constraints) do
+    {:ok, dumped_value} = Ash.Type.dump_to_native(Ash.Type.Decimal, value, constraints)
+    Decimal.to_string(dumped_value)
   end
 
   defp dump_ash_type(Ash.Type.Function, value, _constraints) do
@@ -79,7 +89,17 @@ defmodule AshNeo4j.DataLayer.Dump do
         native
 
       _ ->
-        raise "AshNeo4j.DataLayer.Dump Error dumping value #{inspect(value)} of type #{inspect(type)} to native"
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)} to native"
+    end
+  end
+
+  defp json_encode(value) do
+    case Util.json_encode(value) do
+      {:ok, encoded} ->
+        encoded
+
+      _ ->
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} couldn't encode json"
     end
   end
 end

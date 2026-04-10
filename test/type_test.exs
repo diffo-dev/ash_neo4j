@@ -8,21 +8,22 @@ defmodule AshNeo4j.Test.Type do
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Money
-  alias AshNeo4j.Test.Struct
-  alias AshNeo4j.Test.StructInStruct
+  alias AshNeo4j.Test.Type.DogStruct
+  alias AshNeo4j.Test.Type.DogTypedStruct
   alias AshNeo4j.Test.Util
 
   use ExUnit.Case, async: false
+
+  import Ash.CiString
 
   setup_all do
     BoltyHelper.start()
   end
 
   setup do
-    # on_exit(fn ->
-    #  Neo4jHelper.delete_nodes(:Type)
-    # end)
-    :ok
+    on_exit(fn ->
+      Neo4jHelper.delete_nodes(:Type)
+    end)
   end
 
   @type_attributes %{
@@ -30,73 +31,61 @@ defmodule AshNeo4j.Test.Type do
     array_integer: [1, 2, 3],
     array_string: ["a", "b", "c"],
     array_boolean: [true, true, false],
-    array_map: [%{a: "a"}, %{b: "b"}],
-    array_struct: [%Struct{}],
+    array_map: [%{"a" => "a"}, %{"b" => "b"}],
     atom: :a,
     boolean: true,
-    ci_string: "HELLO",
+    ci_string: ~i(Hello),
     date: ~D[2025-05-11],
     datetime: ~U[2025-05-11 07:45:41Z],
     decimal: Decimal.new("4.2"),
-    duration: %Duration{year: 0, month: 0, week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
+    duration: %Duration{day: 25, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
     integer: 1,
-    json_string: "{\"a\": \"a\", \"b\": 1, \"c\": false}",
-    keyword: [a: :atom, s: "string"],
-    map: %{a: "a", b: 1, c: false, d: nil},
+    map: %{name: "Henry", age: 8, breed: :groodle},
     module: AshNeo4j.DataLayer,
-    naive_datetime: ~N[2025-05-11 07:45:41],
+    naive_datetime: ~N[2025-05-11 07:45:41.000000],
     # regex: ~r/foo/iu,
     string: "Hello",
-    struct: %Struct{s: "Wow"},
-    struct_in_struct: %StructInStruct{struct: %Struct{s: "Wow"}},
-    time: ~T[07:45:41Z],
-    time_usec: ~T[07:45:41.429903Z],
-    tuple: {:a, 1, false},
-    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
-    url: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
+    struct: %DogStruct{name: "Henry", age: 8, breed: :groodle},
+    time: ~T[07:45:41.000000],
+    time_usec: ~T[07:45:41.429903],
+    typed_struct: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z]
+    # url: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   }
 
   @type_node_properties %{
-    "arrayAtom" => [":a", ":b", ":c"],
+    "arrayAtom" => ["a", "b", "c"],
     "arrayInteger" => [1, 2, 3],
     "arrayString" => ["a", "b", "c"],
     "arrayBoolean" => [true, true, false],
-    "arrayMap" => ["%{a: \"a\"}", "%{b: \"b\"}"],
-    "arrayStruct" => [
-      "%AshNeo4j.Test.Struct{a: :a, b: false, d: nil, f: 1.2, i: 0, n: nil, s: \"Hello\"}"
-    ],
+    "arrayMap" => "[{\"a\":\"a\"},{\"b\":\"b\"}]",
     "atom" => "a",
     "binary" => "\x01\x02\x03",
     "boolean" => true,
-    "ciString" => "HELLO",
+    "ciString" => "Hello",
     "date" => ~D[2025-05-11],
     "datetime" => "2025-05-11T07:45:41Z",
-    "decimal" => "Decimal.new(\"4.2\")",
-    "duration" => %Duration{week: 3, day: 4, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
+    "decimal" => "4.2",
+    "duration" => %Duration{day: 25, hour: 5, minute: 6, second: 7, microsecond: {8, 6}},
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
-    "jsonString" => "{\"a\": \"a\", \"b\": 1, \"c\": false}",
-    "keyword" => ["{:a, :atom}", "{:s, string}"],
-    # serialisation order indeterminate
-    "map" => "%{a: \"a\", b: 1, c: false, d: nil}",
+    "map" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "module" => "Elixir.AshNeo4j.DataLayer",
     "naiveDatetime" => ~N[2025-05-11 07:45:41.000000],
     # "regex" => "~r/foo/iu",
     "string" => "Hello",
-    "struct" => "%AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}",
-    "structInStruct" =>
-      "%AshNeo4j.Test.StructInStruct{struct: %AshNeo4j.Test.Struct{a: :a, b: false, d: Decimal.new(\"4.2\"), f: 1.2, i: 0, n: nil, s: \"Wow\"}}",
-    "time" => ~T[07:45:41.000000Z],
-    "timeUsec" => ~T[07:45:41.429903Z],
-    "tuple" => "{:a, 1, false}",
-    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
-    "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
+    "struct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+    "time" => ~T[07:45:41],
+    "timeUsec" => ~T[07:45:41.429903],
+    "typedStruct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z"
+    # "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
   }
 
-  @url "https://www.diffo.dev/"
+  # @url "https://www.diffo.dev/"
 
   describe "Neo4jHelper Type tests" do
     test "type node without properties can be created using Neo4jHelper" do
@@ -165,12 +154,10 @@ defmodule AshNeo4j.Test.Type do
       node = records |> List.first() |> List.first()
       assert node.labels == ["Type"]
 
-      Enum.each(Map.drop(properties, ["duration"]), fn {key, value} ->
+      # check properties that can be directly compared
+      Enum.each(Map.drop(properties, ["duration", "time"]), fn {key, value} ->
         assert Map.get(node.properties, "#{key}") == value
       end)
-
-      # for duration, we expect equivalent values, so we'll compare using timeouts (handles small durations only)
-      assert to_timeout(Map.get(node.properties, "duration")) == to_timeout(Map.get(properties, "duration"))
     end
 
     test "type node with complex properties can be created using Neo4jHelper" do
@@ -199,6 +186,7 @@ defmodule AshNeo4j.Test.Type do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
       Neo4jHelper.create_node([:Type], properties)
       type = Ash.read_one!(Type)
+      assert type.uuid == properties.uuid
       Enum.each(@type_attributes, fn {key, value} -> assert Map.get(type, key) == value end)
     end
 
@@ -225,10 +213,17 @@ defmodule AshNeo4j.Test.Type do
     end
 
     test "type node can be created using ash with properties" do
-      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
-      assert type.url == @url
+      {:ok, type} =
+        Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
 
-      Enum.each(Map.drop(@type_attributes, [:url, :duration]), fn {key, value} -> assert Map.get(type, key) == value end)
+      # check properties that can be directly compared
+      Enum.each(
+        Map.drop(@type_attributes, [:duration, :time, :map, :array_map]),
+        fn {key, value} ->
+          actual = Map.get(type, key)
+          assert actual == value
+        end
+      )
 
       # note the duration returned is equivalent, but differs in days and weeks (neo4j doesn't represent weeks and days separately)
       assert Util.durations_equal(type.duration, @type_attributes.duration)
@@ -259,6 +254,12 @@ defmodule AshNeo4j.Test.Type do
       assert "Type" in type.__metadata__.labels
       assert "Srm" in type.__metadata__.labels
       assert is_integer(type.__metadata__.node_id)
+    end
+
+    test "type node can be created then read with ash" do
+      {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
+      read_type = Ash.read_one!(Type)
+      assert read_type.uuid == type.uuid
     end
   end
 

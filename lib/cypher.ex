@@ -38,11 +38,12 @@ defmodule AshNeo4j.Cypher do
   # This function converts Neo4j compatible Elixir values to their corresponding Cypher representations.
   # TODO use parameters to avoid injection risks, and to handle escaping of strings, rather than converting to Cypher literals directly in this function.
   defp value(v, wrap) do
-
     case v do
       nil -> "null"
       _ when is_bitstring(v) -> wrap(v, wrap)
       _ when is_boolean(v) -> "#{v}"
+      # atom must be after boolean
+      _ when is_atom(v) -> "#{v}"
       _ when is_integer(v) -> "#{v}"
       _ when is_float(v) -> "#{v}"
       _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"

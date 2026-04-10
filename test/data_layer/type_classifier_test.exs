@@ -25,6 +25,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     Ash.Type.Atom,
     Ash.Type.CiString,
     Ash.Type.DateTime,
+    Ash.Type.Decimal,
     Ash.Type.DurationName,
     Ash.Type.Function,
     Ash.Type.Module,
@@ -33,14 +34,13 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
   ]
 
   @ash_json_types [
-    Ash.Type.Decimal,
     Ash.Type.Map,
     Ash.Type.Struct,
     Ash.Type.Union,
     AshNeo4j.Test.Resource.Money,
-    AshNeo4j.Test.Struct,
-    AshNeo4j.Test.StructInStruct,
-    AshNeo4j.Test.TypedStruct
+    AshNeo4j.Test.Type.DogMap,
+    AshNeo4j.Test.Type.DogStruct,
+    AshNeo4j.Test.Type.DogTypedStruct
   ]
 
   @unsupported_types [
@@ -57,7 +57,10 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     nil,
     :ATOM,
     Ash.Type,
-    Ash.Type.Enum
+    Ash.Type.NewType,
+    Ash.Type.Enum,
+    Ash.TypedStruct,
+    Ash.Resource
   ]
 
   describe "Datalayer Type Classifier tests" do

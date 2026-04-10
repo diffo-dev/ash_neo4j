@@ -6,6 +6,9 @@ defmodule AshNeo4j.Test.Util do
   @moduledoc false
   use ExUnit.Case
   import ExUnit.CaptureIO
+  alias AshNeo4j.Test.Type.DogMap
+  alias AshNeo4j.Test.Type.DogStruct
+  alias AshNeo4j.Test.Type.DogTypedStruct
 
   def check_enrichment(resource, struct_name, module, name, value)
       when is_struct(resource) and is_atom(struct_name) and is_nil(module) and is_atom(name) do
@@ -32,4 +35,24 @@ defmodule AshNeo4j.Test.Util do
     dt2 = DateTime.shift(now, d2)
     DateTime.compare(dt1, dt2) == :eq
   end
+
+  @fields [
+    name: [
+      allow_nil?: false,
+      constraints: [trim?: true, allow_empty?: false],
+      type: Ash.Type.String
+    ],
+    age: [allow_nil?: true, constraints: [min: 0], type: Ash.Type.Integer],
+    breed: [
+      allow_nil?: true,
+      constraints: [unsafe_to_atom?: false],
+      type: Ash.Type.Atom
+    ]
+  ]
+
+  def constraints(DogMap), do: [fields: @fields, preserve_nil_values?: false]
+
+  def constraints(DogStruct), do: [fields: @fields, instance_of: DogStruct, preserve_nil_values?: false]
+
+  def constraints(DogTypedStruct), do: [fields: @fields, instance_of: DogTypedStruct, preserve_nil_values?: false]
 end

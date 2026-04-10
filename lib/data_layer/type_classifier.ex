@@ -56,7 +56,6 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
 
   defp ash_type_json?(type) do
     type in [
-      Ash.Type.Decimal,
       Ash.Type.Map,
       Ash.Type.Struct,
       Ash.Type.Union

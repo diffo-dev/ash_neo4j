@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.TypedStruct do
+defmodule AshNeo4j.Test.Type.DogTypedStruct do
   @moduledoc false
 
   use Ash.TypedStruct
@@ -10,6 +10,6 @@ defmodule AshNeo4j.Test.TypedStruct do
   typed_struct do
     field :name, :string, allow_nil?: false
     field :age, :integer, constraints: [min: 0]
-    field :email, :string, default: nil
+    field :breed, :atom, default: nil
   end
 end
