@@ -23,7 +23,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, :update), do: true
   def can?(_, :upsert), do: true
   def can?(_, :destroy), do: true
-  def can?(_, :sort), do: true
+def can?(_, :sort), do: true
   def can?(_, :filter), do: true
   def can?(_, :limit), do: true
   # def can?(_, :bulk_create), do: true
@@ -83,14 +83,13 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def filter(query, filter, _resource) do
-    # TODO check filter involves node properties
     {:ok, %{query | filter: filter}}
   end
 
   @impl true
   def sort(query, sort, _resource) do
-    # TODO check sort involves node properties
-    {:ok, %{query | sort: sort}}
+    deduplicated = Enum.uniq_by(sort, fn {field, _order} -> field end)
+    {:ok, %{query | sort: deduplicated}}
   end
 
   @doc false

@@ -33,24 +33,19 @@ defmodule AshNeo4j.Cypher do
 
   ## Examples
   ```
-  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[Bill Nighy]")
-  "s.name in [Bill Nighy]"
-  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[]")
-  "s.name IS NULL"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "IN", "[$s_name_0]")
+  "s.name IN [$s_name_0]"
   iex> AshNeo4j.Cypher.expression(:s, "name", "is_nil", true)
   "s.name IS NULL"
   iex> AshNeo4j.Cypher.expression(:s, "name", "is_nil", false)
   "s.name IS NOT NULL"
-  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "access")
-  "s.name CONTAINS 'access'"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "$s_name_0")
+  "s.name CONTAINS $s_name_0"
   ```
   """
   def expression(variable, left, operator, right)
       when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
     cond do
-      operator == "in" && right == "[]" ->
-        "#{variable}.#{left} IS NULL"
-
       operator == "is_nil" && right ->
         "#{variable}.#{left} IS NULL"
 
@@ -58,7 +53,7 @@ defmodule AshNeo4j.Cypher do
         "#{variable}.#{left} IS NOT NULL"
 
       operator == "contains" ->
-        "#{variable}.#{left} CONTAINS '#{right}'"
+        "#{variable}.#{left} CONTAINS #{right}"
 
       true ->
         "#{variable}.#{left} #{operator} #{right}"
@@ -117,9 +112,34 @@ defmodule AshNeo4j.Cypher do
       properties
       |> Enum.map_join(", ", fn {k, _v} -> "#{k}: $#{variable}_#{k}" end)
 
-    parameters = Map.new(properties, fn {k, v} -> {"#{variable}_#{k}", v} end)
+    parameters = build_parameters(variable, properties)
 
     {"{#{parameterized_properties}}", parameters}
+  end
+
+  @doc """
+  Converts a node variable and optional property map to cypher WHERE conditions and variable prefixed parameters map.
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.parameterized_conditions(:n, %{name: "Bill Nighy"})
+  {"n.name = $n_name", %{"n_name" => "Bill Nighy"}}
+  iex> AshNeo4j.Cypher.parameterized_conditions(:n, %{name: "Bill Nighy", age: 72})
+  {"n.name = $n_name AND n.age = $n_age", %{"n_name" => "Bill Nighy", "n_age" => 72}}
+  ```
+  """
+  def parameterized_conditions(variable, properties \\ %{}) when is_atom(variable) and is_map(properties) do
+    conditions =
+      Enum.map_join(properties, " AND ", fn {k, _v} ->
+        "#{variable}.#{k} = $#{variable}_#{k}"
+      end)
+
+    parameters = build_parameters(variable, properties)
+
+    {conditions, parameters}
+  end
+
+  defp build_parameters(variable, properties) do
+    Map.new(properties, fn {k, v} -> {"#{variable}_#{k}", v} end)
   end
 
   @spec relationship(atom(), atom()) :: <<_::32, _::_*8>>
