@@ -33,6 +33,9 @@ defmodule AshNeo4j.DataLayer.Cast do
       {:ok, :native, _type} ->
         value
 
+      {:ok, :ash_base64, ash_type} ->
+        cast_ash_type(ash_type, base64_decode(value), constraints)
+
       {:ok, :ash_json, ash_type} ->
         cast_ash_type(ash_type, json_decode(value), constraints)
 
@@ -62,13 +65,23 @@ defmodule AshNeo4j.DataLayer.Cast do
     end
   end
 
+  defp base64_decode(value) do
+    case Base.decode64(value) do
+      {:ok, decoded} ->
+        decoded
+
+      _ ->
+        raise "AshNeo4j.DataLayer Error casting value #{inspect(value)} couldn't decode Base64"
+    end
+  end
+
   defp json_decode(value) do
     case Jason.decode(value) do
       {:ok, decoded} ->
         decoded
 
       _ ->
-        raise "AshNeo4j.DataLayer Error casting value #{inspect(value)} couldn't decode json"
+        raise "AshNeo4j.DataLayer Error casting value #{inspect(value)} couldn't decode JSON"
     end
   end
 end

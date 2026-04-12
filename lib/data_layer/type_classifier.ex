@@ -27,6 +27,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
         unsupported?(type) ->
           {:error, :unsupported, type}
 
+        ash_type_base64?(type) ->
+          {:ok, :ash_base64, type}
+
         ash_type_json?(type) ->
           {:ok, :ash_json, type}
 
@@ -52,6 +55,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
   defp ash_type_other_map?(type) do
     Ash.Type.ash_type?(type) and !Ash.Type.builtin?(type) and
       Ash.Type.storage_type(type) == :map
+  end
+
+  defp ash_type_base64?(type) do
+    Ash.Type.ash_type?(type) and
+      Ash.Type.storage_type(type) == :binary and
+      type != Ash.Type.Function
   end
 
   defp ash_type_json?(type) do
@@ -80,12 +89,10 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
 
   defp unsupported?(type) do
     type in [
-      Ash.Type.Binary,
       Ash.Type.File,
       Ash.Type.Keyword,
       Ash.Type.Term,
       Ash.Type.Tuple,
-      Ash.Type.UrlEncodedBinary,
       Ash.Type.Vector
     ]
   end

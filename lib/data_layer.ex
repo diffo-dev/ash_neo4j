@@ -23,7 +23,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, :update), do: true
   def can?(_, :upsert), do: true
   def can?(_, :destroy), do: true
-def can?(_, :sort), do: true
+  def can?(_, :sort), do: true
   def can?(_, :filter), do: true
   def can?(_, :limit), do: true
   # def can?(_, :bulk_create), do: true

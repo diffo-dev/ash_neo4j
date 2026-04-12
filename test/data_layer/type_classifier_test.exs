@@ -21,16 +21,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     Ash.Type.UUIDv7
   ]
 
-  @ash_types [
-    Ash.Type.Atom,
-    Ash.Type.CiString,
-    Ash.Type.DateTime,
-    Ash.Type.Decimal,
-    Ash.Type.DurationName,
-    Ash.Type.Function,
-    Ash.Type.Module,
-    Ash.Type.UtcDatetime,
-    Ash.Type.UtcDatetimeUsec
+  @ash_base64_types [
+    Ash.Type.Binary,
+    Ash.Type.UrlEncodedBinary
   ]
 
   @ash_json_types [
@@ -43,13 +36,23 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     AshNeo4j.Test.Type.DogTypedStruct
   ]
 
+  @ash_types [
+    Ash.Type.Atom,
+    Ash.Type.CiString,
+    Ash.Type.DateTime,
+    Ash.Type.Decimal,
+    Ash.Type.DurationName,
+    Ash.Type.Function,
+    Ash.Type.Module,
+    Ash.Type.UtcDatetime,
+    Ash.Type.UtcDatetimeUsec
+  ]
+
   @unsupported_types [
-    Ash.Type.Binary,
     Ash.Type.File,
     Ash.Type.Keyword,
     Ash.Type.Term,
     Ash.Type.Tuple,
-    Ash.Type.UrlEncodedBinary,
     Ash.Type.Vector
   ]
 
@@ -77,6 +80,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     test "ash types" do
       Enum.each(@ash_types, fn type ->
         assert TypeClassifier.classify(type) == {:ok, :ash, type}
+      end)
+    end
+
+    test "ash base64 types" do
+      Enum.each(@ash_base64_types, fn type ->
+        assert TypeClassifier.classify(type) == {:ok, :ash_base64, type}
       end)
     end
 

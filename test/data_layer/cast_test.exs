@@ -106,6 +106,18 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     end
   end
 
+  describe "cast ash base64 types" do
+    @tag :base64
+    test "binary" do
+      value_changed(Ash.Type.Binary, "AQID", <<1, 2, 3>>)
+    end
+
+    @tag :base64
+    test "url encoded binary" do
+      value_changed(Ash.Type.UrlEncodedBinary, "AQID", <<1, 2, 3>>)
+    end
+  end
+
   describe "cast ash json types" do
     test "map" do
       value_changed(
@@ -157,6 +169,11 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
         %Money{amount: 100, currency: :aud},
         %Money{amount: 650, currency: :sek}
       ])
+    end
+
+    @tag :base64
+    test "array of base64 encoded binaries" do
+      value_changed({:array, Ash.Type.Binary}, ["AQID", "BAUG"], [<<1, 2, 3>>, <<4, 5, 6>>])
     end
   end
 

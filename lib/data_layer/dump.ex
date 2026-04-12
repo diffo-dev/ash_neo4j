@@ -14,11 +14,24 @@ defmodule AshNeo4j.DataLayer.Dump do
   """
   def dump(type, value, constraints \\ [])
 
+  def dump(_type, nil, _constraints) do
+    nil
+  end
+
+  def dump({:array, inner_type}, value, constraints) when is_list(value) do
+    Enum.map(value, &dump(inner_type, &1, constraints))
+  end
+
   def dump(type, value, constraints) do
     case TypeClassifier.classify(type) do
       {:ok, :native, _type} ->
         # pass through, since Neo4j Bolt driver will handle conversion of native types
         value
+
+      {:ok, :ash_base64, ash_type} ->
+        # ash values that are dumped and base64 encoded
+        dump_ash_type(ash_type, value, constraints)
+        |> base64_encode()
 
       {:ok, :ash_json, ash_type} ->
         # ash values that are dumped and jason encoded
@@ -28,27 +41,6 @@ defmodule AshNeo4j.DataLayer.Dump do
       {:ok, :ash, ash_type} ->
         # other ash types are just dumped for Neo4j to handle
         dump_ash_type(ash_type, value, constraints)
-
-      {:ok, :array, {:ok, :native, _inner_type}} ->
-        # pass through, since Neo4j Bolt driver will handle conversion of native array types
-        value
-
-      {:ok, :array, {:ok, :ash, inner_type}} ->
-        # ash type arrays are each dumped into a list
-        Enum.into(value, [], &dump_ash_type(inner_type, &1, constraints))
-
-      {:ok, :array, {:ok, :ash_json, inner_type}} ->
-        # ash type arrays must be dumped to native arrays before encoding, since the encoding may differ based on the inner type
-        Enum.into(value, [], &dump_ash_type(inner_type, &1, constraints))
-        |> json_encode()
-
-      {:ok, :array, {:ok, _classification, _inner_type}} ->
-        # non-native arrays are json encoded
-        value
-        |> json_encode()
-
-      {:ok, :array, {:error, reason, _}} ->
-        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of array type #{inspect(type)}, #{reason}"
 
       {:error, reason, _} ->
         raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)}, #{reason}"
@@ -93,13 +85,15 @@ defmodule AshNeo4j.DataLayer.Dump do
     end
   end
 
+  defp base64_encode(value), do: Base.encode64(value)
+
   defp json_encode(value) do
     case Util.json_encode(value) do
       {:ok, encoded} ->
         encoded
 
       _ ->
-        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} couldn't encode json"
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} couldn't encode JSON"
     end
   end
 end

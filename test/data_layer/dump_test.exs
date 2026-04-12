@@ -106,6 +106,18 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
     end
   end
 
+  describe "dump ash base64 types" do
+    @tag :base64
+    test "binary" do
+      value_changed(Ash.Type.Binary, <<1, 2, 3>>, "AQID")
+    end
+
+    @tag :base64
+    test "url encoded binary" do
+      value_changed(Ash.Type.UrlEncodedBinary, <<1, 2, 3>>, "AQID")
+    end
+  end
+
   describe "dump ash json types" do
     test "map" do
       value_changed(
@@ -149,15 +161,19 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
     end
 
     test "array of maps" do
-      value_changed({:array, Ash.Type.Map}, [%{"a" => "a"}, %{"b" => "b"}], "[{\"a\":\"a\"},{\"b\":\"b\"}]")
+      value_changed({:array, Ash.Type.Map}, [%{"a" => "a"}, %{"b" => "b"}], ["{\"a\":\"a\"}", "{\"b\":\"b\"}"])
+    end
+
+    @tag :base64
+    test "array of base64 encoded binaries" do
+      value_changed({:array, Ash.Type.Binary}, [<<1, 2, 3>>, <<4, 5, 6>>], ["AQID", "BAUG"])
     end
 
     test "array of embedded resources" do
-      # we expect something like "[{\"currency\":\"aud\",\"amount\":100},{\"currency\":\"sek\",\"amount\":650}]" but json order isn't guaranteed
       value_changed(
         {:array, Money},
         [%Money{amount: 100, currency: :aud}, %Money{amount: 650, currency: :sek}],
-        "[{\"amount\":100,\"currency\":\"aud\"},{\"amount\":650,\"currency\":\"sek\"}]"
+        ["{\"amount\":100,\"currency\":\"aud\"}", "{\"amount\":650,\"currency\":\"sek\"}"]
       )
     end
   end
