@@ -90,9 +90,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
   defp unsupported?(type) do
     type in [
       Ash.Type.File,
-      Ash.Type.Keyword,
       Ash.Type.Term,
-      Ash.Type.Tuple,
       Ash.Type.Vector
     ]
   end

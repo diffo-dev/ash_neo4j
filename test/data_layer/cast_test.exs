@@ -7,10 +7,11 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   use ExUnit.Case, async: false
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.Test.Resource.Money
+  alias AshNeo4j.Test.Type.DogKeyword
   alias AshNeo4j.Test.Type.DogMap
   alias AshNeo4j.Test.Type.DogStruct
+  alias AshNeo4j.Test.Type.DogTuple
   alias AshNeo4j.Test.Type.DogTypedStruct
-  alias AshNeo4j.Test.Util
 
   describe "cast native types" do
     test "using Ash.Type alias" do
@@ -119,12 +120,23 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   end
 
   describe "cast ash json types" do
+    @tag :keyword
+    @tag bugged: "breed isn't being cast_stored to an atom - think this is an Ash defect"
+    test "keyword" do
+      value_changed(
+        DogKeyword,
+        "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
+        [name: "Henry", age: 8, breed: :groodle],
+        DogKeyword.subtype_constraints()
+      )
+    end
+
     test "map" do
       value_changed(
         DogMap,
         "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
         %{name: "Henry", age: 8, breed: :groodle},
-        Util.constraints(DogMap)
+        DogMap.subtype_constraints()
       )
     end
 
@@ -133,7 +145,17 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
         DogStruct,
         "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
         %DogStruct{name: "Henry", age: 8, breed: :groodle},
-        Util.constraints(DogStruct)
+        DogStruct.subtype_constraints()
+      )
+    end
+
+    @tag :tuple
+    test "tuple" do
+      value_changed(
+        DogTuple,
+        "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+        {"Henry", 8, :groodle},
+        DogTuple.subtype_constraints()
       )
     end
 
@@ -142,7 +164,7 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
         DogTypedStruct,
         "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
         %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
-        Util.constraints(DogTypedStruct)
+        DogTypedStruct.subtype_constraints()
       )
     end
 

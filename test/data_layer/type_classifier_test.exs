@@ -50,9 +50,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
 
   @unsupported_types [
     Ash.Type.File,
-    Ash.Type.Keyword,
     Ash.Type.Term,
-    Ash.Type.Tuple,
     Ash.Type.Vector
   ]
 
