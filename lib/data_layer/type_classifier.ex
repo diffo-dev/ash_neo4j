@@ -48,6 +48,54 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
     end
   end
 
+  @doc """
+  Lists invalid types, checked recursively
+  """
+
+  def invalid_types(type, constraints, path \\ [])
+
+  def invalid_types({:array, inner_type}, constraints, path) do
+    item_constraints = item_constraints(inner_type, constraints)
+    invalid_types(inner_type, item_constraints, path)
+  end
+
+  def invalid_types(type, constraints, path) do
+    case classify(type) do
+      {:error, reason, _} ->
+        [{[], reason, type}]
+
+      {:ok, :ash_json, _} ->
+        cond do
+          Ash.Type.NewType.new_type?(type) ->
+            type.subtype_constraints()
+            |> Keyword.get(:fields, Keyword.get(type.subtype_constraints(), :types, []))
+            |> flat_map_field_errors(path)
+
+          Ash.Type.embedded_type?(type) ->
+            Ash.Resource.Info.attributes(type)
+            |> Enum.flat_map(fn attr ->
+              invalid_types(attr.type, attr.constraints, path ++ [attr.name])
+            end)
+
+          true ->
+            constraints
+            |> Keyword.get(:fields, Keyword.get(constraints, :types, []))
+            |> flat_map_field_errors(path)
+        end
+
+      _ ->
+        []
+    end
+  end
+
+  defp flat_map_field_errors(fields, path) do
+    Enum.flat_map(fields, fn {name, field_config} ->
+      field_type = Ash.Type.get_type(field_config[:type])
+      field_constraints = field_config[:constraints] || []
+      invalid_types(field_type, field_constraints, path ++ [name])
+    end)
+  end
+
   defp array?(type) do
     case type do
       {:array, _} -> true

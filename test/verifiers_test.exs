@@ -272,5 +272,80 @@ defmodule AshNeo4j.Test.Verifiers do
         end
       )
     end
+
+    @tag :verifier
+    test "unsupported attribute type" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :name requires unsupported type Ash.Type.Term",
+        fn ->
+          defmodule InvalidAttributeType do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :name, :term, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    @tag :verifier
+    test "unsupported attribute type - within array" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :file_array requires unsupported type Ash.Type.File",
+        fn ->
+          defmodule InvalidAttributeTypeWithinArray do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :file_array, {:array, :file}, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    @tag :verifier
+    test "unsupported attribute type - within typed struct" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :typed_struct requires unsupported type Ash.Type.Term",
+        fn ->
+          defmodule InvalidAttributeWithinTypedStruct do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :typed_struct, AshNeo4j.Test.Type.InvalidTypedStruct, public?: true
+            end
+          end
+        end
+      )
+    end
   end
 end

@@ -110,7 +110,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyRelate,
       AshNeo4j.Verifiers.VerifyGuard,
       AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
-      AshNeo4j.Verifiers.VerifyEnrichable
+      AshNeo4j.Verifiers.VerifyEnrichable,
+      AshNeo4j.Verifiers.VerifyAttributeType
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
