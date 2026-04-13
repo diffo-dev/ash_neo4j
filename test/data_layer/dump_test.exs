@@ -123,7 +123,8 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
         DogKeyword,
         [name: "Henry", age: 8, breed: :groodle],
         "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-        DogKeyword.subtype_constraints() # not strictly needed for dumping, but ensures dumping and casting are inverses of each other
+        # not strictly needed for dumping, but ensures dumping and casting are inverses of each other
+        DogKeyword.subtype_constraints()
       )
     end
 
@@ -195,8 +196,14 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
     test "array of typed structs" do
       value_changed(
         {:array, DogTypedStruct},
-        [%DogTypedStruct{name: "Henry", age: 8, breed: :groodle}, %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}],
-        ["{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}", "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"]
+        [
+          %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+          %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}
+        ],
+        [
+          "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+          "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+        ]
       )
     end
   end

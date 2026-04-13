@@ -118,7 +118,8 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   end
 
   describe "cast ash json types" do
-    @tag bugged: "breed isn't being cast_stored to an atom - Ash defect fixed in https://github.com/ash-project/ash/pull/2673"
+    @tag bugged:
+           "breed isn't being cast_stored to an atom - Ash defect fixed in https://github.com/ash-project/ash/pull/2673"
     test "keyword" do
       value_changed(
         DogKeyword,
@@ -183,10 +184,14 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     end
 
     test "array of embedded resources" do
-      value_changed({:array, Money}, ["{\"currency\":\"aud\",\"amount\":100}", "{\"currency\":\"sek\",\"amount\":650}"], [
-        %Money{amount: 100, currency: :aud},
-        %Money{amount: 650, currency: :sek}
-      ])
+      value_changed(
+        {:array, Money},
+        ["{\"currency\":\"aud\",\"amount\":100}", "{\"currency\":\"sek\",\"amount\":650}"],
+        [
+          %Money{amount: 100, currency: :aud},
+          %Money{amount: 650, currency: :sek}
+        ]
+      )
     end
 
     test "array of base64 encoded binaries" do
@@ -196,8 +201,14 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     test "array of typed structs" do
       value_changed(
         {:array, DogTypedStruct},
-        ["{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}", "{\"name\":\"Kipper\",\"age\":15,\"breed\": \"labradoodle\"}"],
-        [%DogTypedStruct{name: "Henry", age: 8, breed: :groodle}, %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}]
+        [
+          "{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}",
+          "{\"name\":\"Kipper\",\"age\":15,\"breed\": \"labradoodle\"}"
+        ],
+        [
+          %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+          %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}
+        ]
       )
     end
   end

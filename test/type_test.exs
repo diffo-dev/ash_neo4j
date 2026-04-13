@@ -64,7 +64,7 @@ defmodule AshNeo4j.Test.Type do
     time_usec: ~T[07:45:41.429903],
     typed_struct: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
     utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
-    url_encoded_binary: <<1, 2, 3>>,
+    url_encoded_binary: <<1, 2, 3>>
   }
 
   @type_node_properties %{
@@ -73,18 +73,18 @@ defmodule AshNeo4j.Test.Type do
     "arrayString" => ["a", "b", "c"],
     "arrayBoolean" => [true, true, false],
     "arrayMap" => [
-       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
-     ],
+      "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+      "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+    ],
     "arrayBinary" => ["AQID", "BAUG"],
     "arrayStruct" => [
-       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
-     ],
+      "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+      "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+    ],
     "arrayTypedStruct" => [
-       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
-     ],
+      "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+      "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+    ],
     "atom" => "a",
     "binary" => "AQID",
     "boolean" => true,
@@ -210,8 +210,10 @@ defmodule AshNeo4j.Test.Type do
       Neo4jHelper.create_node([:Type], properties)
       type = Ash.read_one!(Type)
       assert type.uuid == properties.uuid
+
       Enum.each(@type_attributes, fn {key, value} ->
-        assert Map.get(type, key) == value end)
+        assert Map.get(type, key) == value
+      end)
     end
 
     test "type node has metadata on read" do
