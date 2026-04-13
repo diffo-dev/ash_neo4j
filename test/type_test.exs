@@ -55,6 +55,7 @@ defmodule AshNeo4j.Test.Type do
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
     integer: 1,
+    # keyword: [name: "Henry", age: 8, breed: :groodle] # keyword is bugged pending ash fix
     map: %{name: "Henry", age: 8, breed: :groodle},
     module: AshNeo4j.DataLayer,
     naive_datetime: ~N[2025-05-11 07:45:41.000000],
@@ -62,9 +63,13 @@ defmodule AshNeo4j.Test.Type do
     struct: %DogStruct{name: "Henry", age: 8, breed: :groodle},
     time: ~T[07:45:41.000000],
     time_usec: ~T[07:45:41.429903],
+    tuple: {"Henry", 8, :groodle},
     typed_struct: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+    union: %Ash.Union{type: :typed_struct, value: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle}},
     utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
-    url_encoded_binary: <<1, 2, 3>>
+    url_encoded_binary: <<1, 2, 3>>,
+    uuid4: Ash.UUID.generate(),
+    uuid7: Ash.UUIDv7.generate()
   }
 
   @type_node_properties %{
@@ -96,6 +101,7 @@ defmodule AshNeo4j.Test.Type do
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
+    # "keyword" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}", # keyword is bugged pending ash fix
     "map" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "module" => "Elixir.AshNeo4j.DataLayer",
     "naiveDatetime" => ~N[2025-05-11 07:45:41.000000],
@@ -103,12 +109,14 @@ defmodule AshNeo4j.Test.Type do
     "struct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "time" => ~T[07:45:41],
     "timeUsec" => ~T[07:45:41.429903],
+    "tuple" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "typedStruct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+    "union" => "{\"type\":\"typed_struct\",\"value\":{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}}",
     "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
-    "urlEncodedBinary" => "AQID"
+    "urlEncodedBinary" => "AQID",
+    "uuid4" => @type_attributes.uuid4,
+    "uuid7" => @type_attributes.uuid7
   }
-
-  # @url "https://www.diffo.dev/"
 
   describe "Neo4jHelper Type tests" do
     test "type node without properties can be created using Neo4jHelper" do

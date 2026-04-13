@@ -16,9 +16,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     Ash.Type.NaiveDatetime,
     Ash.Type.String,
     Ash.Type.Time,
-    Ash.Type.TimeUsec,
-    Ash.Type.UUID,
-    Ash.Type.UUIDv7
+    Ash.Type.TimeUsec
   ]
 
   @ash_base64_types [
@@ -34,6 +32,11 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
     AshNeo4j.Test.Type.DogMap,
     AshNeo4j.Test.Type.DogStruct,
     AshNeo4j.Test.Type.DogTypedStruct
+  ]
+
+  @ash_uuid_types [
+    Ash.Type.UUID,
+    Ash.Type.UUIDv7
   ]
 
   @ash_types [
@@ -87,6 +90,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
       end)
     end
 
+    test "ash uuid types" do
+      Enum.each(@ash_uuid_types, fn type ->
+        assert TypeClassifier.classify(type) == {:ok, :ash_uuid, type}
+      end)
+    end
+
     test "ash json types" do
       Enum.each(@ash_json_types, fn type ->
         assert TypeClassifier.classify(type) == {:ok, :ash_json, type}
@@ -115,9 +124,21 @@ defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
       end)
     end
 
+    test "array of ash base64 types" do
+      Enum.each(@ash_base64_types, fn type ->
+        assert TypeClassifier.classify({:array, type}) == {:ok, :array, {:ok, :ash_base64, type}}
+      end)
+    end
+
     test "array of ash json types" do
       Enum.each(@ash_json_types, fn type ->
         assert TypeClassifier.classify({:array, type}) == {:ok, :array, {:ok, :ash_json, type}}
+      end)
+    end
+
+    test "array of ash uuid types" do
+      Enum.each(@ash_uuid_types, fn type ->
+        assert TypeClassifier.classify({:array, type}) == {:ok, :array, {:ok, :ash_uuid, type}}
       end)
     end
 

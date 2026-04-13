@@ -34,6 +34,9 @@ defmodule AshNeo4j.DataLayer.Cast do
       {:ok, :ash_json, ash_type} ->
         cast_ash_type(ash_type, json_decode(value), constraints)
 
+      {:ok, :ash_uuid, _ash_type} ->
+        value
+
       {:ok, :ash, ash_type} ->
         cast_ash_type(ash_type, value, constraints)
 

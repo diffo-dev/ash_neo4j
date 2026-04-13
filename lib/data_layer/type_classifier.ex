@@ -30,6 +30,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
         ash_type_base64?(type) ->
           {:ok, :ash_base64, type}
 
+        ash_type_uuid?(type) ->
+          {:ok, :ash_uuid, type}
+
         ash_type_json?(type) ->
           {:ok, :ash_json, type}
 
@@ -57,6 +60,11 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
       Ash.Type.storage_type(type) == :map
   end
 
+  defp ash_type_uuid?(type) do
+    Ash.Type.ash_type?(type) and
+      Ash.Type.storage_type(type) == :uuid
+  end
+
   defp ash_type_base64?(type) do
     Ash.Type.ash_type?(type) and
       Ash.Type.storage_type(type) == :binary and
@@ -81,9 +89,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
       Ash.Type.NaiveDatetime,
       Ash.Type.String,
       Ash.Type.Time,
-      Ash.Type.TimeUsec,
-      Ash.Type.UUID,
-      Ash.Type.UUIDv7
+      Ash.Type.TimeUsec
     ]
   end
 

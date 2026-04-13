@@ -122,7 +122,7 @@ defmodule AshNeo4j.Util do
 
   ## Examples
   ```
-  iex> AshNeo4j.Util.typed_struct?(Ash.TypedStruct)
+  iex> AshNeo4j.Util.typed_struct?(AshNeo4j.Test.Type.DogTypedStruct)
   true
   iex> AshNeo4j.Util.typed_struct?(List)
   false
@@ -135,48 +135,45 @@ defmodule AshNeo4j.Util do
   end
 
   @doc """
-  Encodes json, encoding maps which aren't structs with keys in sorted order, even in lists
+  Encodes json, converting structs and maps to ordered objects sorted by key, even when in lists/nested
+  Deliberately does not call Jason.Encoder on structs, since Protocol may not be implemented for persistence/at all
+
   ## Examples
   ```
   iex> AshNeo4j.Util.json_encode(%{name: "Henry", age: 8, breed: :groodle})
-  "{:ok, {\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}}"
+  {:ok, ~s({"age":8,"breed":"groodle","name":"Henry"})}
   iex> AshNeo4j.Util.json_encode([%{currency: :aud, amount: 100}, %{currency: :sek, amount: 650}])
-  "{:ok, [{\"amount\":100,\"currency\":\"aud\"},{\"amount\":650,\"currency\":\"sek\"}]}"
-
+  {:ok, ~s([{"amount":100,"currency":"aud"},{"amount":650,"currency":"sek"}])}
+  iex> AshNeo4j.Util.json_encode(%Ash.Union{type: :typed_struct, value: %AshNeo4j.Test.Type.DogTypedStruct{name: "Henry", age: 8, breed: "groodle"}})
+  {:ok, ~s({"type":"typed_struct","value":{"age":8,"breed":"groodle","name":"Henry"}})}
+  ```
   """
+  def json_encode(value) do
+    value
+    |> to_json_safe()
+    |> Jason.encode()
+  end
 
-  def json_encode(struct) when is_struct(struct), do: Jason.encode(struct)
+  defp to_json_safe(struct) when is_struct(struct) do
+    struct
+    |> Map.from_struct()
+    |> to_json_safe()
+  end
 
-  def json_encode(map) when is_map(map) do
+  defp to_json_safe(map) when is_map(map) and not is_struct(map) do
     map
-    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.map(fn {k, v} -> {to_string(k), to_json_safe(v)} end)
+    |> Enum.sort_by(fn {k, _} -> k end)
     |> Jason.OrderedObject.new()
-    |> json_encode()
   end
 
-  def json_encode(list) when is_list(list) do
-    list
-    |> Enum.reduce_while(
-      "",
-      fn item, acc ->
-        case json_encode(item) do
-          {:ok, encoded} ->
-            if acc == "" do
-              {:cont, "[" <> encoded}
-            else
-              {:cont, acc <> "," <> encoded}
-            end
-
-          {:error, reason} ->
-            {:halt, {:error, reason}}
-        end
-      end
-    )
-    |> case do
-      {:error, reason} -> {:error, reason}
-      encoded -> {:ok, encoded <> "]"}
-    end
+  defp to_json_safe(list) when is_list(list) do
+    Enum.map(list, &to_json_safe/1)
   end
 
-  def json_encode(value), do: Jason.encode(value)
+  defp to_json_safe(atom) when is_atom(atom) and not is_nil(atom) and not is_boolean(atom) do
+    to_string(atom)
+  end
+
+  defp to_json_safe(value), do: value
 end

@@ -39,6 +39,9 @@ defmodule AshNeo4j.DataLayer.Dump do
         dump_ash_type(ash_type, value, constraints)
         |> json_encode()
 
+      {:ok, :ash_uuid, _ash_type} ->
+        value
+
       {:ok, :ash, ash_type} ->
         # other ash types are just dumped for Neo4j to handle
         dump_ash_type(ash_type, value, constraints)

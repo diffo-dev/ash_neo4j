@@ -14,6 +14,7 @@ defmodule AshNeo4j.Test.Resource.Type do
   alias AshNeo4j.Test.Type.DogStruct
   alias AshNeo4j.Test.Type.DogTuple
   alias AshNeo4j.Test.Type.DogTypedStruct
+  alias AshNeo4j.Test.Type.DogUnion
 
   actions do
     default_accept :*
@@ -61,7 +62,10 @@ defmodule AshNeo4j.Test.Resource.Type do
     attribute :time_usec, :time_usec, public?: true
     attribute :tuple, DogTuple, public?: true
     attribute :typed_struct, DogTypedStruct, public?: true
+    attribute :union, DogUnion, public?: true
     attribute :url_encoded_binary, :url_encoded_binary, public?: true
     attribute :utc_datetime_usec, :utc_datetime_usec, public?: true
+    attribute :uuid4, :uuid, public?: true
+    attribute :uuid7, :uuid_v7, public?: true
   end
 end

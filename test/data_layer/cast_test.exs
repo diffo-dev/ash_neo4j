@@ -12,6 +12,8 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   alias AshNeo4j.Test.Type.DogStruct
   alias AshNeo4j.Test.Type.DogTuple
   alias AshNeo4j.Test.Type.DogTypedStruct
+  alias AshNeo4j.Test.Type.DogUnion
+  alias AshNeo4j.Test.Util
 
   describe "cast native types" do
     test "using Ash.Type alias" do
@@ -52,14 +54,6 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
 
     test "time usec" do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
-    end
-
-    test "uuid" do
-      value_unchanged(Ash.Type.UUID, Ash.UUID.generate())
-    end
-
-    test "uuid v7" do
-      value_unchanged(Ash.Type.UUIDv7, Ash.UUIDv7.generate())
     end
   end
 
@@ -167,6 +161,25 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
 
     test "embedded resource" do
       value_changed(Money, "{\"currency\":\"aud\",\"amount\":100}", %Money{amount: 100, currency: :aud})
+    end
+
+    test "tagged union" do
+      value_changed(
+        DogUnion,
+        "{\"type\":\"typed_struct\",\"value\":{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}}",
+        %Ash.Union{type: :typed_struct, value: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle}},
+        Util.init_constraints(DogUnion)
+      )
+    end
+  end
+
+  describe "cast uuid types" do
+    test "uuid" do
+      value_unchanged(Ash.Type.UUID, Ash.UUID.generate())
+    end
+
+    test "uuid v7" do
+      value_unchanged(Ash.Type.UUIDv7, Ash.UUIDv7.generate())
     end
   end
 

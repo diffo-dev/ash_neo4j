@@ -8,6 +8,7 @@ defmodule AshNeo4j.Test.Doc do
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.Cypher
+  alias AshNeo4j.Util
 
   setup_all do
     BoltyHelper.start()
@@ -23,5 +24,6 @@ defmodule AshNeo4j.Test.Doc do
     doctest BoltyHelper
     doctest Neo4jHelper
     doctest Cypher
+    doctest Util
   end
 end
