@@ -211,8 +211,6 @@ defmodule AshNeo4j.Test.Type do
       type = Ash.read_one!(Type)
       assert type.uuid == properties.uuid
       Enum.each(@type_attributes, fn {key, value} ->
-        IO.inspect({key, value}, label: "expected type attribute key, value")
-        IO.inspect(Map.get(type, key), label: "actual type value")
         assert Map.get(type, key) == value end)
     end
 

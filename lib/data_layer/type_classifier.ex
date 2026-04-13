@@ -99,12 +99,11 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
   Merges item constraints for array types.
   """
   def item_constraints(inner_type, constraints) when is_atom(inner_type) and is_list(constraints) do
-    IO.inspect({inner_type, constraints}, label: "array_item_constraints")
     explicit_items = constraints[:items] || []
 
     subtype =
       (Ash.Type.NewType.new_type?(inner_type) && inner_type.subtype_constraints()) || []
 
-    Keyword.merge(subtype, explicit_items) |> IO.inspect(label: "merged_constraints")
+    Keyword.merge(subtype, explicit_items)
   end
 end

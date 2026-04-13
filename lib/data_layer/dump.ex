@@ -77,7 +77,6 @@ defmodule AshNeo4j.DataLayer.Dump do
   end
 
   defp dump_ash_type(type, value, constraints) do
-    IO.inspect({type, value, constraints}, label: "dump_ash_type")
     case Ash.Type.dump_to_native(type, value, constraints) do
       {:ok, native} ->
         native
