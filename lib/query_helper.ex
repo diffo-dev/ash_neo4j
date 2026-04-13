@@ -111,7 +111,7 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  defp to_param_value(%Ash.CiString{} = v), do: to_string(v)
+  defp to_param_value(%Ash.CiString{} = v), do: Ash.CiString.value(v)
   defp to_param_value(%MapSet{} = ms), do: MapSet.to_list(ms)
   defp to_param_value(value), do: value
 
@@ -124,7 +124,16 @@ defmodule AshNeo4j.QueryHelper do
           operator = convert_operator(predicate_operator)
           property_name = Info.convert_to_property_name(resource, predicate.left)
           param_key = "#{variable}_#{property_name}_#{index}"
-          clause = Cypher.expression(variable, property_name, operator, "$#{param_key}")
+
+          clause =
+            Cypher.expression(
+              variable,
+              property_name,
+              operator,
+              "$#{param_key}",
+              case_insensitive?: case_insensitive?(resource, predicate.left, predicate.right)
+            )
+
           new_params = Map.put(params_acc, param_key, to_param_value(predicate.right))
           combined = if clauses == "", do: clause, else: "#{clauses} AND #{clause}"
           {combined, new_params}
@@ -134,7 +143,16 @@ defmodule AshNeo4j.QueryHelper do
           property_name = Info.convert_to_property_name(resource, argument)
           value = hd(tl(predicate.arguments))
           param_key = "#{variable}_#{property_name}_#{index}"
-          clause = Cypher.expression(variable, property_name, "contains", "$#{param_key}")
+
+          clause =
+            Cypher.expression(
+              variable,
+              property_name,
+              "contains",
+              "$#{param_key}",
+              case_insensitive?: case_insensitive?(resource, argument, value)
+            )
+
           new_params = Map.put(params_acc, param_key, to_param_value(value))
           combined = if clauses == "", do: clause, else: "#{clauses} AND #{clause}"
           {combined, new_params}
@@ -144,6 +162,13 @@ defmodule AshNeo4j.QueryHelper do
           {if(clauses == "", do: "TRUE", else: "#{clauses} AND TRUE"), params_acc}
       end
     end)
+  end
+
+  defp case_insensitive?(resource, predicate_left, predicate_right) do
+    # field is ci_string
+    # value is ci_string
+    Info.attribute_type(resource, predicate_left) in [Ash.Type.CiString, :ci_string] or
+      match?(%Ash.CiString{}, predicate_right)
   end
 
   defp order_by({cypher, params}, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do

@@ -29,7 +29,7 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Converts a node variable, label and optional properties to cypher expression
+  Converts a node variable, label, predicates and operator to cypher expression
 
   ## Examples
   ```
@@ -41,22 +41,31 @@ defmodule AshNeo4j.Cypher do
   "s.name IS NOT NULL"
   iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "$s_name_0")
   "s.name CONTAINS $s_name_0"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "$s_name_0", case_insensitive?: true)
+  "toLower(s.name) CONTAINS toLower($s_name_0)"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "=", "$s_name_0", case_insensitive?: true)
+  "toLower(s.name) = toLower($s_name_0)"
   ```
   """
-  def expression(variable, left, operator, right)
+  def expression(variable, left, operator, right, opts \\ [])
       when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
+    case_insensitive? = Keyword.get(opts, :case_insensitive?, false)
+
     cond do
+      operator == "IN" && right == "[]" ->
+        "#{variable}.#{left} IS NULL"
+
       operator == "is_nil" && right ->
         "#{variable}.#{left} IS NULL"
 
       operator == "is_nil" && !right ->
         "#{variable}.#{left} IS NOT NULL"
 
-      operator == "contains" ->
-        "#{variable}.#{left} CONTAINS #{right}"
+      case_insensitive? ->
+        "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
 
       true ->
-        "#{variable}.#{left} #{operator} #{right}"
+        "#{variable}.#{left} #{String.upcase(operator)} #{right}"
     end
   end
 

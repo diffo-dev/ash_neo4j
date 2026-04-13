@@ -31,17 +31,47 @@ defmodule AshNeo4j.Service.Test do
   end
 
   describe "ash read action tests" do
-    test "find the latest specification with a given name" do
+    test "get the latest specification with a given name" do
       _access_v1 = Specification |> Ash.create!(%{name: "access", major_version: 1})
       _access_v2 = Specification |> Ash.create!(%{name: "access", major_version: 2})
       _edge_v3 = Specification |> Ash.create!(%{name: "edge", major_version: 3})
 
-      latest_specification = Specification |> Ash.Query.for_read(:get_latest, %{query: "access"}) |> Ash.read_one!()
+      # this query is case insensitive even though the name attribute isn't
+      latest_specification = Specification |> Ash.Query.for_read(:get_latest, %{query: "Access"}) |> Ash.read_one!()
       assert latest_specification
       assert latest_specification.major_version == 2
       assert latest_specification.name == "access"
       {:ok, refreshed_latest_specification} = latest_specification |> Ash.load(:version)
       assert refreshed_latest_specification.version == "v2.0.0"
+    end
+
+    test "find specifications with names including a given value" do
+      _nbnAccess = Specification |> Ash.create!(%{name: "nbnAccess"})
+      _fibreAccess = Specification |> Ash.create!(%{name: "fibreAccess"})
+      _wireless = Specification |> Ash.create!(%{name: "wireless"})
+
+      found_specifications = Specification |> Ash.Query.for_read(:find, %{query: "access"}) |> Ash.read!()
+      assert length(found_specifications) == 2
+      assert Enum.all?(found_specifications, fn spec -> String.contains?(spec.name, "Access") end)
+    end
+
+    test "specification href is lowercased but can be found with filter using original casing" do
+      _specification =
+        Specification
+        |> Ash.create!(%{name: "broadband", href: "Catalog/Connectivity/Broadband"})
+
+      {:ok, %{records: records}} =
+        Neo4jHelper.read_nodes(:Specification, %{name: "broadband", href: "catalog/connectivity/broadband"})
+
+      assert length(records) == 1
+
+      read_specification =
+        Specification
+        |> Ash.Query.for_read(:read)
+        |> Ash.Query.filter(href: "Catalog/Connectivity/Broadband")
+        |> Ash.read_one!()
+
+      assert Ash.CiString.value(read_specification.href) == "catalog/connectivity/broadband"
     end
 
     test "service can calculate href using referenced specification" do
