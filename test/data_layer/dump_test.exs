@@ -108,25 +108,22 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
   end
 
   describe "dump ash base64 types" do
-    @tag :base64
     test "binary" do
       value_changed(Ash.Type.Binary, <<1, 2, 3>>, "AQID")
     end
 
-    @tag :base64
     test "url encoded binary" do
       value_changed(Ash.Type.UrlEncodedBinary, <<1, 2, 3>>, "AQID")
     end
   end
 
   describe "dump ash json types" do
-    @tag :keyword
     test "keyword" do
       value_changed(
         DogKeyword,
         [name: "Henry", age: 8, breed: :groodle],
         "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-        DogKeyword.subtype_constraints()
+        DogKeyword.subtype_constraints() # not strictly needed for dumping, but ensures dumping and casting are inverses of each other
       )
     end
 
@@ -134,8 +131,7 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
       value_changed(
         DogMap,
         %{name: "Henry", age: 8, breed: :groodle},
-        "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-        DogMap.subtype_constraints()
+        "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}"
       )
     end
 
@@ -148,7 +144,6 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
       )
     end
 
-    @tag :tuple
     test "tuple" do
       value_changed(
         DogTuple,
@@ -185,7 +180,6 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
       value_changed({:array, Ash.Type.Map}, [%{"a" => "a"}, %{"b" => "b"}], ["{\"a\":\"a\"}", "{\"b\":\"b\"}"])
     end
 
-    @tag :base64
     test "array of base64 encoded binaries" do
       value_changed({:array, Ash.Type.Binary}, [<<1, 2, 3>>, <<4, 5, 6>>], ["AQID", "BAUG"])
     end
@@ -195,6 +189,14 @@ defmodule AshNeo4j.DataLayer.Dump.Test do
         {:array, Money},
         [%Money{amount: 100, currency: :aud}, %Money{amount: 650, currency: :sek}],
         ["{\"amount\":100,\"currency\":\"aud\"}", "{\"amount\":650,\"currency\":\"sek\"}"]
+      )
+    end
+
+    test "array of typed structs" do
+      value_changed(
+        {:array, DogTypedStruct},
+        [%DogTypedStruct{name: "Henry", age: 8, breed: :groodle}, %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}],
+        ["{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}", "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"]
       )
     end
   end

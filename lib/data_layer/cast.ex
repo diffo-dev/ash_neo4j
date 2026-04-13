@@ -19,13 +19,8 @@ defmodule AshNeo4j.DataLayer.Cast do
   end
 
   def cast({:array, inner_type}, value, constraints) when is_list(value) do
-    Enum.map(value, &cast(inner_type, &1, constraints))
-  end
-
-  def cast({:array, inner_type}, value, constraints) when is_binary(value) do
-    with {:ok, decoded} <- Jason.decode(value),
-         # already json decoded so call cast_ash_type rather than cast
-         do: Enum.map(decoded, &cast_ash_type(inner_type, &1, constraints))
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+    Enum.map(value, &cast(inner_type, &1, item_constraints))
   end
 
   def cast(type, value, constraints) do

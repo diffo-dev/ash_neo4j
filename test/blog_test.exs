@@ -629,8 +629,7 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "many-to-many relationship tests" do
-    # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing post_id"
-    @tag bugged: true
+    @tag bugged: "fails with Ash.Error.Unknown couldn't relate notes, despite attributes containing post_id"
     test "many posts can be tagged with each tag" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})

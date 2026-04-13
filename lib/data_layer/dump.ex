@@ -19,7 +19,8 @@ defmodule AshNeo4j.DataLayer.Dump do
   end
 
   def dump({:array, inner_type}, value, constraints) when is_list(value) do
-    Enum.map(value, &dump(inner_type, &1, constraints))
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+    Enum.map(value, &dump(inner_type, &1, item_constraints))
   end
 
   def dump(type, value, constraints) do
@@ -76,6 +77,7 @@ defmodule AshNeo4j.DataLayer.Dump do
   end
 
   defp dump_ash_type(type, value, constraints) do
+    IO.inspect({type, value, constraints}, label: "dump_ash_type")
     case Ash.Type.dump_to_native(type, value, constraints) do
       {:ok, native} ->
         native

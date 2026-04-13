@@ -28,11 +28,24 @@ defmodule AshNeo4j.Test.Type do
 
   @type_attributes %{
     array_atom: [:a, :b, :c],
+    array_binary: [<<1, 2, 3>>, <<4, 5, 6>>],
     array_integer: [1, 2, 3],
     array_string: ["a", "b", "c"],
     array_boolean: [true, true, false],
-    array_map: [%{"a" => "a"}, %{"b" => "b"}],
+    array_map: [
+      %{name: "Henry", age: 8, breed: :groodle},
+      %{name: "Kipper", age: 15, breed: :labradoodle}
+    ],
+    array_struct: [
+      %DogStruct{name: "Henry", age: 8, breed: :groodle},
+      %DogStruct{name: "Kipper", age: 15, breed: :labradoodle}
+    ],
+    array_typed_struct: [
+      %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
+      %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}
+    ],
     atom: :a,
+    binary: <<1, 2, 3>>,
     boolean: true,
     ci_string: ~i(Hello),
     date: ~D[2025-05-11],
@@ -45,14 +58,13 @@ defmodule AshNeo4j.Test.Type do
     map: %{name: "Henry", age: 8, breed: :groodle},
     module: AshNeo4j.DataLayer,
     naive_datetime: ~N[2025-05-11 07:45:41.000000],
-    # regex: ~r/foo/iu,
     string: "Hello",
     struct: %DogStruct{name: "Henry", age: 8, breed: :groodle},
     time: ~T[07:45:41.000000],
     time_usec: ~T[07:45:41.429903],
     typed_struct: %DogTypedStruct{name: "Henry", age: 8, breed: :groodle},
-    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z]
-    # url: "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
+    utc_datetime_usec: ~U[2025-05-11 07:45:41.429903Z],
+    url_encoded_binary: <<1, 2, 3>>,
   }
 
   @type_node_properties %{
@@ -60,9 +72,21 @@ defmodule AshNeo4j.Test.Type do
     "arrayInteger" => [1, 2, 3],
     "arrayString" => ["a", "b", "c"],
     "arrayBoolean" => [true, true, false],
-    "arrayMap" => "[{\"a\":\"a\"},{\"b\":\"b\"}]",
+    "arrayMap" => [
+       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+     ],
+    "arrayBinary" => ["AQID", "BAUG"],
+    "arrayStruct" => [
+       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+     ],
+    "arrayTypedStruct" => [
+       "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
+       "{\"age\":15,\"breed\":\"labradoodle\",\"name\":\"Kipper\"}"
+     ],
     "atom" => "a",
-    "binary" => "\x01\x02\x03",
+    "binary" => "AQID",
     "boolean" => true,
     "ciString" => "Hello",
     "date" => ~D[2025-05-11],
@@ -75,14 +99,13 @@ defmodule AshNeo4j.Test.Type do
     "map" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "module" => "Elixir.AshNeo4j.DataLayer",
     "naiveDatetime" => ~N[2025-05-11 07:45:41.000000],
-    # "regex" => "~r/foo/iu",
     "string" => "Hello",
     "struct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "time" => ~T[07:45:41],
     "timeUsec" => ~T[07:45:41.429903],
     "typedStruct" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
-    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z"
-    # "url" => "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"
+    "utcDatetimeUsec" => "2025-05-11T07:45:41.429903Z",
+    "urlEncodedBinary" => "AQID"
   }
 
   # @url "https://www.diffo.dev/"
@@ -187,7 +210,10 @@ defmodule AshNeo4j.Test.Type do
       Neo4jHelper.create_node([:Type], properties)
       type = Ash.read_one!(Type)
       assert type.uuid == properties.uuid
-      Enum.each(@type_attributes, fn {key, value} -> assert Map.get(type, key) == value end)
+      Enum.each(@type_attributes, fn {key, value} ->
+        IO.inspect({key, value}, label: "expected type attribute key, value")
+        IO.inspect(Map.get(type, key), label: "actual type value")
+        assert Map.get(type, key) == value end)
     end
 
     test "type node has metadata on read" do

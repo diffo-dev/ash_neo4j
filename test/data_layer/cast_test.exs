@@ -108,20 +108,17 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
   end
 
   describe "cast ash base64 types" do
-    @tag :base64
     test "binary" do
       value_changed(Ash.Type.Binary, "AQID", <<1, 2, 3>>)
     end
 
-    @tag :base64
     test "url encoded binary" do
       value_changed(Ash.Type.UrlEncodedBinary, "AQID", <<1, 2, 3>>)
     end
   end
 
   describe "cast ash json types" do
-    @tag :keyword
-    @tag bugged: "breed isn't being cast_stored to an atom - think this is an Ash defect"
+    @tag bugged: "breed isn't being cast_stored to an atom - Ash defect fixed in https://github.com/ash-project/ash/pull/2673"
     test "keyword" do
       value_changed(
         DogKeyword,
@@ -149,7 +146,6 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
       )
     end
 
-    @tag :tuple
     test "tuple" do
       value_changed(
         DogTuple,
@@ -183,19 +179,26 @@ defmodule AshNeo4j.DataLayer.Cast.Test do
     end
 
     test "array of maps" do
-      value_changed({:array, Ash.Type.Map}, "[{\"a\":\"a\"},{\"b\":\"b\"}]", [%{"a" => "a"}, %{"b" => "b"}])
+      value_changed({:array, Ash.Type.Map}, ["{\"a\":\"a\"}", "{\"b\":\"b\"}"], [%{"a" => "a"}, %{"b" => "b"}])
     end
 
     test "array of embedded resources" do
-      value_changed({:array, Money}, "[{\"currency\":\"aud\",\"amount\":100},{\"currency\":\"sek\",\"amount\":650}]", [
+      value_changed({:array, Money}, ["{\"currency\":\"aud\",\"amount\":100}", "{\"currency\":\"sek\",\"amount\":650}"], [
         %Money{amount: 100, currency: :aud},
         %Money{amount: 650, currency: :sek}
       ])
     end
 
-    @tag :base64
     test "array of base64 encoded binaries" do
       value_changed({:array, Ash.Type.Binary}, ["AQID", "BAUG"], [<<1, 2, 3>>, <<4, 5, 6>>])
+    end
+
+    test "array of typed structs" do
+      value_changed(
+        {:array, DogTypedStruct},
+        ["{\"name\":\"Henry\",\"age\":8,\"breed\": \"groodle\"}", "{\"name\":\"Kipper\",\"age\":15,\"breed\": \"labradoodle\"}"],
+        [%DogTypedStruct{name: "Henry", age: 8, breed: :groodle}, %DogTypedStruct{name: "Kipper", age: 15, breed: :labradoodle}]
+      )
     end
   end
 
