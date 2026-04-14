@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Service.Test do
+defmodule AshNeo4j.ServiceTest do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.Neo4jHelper

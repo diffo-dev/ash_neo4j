@@ -11,7 +11,8 @@ defmodule AshNeo4j.Verifiers.VerifyEnrichable do
 
   @impl true
   def verify(dsl) do
-    relate = Verifier.get_option(dsl, [:neo4j], :relate, [])
+    # we want to verify using relate including defaults
+    relate = Verifier.get_persisted(dsl, :relate, [])
     relate_no_names = Enum.into(relate, [], &Tuple.delete_at(&1, 0))
 
     if length(relate) == length(Enum.uniq(relate_no_names)) do

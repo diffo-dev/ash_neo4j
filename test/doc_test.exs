@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Doc do
+defmodule AshNeo4j.DocTest do
   @moduledoc false
   use ExUnit.Case
   alias AshNeo4j.BoltyHelper

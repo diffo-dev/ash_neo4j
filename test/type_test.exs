@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Type do
+defmodule AshNeo4j.TypeTest do
   @moduledoc false
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper

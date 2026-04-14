@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.DataLayer.TypeClassifier.Test do
+defmodule AshNeo4j.DataLayer.TypeClassifierTest do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.DataLayer.TypeClassifier
