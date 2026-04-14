@@ -125,13 +125,15 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyEnrichable,
       AshNeo4j.Verifiers.VerifyAttributeType
     ],
+    persisters: [
+      AshNeo4j.Persisters.PersistAddDomainLabel,
+      AshNeo4j.Persisters.PersistEnsureIdTranslated,
+      AshNeo4j.Persisters.PersistEnsureLabelled
+    ],
     transformers: [
-      AshNeo4j.Transformers.TransformEnsureLabelled,
-      AshNeo4j.Transformers.TransformAddDomainLabel,
-      AshNeo4j.Transformers.TransformEnsureIdTranslated,
-      AshNeo4j.Transformers.TransformDefaultRelate,
       AshNeo4j.Transformers.TransformAddTranslations,
-      AshNeo4j.Transformers.TransformAddRelationshipAttributes
+      AshNeo4j.Transformers.TransformAddRelationshipAttributes,
+      AshNeo4j.Transformers.TransformDefaultRelate
     ]
 
   defmodule Query do

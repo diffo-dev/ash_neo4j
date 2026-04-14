@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformAddDomainLabel do
+defmodule AshNeo4j.Persisters.PersistAddDomainLabel do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer

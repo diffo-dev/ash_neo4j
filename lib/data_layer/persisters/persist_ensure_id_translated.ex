@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformEnsureIdTranslated do
+defmodule AshNeo4j.Persisters.PersistEnsureIdTranslated do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
@@ -13,10 +13,6 @@ defmodule AshNeo4j.Transformers.TransformEnsureIdTranslated do
   def transform(dsl) do
     {:ok, ensure_id_translated(dsl)}
   end
-
-  @impl true
-  def after?(AshNeo4j.Transformers.TransformAddTranslations), do: true
-  def after?(_), do: false
 
   defp ensure_id_translated(dsl) do
     translations = Verifier.get_option(dsl, [:neo4j], :translations, [])

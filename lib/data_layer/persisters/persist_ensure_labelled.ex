@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformEnsureLabelled do
+defmodule AshNeo4j.Persisters.PersistEnsureLabelled do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
@@ -14,7 +14,7 @@ defmodule AshNeo4j.Transformers.TransformEnsureLabelled do
   end
 
   defp ensure_labelled(dsl) do
-    case Verifier.get_option(dsl, [:neo4j], :label, nil) do
+    case Transformer.get_option(dsl, [:neo4j], :label, nil) do
       nil ->
         resource = Verifier.get_persisted(dsl, :module)
         module = String.to_atom(List.last(Module.split(resource)))
