@@ -8,11 +8,12 @@ defmodule AshNeo4j.DataLayer do
   @behaviour Ash.DataLayer
 
   require Logger
-  alias AshNeo4j.DataLayer.Info
+  alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.DataLayer.Dump
+  alias AshNeo4j.Util
 
   @filter_stream_size 100
 
@@ -126,14 +127,10 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyAttributeType
     ],
     persisters: [
-      AshNeo4j.Persisters.PersistAddDomainLabel,
-      AshNeo4j.Persisters.PersistEnsureIdTranslated,
-      AshNeo4j.Persisters.PersistEnsureLabelled
-    ],
-    transformers: [
-      AshNeo4j.Transformers.TransformAddTranslations,
-      AshNeo4j.Transformers.TransformAddRelationshipAttributes,
-      AshNeo4j.Transformers.TransformDefaultRelate
+      AshNeo4j.Persisters.PersistLabels,
+      AshNeo4j.Persisters.PersistTranslations,
+      AshNeo4j.Persisters.PersistRelationshipAttributes,
+      AshNeo4j.Persisters.PersistRelate
     ]
 
   defmodule Query do
@@ -258,7 +255,7 @@ defmodule AshNeo4j.DataLayer do
     """)
 
     subject_id = id_properties(resource, changeset.data)
-    subject_label = Info.label(resource)
+    subject_label = ResourceInfo.label(resource)
 
     update_properties = dump_properties(resource, changeset.attributes)
 
@@ -283,9 +280,9 @@ defmodule AshNeo4j.DataLayer do
     relationship_update_result =
       if accessing_from = Map.get(changeset.context, :accessing_from) do
         object_resource = Map.get(accessing_from, :source)
-        object_label = Info.label(object_resource)
+        object_label = ResourceInfo.label(object_resource)
         object_relationship_name = Map.get(accessing_from, :name)
-        object_node_relationship = Info.node_relationship(object_resource, object_relationship_name)
+        object_node_relationship = ResourceInfo.node_relationship(object_resource, object_relationship_name)
 
         if Map.get(accessing_from, :unrelating?) do
           # unrelate
@@ -309,7 +306,7 @@ defmodule AshNeo4j.DataLayer do
                      object_label,
                      object_id,
                      edge_label,
-                     Info.reverse(object_to_subject_direction)
+                     Util.reverse(object_to_subject_direction)
                    ) do
                 {:ok, %Bolty.Response{results: []}} ->
                   {:error, "no result to unrelate nodes"}
@@ -341,7 +338,7 @@ defmodule AshNeo4j.DataLayer do
                      object_label,
                      object_id,
                      edge_label,
-                     Info.reverse(object_to_subject_direction)
+                     Util.reverse(object_to_subject_direction)
                    ) do
                 {:ok, %Bolty.Response{results: []}} ->
                   {:error, "no result to relate nodes"}
@@ -359,13 +356,13 @@ defmodule AshNeo4j.DataLayer do
         if changeset.relationships do
           Enum.reduce_while(changeset.relationships, nil, fn {relationship_name, relationship_change}, _acc ->
             subject_node_relationship =
-              Info.node_relationship(resource, relationship_name)
+              ResourceInfo.node_relationship(resource, relationship_name)
 
             subject_relationship =
               Ash.Resource.Info.relationship(resource, relationship_name)
 
             object_resource = subject_relationship.destination
-            object_label = Info.label(object_resource)
+            object_label = ResourceInfo.label(object_resource)
 
             {arguments, options} = hd(relationship_change)
             type = Keyword.get(options, :type)
@@ -375,7 +372,10 @@ defmodule AshNeo4j.DataLayer do
                 # unrelate
                 subject_source_attribute = subject_relationship.source_attribute
                 subject_destination_attribute = subject_relationship.destination_attribute
-                object_property_name = Info.convert_to_property_name(object_resource, subject_destination_attribute)
+
+                object_property_name =
+                  ResourceInfo.convert_to_property_name(object_resource, subject_destination_attribute)
+
                 object_property_value = Map.get(changeset.data, subject_source_attribute)
                 object_id = %{object_property_name => object_property_value}
 
@@ -411,7 +411,7 @@ defmodule AshNeo4j.DataLayer do
                 # relate each argument
                 arg_relate_result =
                   Enum.reduce_while(arguments, nil, fn argument, _acc ->
-                    object_id = Info.convert_to_properties(object_resource, argument)
+                    object_id = ResourceInfo.convert_to_properties(object_resource, argument)
 
                     case map_size(object_id) do
                       0 ->
@@ -421,8 +421,8 @@ defmodule AshNeo4j.DataLayer do
                         {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
                           subject_node_relationship
 
-                        subject_exclusive? = Info.source_exclusive?(resource, relationship_name)
-                        object_exclusive? = Info.destination_exclusive?(resource, relationship_name)
+                        subject_exclusive? = ResourceInfo.source_exclusive?(resource, relationship_name)
+                        object_exclusive? = ResourceInfo.destination_exclusive?(resource, relationship_name)
 
                         case Neo4jHelper.relate_nodes(
                                subject_label,
@@ -475,11 +475,11 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: destroy(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    label = Info.label(resource)
+    label = ResourceInfo.label(resource)
     id_properties = id_properties(resource, changeset.data)
 
     result =
-      case Neo4jHelper.safe_delete_nodes(label, id_properties, Info.preserve_node_relationships(resource)) do
+      case Neo4jHelper.safe_delete_nodes(label, id_properties, ResourceInfo.preserve_node_relationships(resource)) do
         {:ok, _} ->
           :ok
 
@@ -507,7 +507,7 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def transaction(resource, fun, _timeout, _) do
-    label = Info.label(resource)
+    label = ResourceInfo.label(resource)
 
     :global.trans(
       {{:neo4j, label}, System.unique_integer()},
@@ -532,12 +532,12 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def rollback(resource, error) do
-    throw({{:neo4j_rollback, Info.label(resource)}, error})
+    throw({{:neo4j_rollback, ResourceInfo.label(resource)}, error})
   end
 
   @impl true
   def in_transaction?(resource) do
-    Process.get({:neo4j_in_transaction, Info.label(resource)}, false) == true
+    Process.get({:neo4j_in_transaction, ResourceInfo.label(resource)}, false) == true
   end
 
   defp filter_matches(records, nil, _domain), do: records
@@ -655,10 +655,10 @@ defmodule AshNeo4j.DataLayer do
     edge_direction = edge_direction(edge, dest_node)
 
     relationship =
-      Info.relationship(resource, edge_label, edge_direction, dest_labels)
+      ResourceInfo.relationship(resource, edge_label, edge_direction, dest_labels)
 
     if relationship != nil do
-      reverse_node_relationship = Info.reverse_node_relationship(resource, relationship.name)
+      reverse_node_relationship = ResourceInfo.reverse_node_relationship(resource, relationship.name)
 
       reverse_relationship =
         cond do
@@ -672,7 +672,7 @@ defmodule AshNeo4j.DataLayer do
       cond do
         relationship.cardinality == :one && relationship.type == :belongs_to ->
           destination_property =
-            Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+            ResourceInfo.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
           [
             {relationship.source_attribute, Map.get(dest_node.properties, destination_property)} | acc
@@ -681,7 +681,7 @@ defmodule AshNeo4j.DataLayer do
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
           source_property =
-            Info.convert_to_property_name(relationship.source, relationship.source_attribute)
+            ResourceInfo.convert_to_property_name(relationship.source, relationship.source_attribute)
 
           [
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
@@ -694,14 +694,14 @@ defmodule AshNeo4j.DataLayer do
 
         true ->
           Logger.warning(
-            "AshNeo4j.DataLayer: unable to enrich source node #{inspect(Info.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, unsupported"
+            "AshNeo4j.DataLayer: unable to enrich source node #{inspect(ResourceInfo.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, unsupported"
           )
 
           acc
       end
     else
       Logger.warning(
-        "AshNeo4j.DataLayer: unable to enrich source node #{inspect(Info.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, no relationship"
+        "AshNeo4j.DataLayer: unable to enrich source node #{inspect(ResourceInfo.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, no relationship"
       )
 
       acc
@@ -729,7 +729,7 @@ defmodule AshNeo4j.DataLayer do
       end)
 
     fields =
-      Enum.into(Info.translations(resource), enriched, fn {resource_field, node_field} ->
+      Enum.into(ResourceInfo.translations(resource), enriched, fn {resource_field, node_field} ->
         property_value = Map.get(node.properties, to_string(node_field))
         {resource_field, cast_attribute(resource, resource_field, property_value)}
       end)
@@ -779,7 +779,7 @@ defmodule AshNeo4j.DataLayer do
 
   defp relate_nodes(source_resource, resource, attributes)
        when is_struct(source_resource) and is_atom(resource) and is_map(attributes) do
-    relationship_attributes = Info.relationship_attributes(resource) |> Keyword.delete(:id)
+    relationship_attributes = ResourceInfo.relationship_attributes(resource) |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
     case Enum.count(relationship_source_attributes) do
@@ -795,12 +795,12 @@ defmodule AshNeo4j.DataLayer do
             fn {source_attribute, name}, acc ->
               relationship = Ash.Resource.Info.relationship(resource, name)
               dest_resource = relationship.destination
-              node_relationship = Info.node_relationship(resource, name)
+              node_relationship = ResourceInfo.node_relationship(resource, name)
 
               case node_relationship do
                 {^name, edge_label, edge_direction, destination_label} ->
                   dest_node_property_name =
-                    Keyword.get(Info.translations(dest_resource), relationship.destination_attribute)
+                    Keyword.get(ResourceInfo.translations(dest_resource), relationship.destination_attribute)
 
                   dest_id_value = Map.get(relationship_source_attributes, source_attribute)
 
@@ -808,7 +808,7 @@ defmodule AshNeo4j.DataLayer do
                     acc
                   else
                     dest_id = %{dest_node_property_name => dest_id_value}
-                    exclusive = Info.destination_exclusive?(resource, name)
+                    exclusive = ResourceInfo.destination_exclusive?(resource, name)
                     [{destination_label, dest_id, edge_label, edge_direction, exclusive} | acc]
                   end
 
@@ -819,7 +819,7 @@ defmodule AshNeo4j.DataLayer do
           )
 
         # relate resources, potentially unrelating destination resources
-        label = Info.label(resource)
+        label = ResourceInfo.label(resource)
         id_properties = id_properties(resource, attributes)
 
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
@@ -849,7 +849,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
-    case Info.labels(resource) |> Neo4jHelper.create_node(properties) do
+    case ResourceInfo.labels(resource) |> Neo4jHelper.create_node(properties) do
       {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         {:ok, convert_node_to_resource(resource, node)}
@@ -861,7 +861,7 @@ defmodule AshNeo4j.DataLayer do
 
   defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
     primary_keys = Ash.Resource.Info.primary_key(resource)
-    translations = Info.translations(resource)
+    translations = ResourceInfo.translations(resource)
     Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translations, key, key), Map.get(map, key)} end)
   end
 
@@ -869,7 +869,7 @@ defmodule AshNeo4j.DataLayer do
        when is_atom(source_resource) and is_atom(dest_resource) and is_map(source_map) and
               is_atom(dest_relationship_name) do
     # source_relationship_name
-    source_node_relationship = Info.reverse_node_relationship(dest_resource, dest_relationship_name)
+    source_node_relationship = ResourceInfo.reverse_node_relationship(dest_resource, dest_relationship_name)
 
     if source_node_relationship != nil do
       source_relationship_name = elem(source_node_relationship, 0)
@@ -878,7 +878,7 @@ defmodule AshNeo4j.DataLayer do
 
       if value != nil do
         dest_property_name =
-          Info.convert_to_property_name(dest_resource, source_relationship.destination_attribute)
+          ResourceInfo.convert_to_property_name(dest_resource, source_relationship.destination_attribute)
           |> String.to_atom()
 
         %{dest_property_name => value}
@@ -899,7 +899,7 @@ defmodule AshNeo4j.DataLayer do
   defp remove_property_names(resource, map) when is_atom(resource) and is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(Info.translations(resource), field, nil) end)
+    |> Enum.into([], fn {field, _} -> Keyword.get(ResourceInfo.translations(resource), field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
   end
 
@@ -922,7 +922,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp dump_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    Info.translations(resource)
+    ResourceInfo.translations(resource)
     |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
       value = Map.get(attributes, key)
 

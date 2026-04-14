@@ -13,8 +13,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelPascalCase do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    module = String.to_atom(List.last(Module.split(resource)))
-    label = Verifier.get_option(dsl, [:neo4j], :label, module)
+    label = Verifier.get_persisted(dsl, :label)
 
     cond do
       label == nil ->

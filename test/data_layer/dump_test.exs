@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.DataLayer.Dump.Test do
+defmodule AshNeo4j.DataLayer.DumpTest do
   @moduledoc false
   use ExUnit.Case, async: false
   alias AshNeo4j.DataLayer.Dump

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformAddRelationshipAttributes do
+defmodule AshNeo4j.Persisters.PersistRelationshipAttributes do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
@@ -10,10 +10,6 @@ defmodule AshNeo4j.Transformers.TransformAddRelationshipAttributes do
 
   @impl true
   def transform(dsl) do
-    {:ok, add_relationship_attributes(dsl)}
-  end
-
-  defp add_relationship_attributes(dsl) do
     relationships = Verifier.get_entities(dsl, [:relationships])
 
     relationship_attributes =
@@ -21,6 +17,6 @@ defmodule AshNeo4j.Transformers.TransformAddRelationshipAttributes do
         {Map.get(relationship, :source_attribute), Map.get(relationship, :name)}
       end)
 
-    Transformer.set_option(dsl, [:neo4j], :relationship_attributes, relationship_attributes)
+    {:ok, Transformer.persist(dsl, :relationship_attributes, relationship_attributes)}
   end
 end

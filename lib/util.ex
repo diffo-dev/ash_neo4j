@@ -118,6 +118,17 @@ defmodule AshNeo4j.Util do
   end
 
   @doc """
+  Returns the reverse direction
+  """
+  def reverse(direction) when is_atom(direction) do
+    case direction do
+      :incoming -> :outgoing
+      :outgoing -> :incoming
+      _ -> nil
+    end
+  end
+
+  @doc """
   Whether the given module uses Ash.TypedStruct
 
   ## Examples

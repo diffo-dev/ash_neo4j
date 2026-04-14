@@ -7,7 +7,7 @@ defmodule AshNeo4j.QueryHelper do
   require Ash.Query
 
   alias AshNeo4j.Cypher
-  alias AshNeo4j.DataLayer.Info
+  alias AshNeo4j.Resource.Info, as: ResourceInfo
 
   @moduledoc """
   AshNeo4j DataLayer QueryHelper
@@ -35,7 +35,7 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   defp cypher(ash_query) do
-    label = Info.label(ash_query.resource)
+    label = ResourceInfo.label(ash_query.resource)
     base_match = "MATCH " <> Cypher.node(:s, [label])
 
     if ash_query.filter == nil do
@@ -58,8 +58,8 @@ defmodule AshNeo4j.QueryHelper do
       Enum.reduce(predicates, [], fn predicate, acc ->
         if Map.has_key?(predicate, :operator) do
           operator = convert_operator(predicate.operator)
-          property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-          relationship = Info.relationship(ash_query.resource, property_name)
+          property_name = ResourceInfo.convert_to_property_name(ash_query.resource, predicate.left)
+          relationship = ResourceInfo.relationship(ash_query.resource, property_name)
 
           if (operator == "IN" or operator == "=") and relationship != nil do
             [predicate | acc]
@@ -82,14 +82,14 @@ defmodule AshNeo4j.QueryHelper do
       length(relationship_predicates) == 1 ->
         predicate = hd(relationship_predicates)
         operator = convert_operator(predicate.operator)
-        property_name = Info.convert_to_property_name(ash_query.resource, predicate.left)
-        relationship_name = elem(Info.relationship(ash_query.resource, property_name), 1)
+        property_name = ResourceInfo.convert_to_property_name(ash_query.resource, predicate.left)
+        relationship_name = elem(ResourceInfo.relationship(ash_query.resource, property_name), 1)
         relationship = Ash.Resource.Info.relationship(ash_query.resource, relationship_name)
-        node_relationship = Info.node_relationship(ash_query.resource, relationship_name)
-        dest_label = Info.label(relationship.destination)
+        node_relationship = ResourceInfo.node_relationship(ash_query.resource, relationship_name)
+        dest_label = ResourceInfo.label(relationship.destination)
 
         dest_property_name =
-          Info.convert_to_property_name(relationship.destination, relationship.destination_attribute)
+          ResourceInfo.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
         param_key = "d_#{dest_property_name}"
 
@@ -122,7 +122,7 @@ defmodule AshNeo4j.QueryHelper do
       case predicate do
         %{operator: predicate_operator} ->
           operator = convert_operator(predicate_operator)
-          property_name = Info.convert_to_property_name(resource, predicate.left)
+          property_name = ResourceInfo.convert_to_property_name(resource, predicate.left)
           param_key = "#{variable}_#{property_name}_#{index}"
 
           clause =
@@ -140,7 +140,7 @@ defmodule AshNeo4j.QueryHelper do
 
         %{name: :contains} ->
           argument = hd(predicate.arguments)
-          property_name = Info.convert_to_property_name(resource, argument)
+          property_name = ResourceInfo.convert_to_property_name(resource, argument)
           value = hd(tl(predicate.arguments))
           param_key = "#{variable}_#{property_name}_#{index}"
 
@@ -167,7 +167,7 @@ defmodule AshNeo4j.QueryHelper do
   defp case_insensitive?(resource, predicate_left, predicate_right) do
     # field is ci_string
     # value is ci_string
-    Info.attribute_type(resource, predicate_left) in [Ash.Type.CiString, :ci_string] or
+    ResourceInfo.attribute_type(resource, predicate_left) in [Ash.Type.CiString, :ci_string] or
       match?(%Ash.CiString{}, predicate_right)
   end
 
@@ -180,7 +180,7 @@ defmodule AshNeo4j.QueryHelper do
         {cypher, params}
 
       _ ->
-        translations = AshNeo4j.DataLayer.Info.translations(ash_query.resource)
+        translations = ResourceInfo.translations(ash_query.resource)
 
         terms =
           Enum.map_join(ash_query.sort, ", ", fn {name, order} ->

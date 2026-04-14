@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Verifiers do
+defmodule AshNeo4j.Verifiers.Test do
   @moduledoc false
 
   use ExUnit.Case, async: false
