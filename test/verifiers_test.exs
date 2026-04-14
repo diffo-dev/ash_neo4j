@@ -273,7 +273,6 @@ defmodule AshNeo4j.Test.Verifiers do
       )
     end
 
-    @tag :verifier
     test "unsupported attribute type" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,
@@ -298,7 +297,6 @@ defmodule AshNeo4j.Test.Verifiers do
       )
     end
 
-    @tag :verifier
     test "unsupported attribute type - within array" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,
@@ -323,7 +321,6 @@ defmodule AshNeo4j.Test.Verifiers do
       )
     end
 
-    @tag :verifier
     test "unsupported attribute type - within typed struct" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,

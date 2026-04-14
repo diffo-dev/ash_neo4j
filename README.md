@@ -136,7 +136,7 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 * edge direction must be in [:incoming, :outgoing]
 * relate: relationship_name must match the name of a relationship
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
-* attribute type not supported
+* attribute type requires unsupported term
 
 ## Installing Neo4j and Configuring Bolty
 
