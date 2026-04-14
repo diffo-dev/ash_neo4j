@@ -251,7 +251,7 @@ defmodule AshNeo4j.DataLayer.Info do
   Converts an attribute name to a node property name string, translating if necessary
   The attribute name can be an Ash.Query.Ref or atom
   """
-  @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
+  @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref)
       when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
@@ -263,6 +263,23 @@ defmodule AshNeo4j.DataLayer.Info do
     translations(resource)
     |> Keyword.get(attribute_name, attribute_name)
     |> to_string()
+  end
+
+  @doc """
+  Returns the Ash.Type of the attribute from the name
+  """
+  @spec attribute_type(Ash.Resource.t(), atom()) :: Ash.Type.t() | nil
+  def attribute_type(resource, ash_query_ref) when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
+    attribute_name = Ash.Query.Ref.name(ash_query_ref)
+    attribute_type(resource, attribute_name)
+  end
+
+  @spec attribute_type(Ash.Resource.t(), atom()) :: Ash.Type.t() | nil
+  def attribute_type(resource, attribute_name) when is_atom(resource) and is_atom(attribute_name) do
+    case Ash.Resource.Info.attribute(resource, attribute_name) do
+      nil -> nil
+      attribute -> attribute.type
+    end
   end
 
   @doc """

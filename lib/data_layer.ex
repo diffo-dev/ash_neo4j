@@ -12,6 +12,7 @@ defmodule AshNeo4j.DataLayer do
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.DataLayer.Cast
+  alias AshNeo4j.DataLayer.Dump
 
   @filter_stream_size 100
 
@@ -82,14 +83,13 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def filter(query, filter, _resource) do
-    # TODO check filter involves node properties
     {:ok, %{query | filter: filter}}
   end
 
   @impl true
   def sort(query, sort, _resource) do
-    # TODO check sort involves node properties
-    {:ok, %{query | sort: sort}}
+    deduplicated = Enum.uniq_by(sort, fn {field, _order} -> field end)
+    {:ok, %{query | sort: deduplicated}}
   end
 
   @doc false
@@ -110,7 +110,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Verifiers.VerifyRelate,
       AshNeo4j.Verifiers.VerifyGuard,
       AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
-      AshNeo4j.Verifiers.VerifyEnrichable
+      AshNeo4j.Verifiers.VerifyEnrichable,
+      AshNeo4j.Verifiers.VerifyAttributeType
     ],
     transformers: [
       AshNeo4j.Transformers.TransformEnsureLabelled,
@@ -245,14 +246,14 @@ defmodule AshNeo4j.DataLayer do
     subject_id = id_properties(resource, changeset.data)
     subject_label = Info.label(resource)
 
-    update_properties = properties(resource, changeset.attributes)
+    update_properties = dump_properties(resource, changeset.attributes)
 
-    remove_properties = remove_properties(resource, changeset.attributes)
+    remove_property_names = remove_property_names(resource, changeset.attributes)
 
     property_update_result =
-      if !Enum.empty?(update_properties) or !Enum.empty?(remove_properties) do
+      if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
         # update properties
-        case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_properties) do
+        case subject_label |> Neo4jHelper.update_node(subject_id, update_properties, remove_property_names) do
           {:ok, %Bolty.Response{results: []}} ->
             {:error, "no result to update node"}
 
@@ -716,7 +717,7 @@ defmodule AshNeo4j.DataLayer do
     fields =
       Enum.into(Info.translations(resource), enriched, fn {resource_field, node_field} ->
         property_value = Map.get(node.properties, to_string(node_field))
-        {resource_field, Cast.cast(resource, resource_field, property_value)}
+        {resource_field, cast_attribute(resource, resource_field, property_value)}
       end)
 
     # nil belongs_to if destination_attribute is nil
@@ -751,7 +752,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    properties = properties(resource, attributes)
+    properties = dump_properties(resource, attributes)
 
     case create_node(resource, properties) do
       {:ok, source_resource} ->
@@ -875,16 +876,52 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp properties(resource, map) when is_atom(resource) and is_map(map) do
-    Info.translations(resource)
-    |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
-    |> Map.reject(fn {_k, v} -> v == nil end)
-  end
+  # defp properties(resource, map) when is_atom(resource) and is_map(map) do
+  #  Info.translations(resource)
+  #  |> Enum.into(%{}, fn {key, translated_key} -> {translated_key, Map.get(map, key)} end)
+  #  |> Map.reject(fn {_k, v} -> v == nil end)
+  # end
 
-  defp remove_properties(resource, map) when is_atom(resource) and is_map(map) do
+  defp remove_property_names(resource, map) when is_atom(resource) and is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
     |> Enum.into([], fn {field, _} -> Keyword.get(Info.translations(resource), field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
+  end
+
+  def cast_attribute(_resource, _name, nil) do
+    nil
+  end
+
+  def cast_attribute(resource, name, value) when is_atom(resource) and is_atom(name) do
+    attribute = Ash.Resource.Info.attribute(resource, name)
+
+    if attribute == nil do
+      Logger.warning(
+        "AshNeo4j.DataLayer: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value"
+      )
+
+      value
+    else
+      Cast.cast(attribute.type, value, attribute.constraints)
+    end
+  end
+
+  defp dump_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
+    Info.translations(resource)
+    |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
+      value = Map.get(attributes, key)
+
+      if value != nil do
+        attribute = Ash.Resource.Info.attribute(resource, key)
+
+        attribute_type =
+          Ash.Type.get_type!(attribute.type)
+
+        Map.put(acc, translated_key, Dump.dump(attribute_type, value, attribute.constraints))
+      else
+        acc
+      end
+    end)
   end
 end

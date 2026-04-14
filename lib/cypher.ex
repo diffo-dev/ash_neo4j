@@ -5,72 +5,16 @@
 defmodule AshNeo4j.Cypher do
   @moduledoc """
   AshNeo4j Cypher
+  Functions for converting Elixir data structures to Cypher query components and running Cypher queries against a Neo4j database.
+  Ideally has no specific knowledge of Ash
+
   """
 
   require Logger
 
+  @spec remove_properties(atom(), maybe_improper_list()) :: binary()
   @doc """
-  Converts a map to a cypher properties string.
-  The map is converted to a string in the format `{key1: value1, key2: value2}`.
-
-  ## Examples
-  ```
-  iex> AshNeo4j.Cypher.properties(%{name: "Bill Nighy", born: 1949, bafta_winner: true})
-  "{name: 'Bill Nighy', born: 1949, bafta_winner: true}"
-  ```
-  """
-  def properties(map) when is_map(map) do
-    properties =
-      map
-      |> Enum.map_join(", ", &property(&1))
-
-    "{#{properties}}"
-  end
-
-  defp property(property) when is_tuple(property) do
-    {k, v} = property
-    "#{k}: " <> value(v, "'")
-  end
-
-  defp value(v, wrap \\ nil) do
-    case v do
-      nil -> "null"
-      _ when is_boolean(v) -> "#{v}"
-      # atom must be after boolean
-      _ when is_atom(v) -> wrap(":#{v}", wrap)
-      _ when is_integer(v) -> "#{v}"
-      _ when is_float(v) -> "#{v}"
-      _ when is_list(v) -> "[" <> Enum.map_join(v, ", ", &value(&1, wrap)) <> "]"
-      _ when is_function(v) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, Date) -> "date(" <> wrap(Date.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, DateTime) -> "datetime(" <> wrap(DateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Decimal) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, NaiveDateTime) -> "localdatetime(" <> wrap(NaiveDateTime.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Regex) -> wrap("#{inspect(v)}", wrap)
-      _ when is_struct(v, Time) -> "time(" <> wrap(Time.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, Ash.CiString) -> wrap(Ash.CiString.value(v), wrap)
-      _ when is_struct(v, Duration) -> "duration(" <> wrap(Duration.to_iso8601(v), wrap) <> ")"
-      _ when is_struct(v, MapSet) -> wrap("#{inspect(v)}", wrap)
-      # following assumes embedded structs will implement to_string protocol
-      _ when is_struct(v) -> wrap("#{to_string(v)}", wrap)
-      # map must be after struct
-      _ when is_map(v) -> wrap("#{inspect(v)}", wrap)
-      _ when is_tuple(v) -> wrap("{" <> Enum.map_join(Tuple.to_list(v), ", ", &value(&1)) <> "}", wrap)
-      # no specific property value format, requires String.Chars protocol
-      _ -> wrap("#{v}", wrap)
-    end
-  end
-
-  defp wrap(v, nil) when is_nil(nil) do
-    v
-  end
-
-  defp wrap(v, wrap) when is_bitstring(wrap) do
-    wrap <> v <> wrap
-  end
-
-  @doc """
-  Converts a list into a remove properties string.
+  Converts a list of property names into a remove properties string.
   The list is converted to a string in the format `n.key1, n.key2`.
 
   ## Examples
@@ -79,32 +23,36 @@ defmodule AshNeo4j.Cypher do
   "n.born, n.bafta_winner"
   ```
   """
-  def remove_properties(label, list) when is_atom(label) and is_list(list) do
-    list
-    |> Enum.map_join(", ", fn property -> "#{label}.#{property}" end)
+  def remove_properties(label, names) when is_atom(label) and is_list(names) do
+    names
+    |> Enum.map_join(", ", fn name -> "#{label}.#{name}" end)
   end
 
   @doc """
-  Converts a node variable, label and optional properties to cypher expression
+  Converts a node variable, label, predicates and operator to cypher expression
 
   ## Examples
   ```
-  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[Bill Nighy]")
-  "s.name in [Bill Nighy]"
-  iex> AshNeo4j.Cypher.expression(:s, "name", "in", "[]")
-  "s.name IS NULL"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "IN", "[$s_name_0]")
+  "s.name IN [$s_name_0]"
   iex> AshNeo4j.Cypher.expression(:s, "name", "is_nil", true)
   "s.name IS NULL"
   iex> AshNeo4j.Cypher.expression(:s, "name", "is_nil", false)
   "s.name IS NOT NULL"
-  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "access")
-  "s.name CONTAINS 'access'"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "$s_name_0")
+  "s.name CONTAINS $s_name_0"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "contains", "$s_name_0", case_insensitive?: true)
+  "toLower(s.name) CONTAINS toLower($s_name_0)"
+  iex> AshNeo4j.Cypher.expression(:s, "name", "=", "$s_name_0", case_insensitive?: true)
+  "toLower(s.name) = toLower($s_name_0)"
   ```
   """
-  def expression(variable, left, operator, right)
+  def expression(variable, left, operator, right, opts \\ [])
       when is_atom(variable) and is_bitstring(left) and is_bitstring(operator) do
+    case_insensitive? = Keyword.get(opts, :case_insensitive?, false)
+
     cond do
-      operator == "in" && right == "[]" ->
+      operator == "IN" && right == "[]" ->
         "#{variable}.#{left} IS NULL"
 
       operator == "is_nil" && right ->
@@ -113,33 +61,94 @@ defmodule AshNeo4j.Cypher do
       operator == "is_nil" && !right ->
         "#{variable}.#{left} IS NOT NULL"
 
-      operator == "contains" ->
-        "#{variable}.#{left} CONTAINS '#{right}'"
+      case_insensitive? ->
+        "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
 
       true ->
-        "#{variable}.#{left} #{operator} #{right}"
+        "#{variable}.#{left} #{String.upcase(operator)} #{right}"
     end
   end
 
   @doc """
-  Converts a node variable, labels and optional properties to cypher node.
+  Converts a node variable and labels to basic cypher node expression.
 
   ## Examples
   ```
   iex> AshNeo4j.Cypher.node(:s, [:Actor])
   "(s:Actor)"
-  iex> AshNeo4j.Cypher.node(:s, [:Cinema, :Actor], %{name: "Bill Nighy"})
-  "(s:Cinema:Actor {name: 'Bill Nighy'})"
   ```
   """
-  def node(variable, labels, properties \\ %{}) when is_atom(variable) and is_list(labels) and is_map(properties) do
-    label_string = Enum.join(labels, ":")
+  def node(variable, labels) when is_atom(variable) and is_list(labels) do
+    "(#{variable}:#{Enum.join(labels, ":")})"
+  end
 
+  @doc """
+  Converts a node variable, labels and optional property map to cypher properties string and variable prefixed parameters map.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.parameterized_node(:s, [:Actor])
+  {"(s:Actor)", %{}}
+  iex> AshNeo4j.Cypher.parameterized_node(:s, [:Cinema, :Actor], %{name: "Bill Nighy"})
+  {"(s:Cinema:Actor {name: $s_name})", %{"s_name" =>"Bill Nighy"}}
+  ```
+   Note: the properties map is converted to parameter names by prefixing the keys with `$<variable>`, and the original values are returned in a separate map for use as query parameters.
+  """
+  def parameterized_node(variable, labels, properties \\ %{})
+      when is_atom(variable) and is_list(labels) and is_map(properties) do
     if properties == %{} do
-      "(#{variable}:#{label_string})"
+      {node(variable, labels), %{}}
     else
-      "(#{variable}:#{label_string} " <> properties(properties) <> ")"
+      {property_cypher, parameters} = parameterized_properties(variable, properties)
+      label_string = Enum.join(labels, ":")
+      {"(#{variable}:#{label_string} #{property_cypher})", parameters}
     end
+  end
+
+  @doc """
+  Converts a node variable and optional property map to cypher properties string and variable prefixed parameters map.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.parameterized_properties(:s)
+  {"{}", %{}}
+  iex> AshNeo4j.Cypher.parameterized_properties(:s, %{name: "Bill Nighy"})
+  {"{name: $s_name}", %{"s_name" =>"Bill Nighy"}}
+  ```
+  """
+  def parameterized_properties(variable, properties \\ %{}) when is_atom(variable) and is_map(properties) do
+    parameterized_properties =
+      properties
+      |> Enum.map_join(", ", fn {k, _v} -> "#{k}: $#{variable}_#{k}" end)
+
+    parameters = build_parameters(variable, properties)
+
+    {"{#{parameterized_properties}}", parameters}
+  end
+
+  @doc """
+  Converts a node variable and optional property map to cypher WHERE conditions and variable prefixed parameters map.
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.parameterized_conditions(:n, %{name: "Bill Nighy"})
+  {"n.name = $n_name", %{"n_name" => "Bill Nighy"}}
+  iex> AshNeo4j.Cypher.parameterized_conditions(:n, %{name: "Bill Nighy", age: 72})
+  {"n.name = $n_name AND n.age = $n_age", %{"n_name" => "Bill Nighy", "n_age" => 72}}
+  ```
+  """
+  def parameterized_conditions(variable, properties \\ %{}) when is_atom(variable) and is_map(properties) do
+    conditions =
+      Enum.map_join(properties, " AND ", fn {k, _v} ->
+        "#{variable}.#{k} = $#{variable}_#{k}"
+      end)
+
+    parameters = build_parameters(variable, properties)
+
+    {conditions, parameters}
+  end
+
+  defp build_parameters(variable, properties) do
+    Map.new(properties, fn {k, v} -> {"#{variable}_#{k}", v} end)
   end
 
   @spec relationship(atom(), atom()) :: <<_::32, _::_*8>>
@@ -209,14 +218,19 @@ defmodule AshNeo4j.Cypher do
   iex> {result, _} = AshNeo4j.Cypher.run(cypher)
   iex> result
   :ok
+  iex> cypher = "MATCH (n:Actor {name: $name}) RETURN n"
+  iex> params = %{name: "Bill Nighy"}
+  iex> {result, _} = AshNeo4j.Cypher.run(cypher, params)
+  iex> result
+  :ok
   ```
   """
-  def run(cypher) when is_bitstring(cypher) do
+  def run(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("""
-    AshNeo4.Cypher: run(#{cypher})
+    AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
     """)
 
-    bolty_result = Bolty.query(Bolt, cypher)
+    bolty_result = Bolty.query(Bolt, cypher, params)
 
     if elem(bolty_result, 0) == :ok do
       Logger.debug("""
@@ -227,10 +241,10 @@ defmodule AshNeo4j.Cypher do
     bolty_result
   end
 
-  def run_expecting_deletions(cypher) when is_bitstring(cypher) do
+  def run_expecting_deletions(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
 
-    bolty_result = Bolty.query(Bolt, cypher)
+    bolty_result = Bolty.query(Bolt, cypher, params)
 
     if elem(bolty_result, 0) == :ok do
       response = elem(bolty_result, 1)

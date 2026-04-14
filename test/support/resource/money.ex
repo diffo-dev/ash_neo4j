@@ -20,10 +20,4 @@ defmodule AshNeo4j.Test.Resource.Money do
       constraints one_of: [:aud, :eur, :sek, :usd]
     end
   end
-
-  defimpl String.Chars do
-    def to_string(struct) do
-      inspect(Ash.Test.strip_metadata(struct)) |> String.replace(", __meta__: #Ecto.Schema.Metadata<>", "")
-    end
-  end
 end

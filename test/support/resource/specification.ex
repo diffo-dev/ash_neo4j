@@ -29,17 +29,28 @@ defmodule AshNeo4j.Test.Resource.Specification do
       get? true
 
       argument :query, :ci_string do
-        description "Return only specifications with names including the given value."
+        description "Return only specifications with names matching the given value (case insensitive)."
       end
 
       prepare build(limit: 1, sort: [major_version: :desc])
+      filter expr(name == ^arg(:query))
+    end
+
+    read :find do
+      description "find specifications with names including the given value"
+
+      argument :query, :ci_string do
+        description "Return only specifications with names including the given value (case insensitive)."
+      end
+
+      prepare build(sort: [name: :asc, major_version: :desc])
       filter expr(contains(name, ^arg(:query)))
     end
   end
 
   attributes do
     uuid_primary_key :id, writable?: true
-    attribute :href, :string, public?: true
+    attribute :href, :ci_string, public?: true, constraints: [casing: :lower]
     attribute :name, :string, public?: true
     attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
     attribute :major_version, :integer, default: 1, public?: true, source: :versionMajor
