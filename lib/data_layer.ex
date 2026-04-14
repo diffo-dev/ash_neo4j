@@ -26,18 +26,30 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, :sort), do: true
   def can?(_, :filter), do: true
   def can?(_, :limit), do: true
-  # def can?(_, :bulk_create), do: true
   def can?(_, :offset), do: true
   def can?(_, :boolean_filter), do: true
-  # def can?(_, :transact), do: true
-  def can?(_, {:filter_expr, _}), do: true
-  def can?(_, :nested_expressions), do: true
-  # def can?(_, :expression_calculation), do: true
-  # def can?(_, :expression_calculation_sort), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, {:join, _}), do: true
   def can?(_, {:lateral_join, _}), do: true
   def can?(_, {:filter_relationship, _}), do: true
+  def can?(_, :nested_expressions), do: true
+
+  # Operators with actual Cypher equivalents in convert_operator/1
+  def can?(_, {:filter_expr, %Ash.Query.Operator.Eq{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.NotEq{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.In{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.LessThanOrEqual{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.LessThan{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.GreaterThan{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.GreaterThanOrEqual{}}), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Operator.IsNil{}}), do: true
+
+  # contains — handled in predicates/2 via the %{name: :contains} branch
+  def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: true
+
+  # Everything else — NOT natively translated, runtime filtered
+  def can?(_, {:filter_expr, _}), do: false
+
   def can?(_, _), do: false
 
   @neo4j %Spark.Dsl.Section{

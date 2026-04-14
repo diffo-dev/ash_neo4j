@@ -52,7 +52,7 @@ defmodule AshNeo4j.Test.Resource.Specification do
     uuid_primary_key :id, writable?: true
     attribute :href, :ci_string, public?: true, constraints: [casing: :lower]
     attribute :name, :string, public?: true
-    attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
+    attribute :type, :atom, constraints: [one_of: [:service, :resource]], default: :service, public?: true
     attribute :major_version, :integer, default: 1, public?: true, source: :versionMajor
     attribute :minor_version, :integer, default: 0, public?: true, source: :versionMinor
     attribute :patch_version, :integer, default: 0, public?: true, source: :versionPatch
@@ -60,13 +60,17 @@ defmodule AshNeo4j.Test.Resource.Specification do
   end
 
   calculations do
-    calculate :version, :string, expr("v" <> major_version <> "." <> minor_version <> "." <> patch_version)
+    calculate :version,
+              :string,
+              AshNeo4j.Test.Resource.Calculation.Version do
+      description "the version string e.g. v1.0.1"
+    end
   end
 
   preparations do
     prepare build(
-              load: [:version],
-              sort: [name: :asc, major_version: :desc]
+              sort: [name: :asc, major_version: :desc],
+              load: [:href, :type, :major_version, :minor_version, :patch_version, :tmf_version]
             )
   end
 end
