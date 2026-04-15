@@ -112,8 +112,6 @@ defmodule AshNeo4j.DataLayer.CastTest do
   end
 
   describe "cast ash json types" do
-    @tag bugged:
-           "breed isn't being cast_stored to an atom - Ash defect fixed in https://github.com/ash-project/ash/pull/2673"
     test "keyword" do
       value_changed(
         DogKeyword,
