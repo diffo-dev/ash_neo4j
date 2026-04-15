@@ -26,17 +26,17 @@ defmodule AshNeo4j.Resource.InfoTest do
 
   describe "domain_label" do
     test "domain label is derived from domain module short name" do
-      assert ResourceInfo.domain_label(Specification) == :Srm
-      assert ResourceInfo.domain_label(Service) == :Srm
-      assert ResourceInfo.domain_label(Event) == :Srm
+      assert ResourceInfo.domain_label(Specification) == :SRM
+      assert ResourceInfo.domain_label(Service) == :SRM
+      assert ResourceInfo.domain_label(Event) == :SRM
     end
   end
 
   describe "labels" do
     test "returns domain label then resource label" do
-      assert ResourceInfo.labels(Specification) == [:Srm, :Specification]
-      assert ResourceInfo.labels(Service) == [:Srm, :Service]
-      assert ResourceInfo.labels(Event) == [:Srm, :Event]
+      assert ResourceInfo.labels(Specification) == [:SRM, :Specification]
+      assert ResourceInfo.labels(Service) == [:SRM, :Service]
+      assert ResourceInfo.labels(Event) == [:SRM, :Event]
     end
   end
 
@@ -177,22 +177,22 @@ defmodule AshNeo4j.Resource.InfoTest do
 
   describe "node_relationship/4 - by edge label, direction, destination labels list" do
     test "matches when destination label is in list" do
-      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:Srm, :Service]) ==
+      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:SRM, :Service]) ==
                {:service, :RAISED, :incoming, :Service}
     end
 
     test "strips domain label from list before matching" do
-      # :Srm is domain label and must be excluded before lookup
-      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:Srm, :Service]) ==
+      # :SRM is domain label and must be excluded before lookup
+      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:SRM, :Service]) ==
                ResourceInfo.node_relationship(Event, :RAISED, :incoming, :Service)
     end
 
     test "returns nil when only domain label remains after stripping" do
-      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:Srm]) == nil
+      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:SRM]) == nil
     end
 
     test "returns nil when no label in list matches" do
-      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:Srm, :Resource]) == nil
+      assert ResourceInfo.node_relationship(Event, :RAISED, :incoming, [:SRM, :Resource]) == nil
     end
   end
 
@@ -225,7 +225,7 @@ defmodule AshNeo4j.Resource.InfoTest do
     end
 
     test "returns Ash relationship struct matching edge label, direction, destination list" do
-      rel = ResourceInfo.relationship(Event, :RAISED, :incoming, [:Srm, :Service])
+      rel = ResourceInfo.relationship(Event, :RAISED, :incoming, [:SRM, :Service])
       assert rel != nil
       assert rel.name == :service
       assert rel.destination == AshNeo4j.Test.Resource.Service

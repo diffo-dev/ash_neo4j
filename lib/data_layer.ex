@@ -118,19 +118,19 @@ defmodule AshNeo4j.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: @sections,
-    verifiers: [
-      AshNeo4j.Verifiers.VerifyLabelPascalCase,
-      AshNeo4j.Verifiers.VerifyRelate,
-      AshNeo4j.Verifiers.VerifyGuard,
-      AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
-      AshNeo4j.Verifiers.VerifyEnrichable,
-      AshNeo4j.Verifiers.VerifyAttributeType
-    ],
     persisters: [
       AshNeo4j.Persisters.PersistLabels,
       AshNeo4j.Persisters.PersistTranslations,
       AshNeo4j.Persisters.PersistRelationshipAttributes,
       AshNeo4j.Persisters.PersistRelate
+    ],
+    verifiers: [
+      AshNeo4j.Verifiers.VerifyLabelsPascalCase,
+      AshNeo4j.Verifiers.VerifyRelate,
+      AshNeo4j.Verifiers.VerifyGuard,
+      AshNeo4j.Verifiers.VerifyPropertiesCamelCase,
+      AshNeo4j.Verifiers.VerifyEnrichable,
+      AshNeo4j.Verifiers.VerifyAttributeType
     ]
 
   defmodule Query do
