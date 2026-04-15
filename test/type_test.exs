@@ -55,7 +55,7 @@ defmodule AshNeo4j.TypeTest do
     float: 1.23456789,
     function: &Neo4jHelper.create_node/2,
     integer: 1,
-    # keyword: [name: "Henry", age: 8, breed: :groodle] # keyword is bugged pending ash fix
+    keyword: [name: "Henry", age: 8, breed: :groodle],
     map: %{name: "Henry", age: 8, breed: :groodle},
     module: AshNeo4j.DataLayer,
     naive_datetime: ~N[2025-05-11 07:45:41.000000],
@@ -101,7 +101,7 @@ defmodule AshNeo4j.TypeTest do
     "float" => 1.23456789,
     "function" => "&AshNeo4j.Neo4jHelper.create_node/2",
     "integer" => 1,
-    # "keyword" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}", # keyword is bugged pending ash fix
+    "keyword" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "map" => "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}",
     "module" => "Elixir.AshNeo4j.DataLayer",
     "naiveDatetime" => ~N[2025-05-11 07:45:41.000000],
