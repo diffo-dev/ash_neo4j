@@ -12,10 +12,10 @@ defmodule AshNeo4j.Persisters.PersistLabels do
   @impl true
   def transform(dsl) do
     domain_module = Verifier.get_persisted(dsl, :domain, :Domain)
-    domain_label = short_name(domain_module) |> to_pascal_case()
+    domain_label = short_name(domain_module)
 
     resource_module = Verifier.get_persisted(dsl, :module)
-    default_resource_label = short_name(resource_module) |> to_pascal_case()
+    default_resource_label = short_name(resource_module)
     resource_label = Transformer.get_option(dsl, [:neo4j], :label, default_resource_label)
 
     {:ok,

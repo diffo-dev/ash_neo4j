@@ -9,10 +9,10 @@ defmodule AshNeo4j.Verifiers.Test do
   alias AshNeo4j.Test.Util
 
   describe "Verifiers tests" do
-    test "label: invalid label warns DslError on compilation" do
+    test "label: invalid resource label warns DslError on compilation" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,
-        "label: neo4j label must be PascalCase",
+        "neo4j: neo4j labels must be PascalCase",
         fn ->
           defmodule InvalidLabel do
             use Ash.Resource,
@@ -20,8 +20,46 @@ defmodule AshNeo4j.Verifiers.Test do
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
-              label :comment
+              label :External_Identifier
             end
+
+            attributes do
+              uuid_primary_key :id
+              attribute :title, :string, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "label: invalid resource warns DslError on compilation" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "neo4j: neo4j labels must be PascalCase",
+        fn ->
+          defmodule Invalid_Resource do
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            attributes do
+              uuid_primary_key :id
+              attribute :title, :string, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "label: invalid domain warns DslError on compilation" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "neo4j: neo4j labels must be PascalCase",
+        fn ->
+          defmodule InvalidDomainResource do
+            use Ash.Resource,
+              domain: AshNeo4j.Test.Invalid_Domain,
+              data_layer: AshNeo4j.DataLayer
 
             attributes do
               uuid_primary_key :id
