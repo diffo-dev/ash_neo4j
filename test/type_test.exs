@@ -290,6 +290,25 @@ defmodule AshNeo4j.TypeTest do
       assert is_integer(type.__metadata__.node_id)
     end
 
+    test "type node is created with ash and nils are suppressed in json blobs" do
+      {:ok, type} =
+        Type
+        |> Ash.Changeset.for_create(:create, %{string: "Hello", typed_struct: %DogTypedStruct{name: "Henry", age: 8}})
+        |> Ash.create()
+
+      {:ok, read_type} = Ash.get(Type, type.uuid)
+      assert read_type.typed_struct == %DogTypedStruct{name: "Henry", age: 8}
+
+      # check typed struct encoding, nil should be suppressed, type should be erased, fields should be sorted alphabetically
+      assert {:ok, %{records: records}} = Neo4jHelper.read_nodes(:Type, %{string: "Hello"})
+      assert length(records) == 1
+      node = records |> List.first() |> List.first()
+
+      %{"typedStruct" => typed_struct} = node.properties
+
+      assert typed_struct == ~s({"age":8,"name":"Henry"})
+    end
+
     test "type node can be created then read with ash" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, @type_attributes) |> Ash.create()
       read_type = Ash.read_one!(Type)
