@@ -256,11 +256,12 @@ defmodule AshNeo4j.DataLayer.CastTest do
     end
 
     test "cast - module isn't a known Ash.Type" do
-      assert {:error, _} = Cast.cast(
-        AshNeo4j.DataLayer,
-        ~s({"type":"AshNeo4j.DataLayer","value":{"handle":"Henry"}}),
-        []
-      )
+      assert {:error, _} =
+               Cast.cast(
+                 AshNeo4j.DataLayer,
+                 ~s({"type":"AshNeo4j.DataLayer","value":{"handle":"Henry"}}),
+                 []
+               )
     end
   end
 

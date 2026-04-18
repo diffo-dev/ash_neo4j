@@ -186,7 +186,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. Neo4j doesn't store the timezone, just the offset so timezone information is lost.
 
-Struct is supported, however must implement Ash.Type. Arrays are supported.
+Struct is supported, however must implement Ash.Type. Ash arrays are supported.
 
 Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 

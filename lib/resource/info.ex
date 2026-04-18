@@ -230,11 +230,10 @@ defmodule AshNeo4j.Resource.Info do
 
   @doc """
   Converts an attribute name to a node property name string, translating if necessary
-  The attribute name can be an Ash.Query.Ref or atom
   """
   @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref)
-      when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
+     when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
     convert_to_property_name(resource, attribute_name)
   end

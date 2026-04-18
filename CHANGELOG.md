@@ -204,3 +204,18 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 ### Fixes
 
 * fix domain label incorrect
+
+## [v0.3.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.2.15...v0.3.0) (2026-04-18)
+
+This release changes the storage type for most types. Ash.Type dump_to_native/cast_stored are used where possible.T
+String.Chars is no longer required and JSON blobs/Base64 are employed. Native Neo4j types are used except for datetime, instead we use ISO8601 strings to work around Neo4j 5.x incompatibility. There is no data migration supported.
+
+### What's Changed
+* 196 remove need for structs to implement stringchars by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/197
+* reduced advertised capability, fixed calculations by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/198
+* refactored transformers as persisters, split DataLayer and Resource Info by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/201
+* updated deps and reinstated keyword tests by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/204
+* fixed persister and improved verifier to verify all labels by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/205
+* added encoding test and fixed json_encode for map by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/207
+* added defensive casting, returning error tuple by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/209
+* expression calculations in memory by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/210
