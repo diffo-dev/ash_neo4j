@@ -173,7 +173,9 @@ defmodule AshNeo4j.Util do
 
   defp to_json_safe(map) when is_map(map) and not is_struct(map) do
     map
-    |> Enum.map(fn {k, v} -> {to_string(k), to_json_safe(v)} end)
+    |> Enum.reduce([], fn {k, v}, acc ->
+      if is_nil(v), do: acc, else: [{to_string(k), to_json_safe(v)} | acc]
+    end)
     |> Enum.sort_by(fn {k, _} -> k end)
     |> Jason.OrderedObject.new()
   end
