@@ -75,11 +75,11 @@ defmodule AshNeo4j.DataLayer.Cast do
           {:ok, Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))}
 
         {:error, _} ->
-          {:error, "AshNeo4j.DataLayer: function module #{inspect(module)} is not loaded"}
+          {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Function: module cannot be loaded"}
       end
     rescue
       e ->
-        {:error, "AshNeo4j.DataLayer: cannot cast function #{inspect(value)}: #{Exception.message(e)}"}
+        {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Function: #{Exception.message(e)}"}
     end
   end
 
@@ -89,10 +89,10 @@ defmodule AshNeo4j.DataLayer.Cast do
 
       case Code.ensure_loaded(module) do
         {:module, _} -> {:ok, module}
-        {:error, _} -> {:error, "AshNeo4j.DataLayer: module #{inspect(value)} is not loaded"}
+        {:error, _} -> {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Module: module cannot be loaded"}
       end
     rescue
-      _ -> {:error, "AshNeo4j.DataLayer: module #{inspect(value)} is not a known atom"}
+      _ -> {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Module: not a known atom"}
     end
   end
 
@@ -110,7 +110,7 @@ defmodule AshNeo4j.DataLayer.Cast do
       end
     rescue
       e ->
-        {:error, "AshNeo4j.DataLayer: exception casting #{inspect(value)} as #{inspect(type)}: #{Exception.message(e)}"}
+        {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as #{inspect(type)}: #{Exception.message(e)}"}
     end
   end
 end

@@ -48,8 +48,10 @@ defmodule AshNeo4j.DataLayer do
   # contains — handled in predicates/2 via the %{name: :contains} branch
   def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: true
 
-  # Everything else — NOT natively translated, runtime filtered
-  def can?(_, {:filter_expr, _}), do: false
+  # All other filter expressions are accepted so Ash can hydrate and then evaluate
+  # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
+  # back to TRUE for unrecognised predicates; filter_stream corrects the results.
+  def can?(_, {:filter_expr, _}), do: true
 
   def can?(_, _), do: false
 
