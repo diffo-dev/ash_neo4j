@@ -241,7 +241,7 @@ defmodule AshNeo4j.DataLayer.CastTest do
                  []
                )
 
-      assert reason =~ "not a known atom"
+      assert reason =~ "cannot cast"
     end
 
     test "cast - function module not loaded returns error" do
@@ -252,7 +252,7 @@ defmodule AshNeo4j.DataLayer.CastTest do
                  []
                )
 
-      assert reason =~ "is not loaded"
+      assert reason =~ "cannot cast"
     end
 
     test "cast - module isn't a known Ash.Type" do
