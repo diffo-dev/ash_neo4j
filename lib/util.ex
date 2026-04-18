@@ -189,4 +189,18 @@ defmodule AshNeo4j.Util do
   end
 
   defp to_json_safe(value), do: value
+
+  def base64_decode(value) do
+    case Base.decode64(value) do
+      {:ok, decoded} -> {:ok, decoded}
+      _ -> {:error, "AshNeo4j.DataLayer: cannot decode Base64 value #{inspect(value)}"}
+    end
+  end
+
+  def json_decode(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} -> {:ok, decoded}
+      {:error, reason} -> {:error, "AshNeo4j.DataLayer: cannot decode JSON value #{inspect(value)}: #{inspect(reason)}"}
+    end
+  end
 end

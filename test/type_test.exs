@@ -316,6 +316,26 @@ defmodule AshNeo4j.TypeTest do
     end
   end
 
+  describe "defensive tests" do
+    test "cast function - module not loaded returns error" do
+      Neo4jHelper.create_node([:Type], %{
+        "uuid" => Ash.UUID.generate(),
+        "function" => "&NonExistent.Module.my_fun/2"
+      })
+
+      assert {:error, _} = Ash.read_one(Type)
+    end
+
+    test "cast module - module not loaded returns error" do
+      Neo4jHelper.create_node([:Type], %{
+        "uuid" => Ash.UUID.generate(),
+        "module" => "Elixir.NonExistent.Module"
+      })
+
+      assert {:error, _} = Ash.read_one(Type)
+    end
+  end
+
   describe "Ash Destroy Type tests" do
     test "type can be destroyed using ash" do
       {:ok, type} = Type |> Ash.Changeset.for_create(:create, %{}) |> Ash.create()

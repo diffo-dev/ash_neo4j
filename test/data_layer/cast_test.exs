@@ -226,24 +226,49 @@ defmodule AshNeo4j.DataLayer.CastTest do
 
   describe "errors" do
     test "not an Ash.Type" do
-      raises(Ash.Resource, "fred")
+      assert {:error, _reason} = Cast.cast(Ash.Resource, "fred")
     end
 
     test "not valid json" do
-      raises(Ash.Type.Map, "{name:\"Henry\"")
+      assert {:error, _reason} = Cast.cast(Ash.Type.Map, "{name:\"Henry\"")
+    end
+
+    test "cast - module not loaded returns error" do
+      assert {:error, reason} =
+               AshNeo4j.DataLayer.Cast.cast(
+                 Ash.Type.Module,
+                 "Elixir.NonExistent.Module.ThatNeverExisted",
+                 []
+               )
+
+      assert reason =~ "not a known atom"
+    end
+
+    test "cast - function module not loaded returns error" do
+      assert {:error, reason} =
+               AshNeo4j.DataLayer.Cast.cast(
+                 Ash.Type.Function,
+                 "&NonExistent.Module.ThatNeverExisted.fun/1",
+                 []
+               )
+
+      assert reason =~ "is not loaded"
+    end
+
+    test "cast - module isn't a known Ash.Type" do
+      assert {:error, _} = Cast.cast(
+        AshNeo4j.DataLayer,
+        ~s({"type":"AshNeo4j.DataLayer","value":{"handle":"Henry"}}),
+        []
+      )
     end
   end
 
-  defp raises(type, value, constraints \\ []) do
-    assert_raise RuntimeError, fn -> Cast.cast(type, value, constraints) end
-  end
-
   defp value_unchanged(type, value, constraints \\ []) do
-    assert Cast.cast(type, value, constraints) == value
+    assert Cast.cast(type, value, constraints) == {:ok, value}
   end
 
   defp value_changed(type, value, expected, constraints \\ []) do
-    casted = Cast.cast(type, value, constraints)
-    assert casted == expected
+    assert Cast.cast(type, value, constraints) == {:ok, expected}
   end
 end
