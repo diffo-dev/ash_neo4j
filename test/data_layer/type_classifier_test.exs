@@ -25,8 +25,10 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
   ]
 
   @ash_json_types [
+    Ash.Type.Keyword,
     Ash.Type.Map,
     Ash.Type.Struct,
+    Ash.Type.Tuple,
     Ash.Type.Union,
     AshNeo4j.Test.Resource.Money,
     AshNeo4j.Test.Type.DogMap,
