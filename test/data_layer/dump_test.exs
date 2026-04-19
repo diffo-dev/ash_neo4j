@@ -78,7 +78,7 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_changed(Ash.Type.DurationName, :day, "day")
     end
 
-    test "function" do
+    test "function - MFA" do
       value_changed(
         Ash.Type.Function,
         &AshNeo4j.Neo4jHelper.create_node/2,
@@ -228,6 +228,12 @@ defmodule AshNeo4j.DataLayer.DumpTest do
 
     test "invalid atom" do
       raises(Ash.Type.Atom, "invalid atom")
+    end
+
+    @tag :function
+    test "invalid function - not MFA" do
+      a = fn a, b -> a + b end
+      raises(Ash.Type.Function, a)
     end
   end
 

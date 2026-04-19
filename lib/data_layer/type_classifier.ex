@@ -121,8 +121,10 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
 
   defp ash_type_json?(type) do
     type in [
+      Ash.Type.Keyword,
       Ash.Type.Map,
       Ash.Type.Struct,
+      Ash.Type.Tuple,
       Ash.Type.Union
     ] or ash_type_other_map?(type)
   end

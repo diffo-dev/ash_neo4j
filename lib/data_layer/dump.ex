@@ -66,7 +66,12 @@ defmodule AshNeo4j.DataLayer.Dump do
 
   defp dump_ash_type(Ash.Type.Function, value, _constraints) do
     info = Function.info(value)
-    "&" <> Atom.to_string(info[:module]) <> "." <> Atom.to_string(info[:name]) <> "/" <> Integer.to_string(info[:arity])
+    case info[:type] do
+      :external ->
+        "&" <> Atom.to_string(info[:module]) <> "." <> Atom.to_string(info[:name]) <> "/" <> Integer.to_string(info[:arity])
+      _ ->
+        raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type Function: function is not external"
+    end
   end
 
   defp dump_ash_type(Ash.Type.UtcDatetime, value, constraints) do

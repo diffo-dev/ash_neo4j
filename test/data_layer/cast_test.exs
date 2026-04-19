@@ -78,7 +78,7 @@ defmodule AshNeo4j.DataLayer.CastTest do
       value_changed(Ash.Type.DurationName, "day", :day)
     end
 
-    test "function" do
+    test "function - mfa" do
       value_changed(
         Ash.Type.Function,
         "&Elixir.AshNeo4j.Neo4jHelper.create_node/2",
