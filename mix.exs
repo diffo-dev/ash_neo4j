@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -103,7 +103,7 @@ defmodule AshNeo4j.MixProject do
     [
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, ">= 0.0.9"},
+      {:bolty, bolty_version(">= 0.0.10")},
       {:jason, "~> 1.4"},
       {:igniter, ">= 0.6.29 and < 1.0.0-0", [env: :prod, hex: "igniter", repo: "hexpm", optional: true]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
@@ -115,6 +115,15 @@ defmodule AshNeo4j.MixProject do
       {:excoveralls, "~> 0.18.0", only: [:dev, :test]},
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false}
     ]
+  end
+
+  defp bolty_version(default_version) do
+    case System.get_env("BOLTY_VERSION") do
+      nil -> default_version
+      "local" -> [path: "../bolty"]
+      "main" -> [git: "https://github.com/diffo-dev/bolty.git"]
+      version -> "~> #{version}"
+    end
   end
 
   defp ash_version(default_version) do
