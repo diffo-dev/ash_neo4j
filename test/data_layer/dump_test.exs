@@ -40,6 +40,10 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_unchanged(Ash.Type.Date, ~D[2025-05-11])
     end
 
+    test "date time" do
+      value_unchanged(Ash.Type.DateTime, ~U[2025-05-11 07:45:41Z])
+    end
+
     test "duration" do
       value_unchanged(Ash.Type.Duration, Duration.new!(year: 1))
     end
@@ -55,6 +59,14 @@ defmodule AshNeo4j.DataLayer.DumpTest do
     test "time usec" do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
+
+    test "utc date time" do
+      value_unchanged(Ash.Type.UtcDatetime, ~U[2025-05-11 07:45:41Z], precision: :second)
+    end
+
+    test "utc date time usec" do
+      value_unchanged(Ash.Type.UtcDatetimeUsec, ~U[2025-05-11 07:45:41.429903Z], precision: :microsecond)
+    end
   end
 
   describe "dump ash types" do
@@ -64,10 +76,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
 
     test "ci string" do
       value_changed(Ash.Type.CiString, Ash.CiString.new("Hello"), "Hello")
-    end
-
-    test "date time" do
-      value_changed(Ash.Type.DateTime, ~U[2025-05-11 07:45:41Z], "2025-05-11T07:45:41Z")
     end
 
     test "decimal" do
@@ -88,16 +96,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
 
     test "module" do
       value_changed(Ash.Type.Module, AshNeo4j.DataLayer, "Elixir.AshNeo4j.DataLayer")
-    end
-
-    test "utc date time" do
-      value_changed(Ash.Type.UtcDatetime, ~U[2025-05-11 07:45:41Z], "2025-05-11T07:45:41Z", precision: :second)
-    end
-
-    test "utc date time usec" do
-      value_changed(Ash.Type.UtcDatetimeUsec, ~U[2025-05-11 07:45:41.429903Z], "2025-05-11T07:45:41.429903Z",
-        precision: :microsecond
-      )
     end
   end
 

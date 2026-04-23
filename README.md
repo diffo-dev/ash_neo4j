@@ -146,7 +146,7 @@ ash_neo4j uses [bolty](https://github./com/diffo-dev/bolty), a reluctant fork of
 
 Your Ash application needs to configure, start and supervise bolty see [bolty documentation](https://hexdocs.pm/bolty/). Make sure to configure any required authorisation.
 
-I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (bolty limits to bolt 5.4) and any version in between *should* work. 
+I've used a few Neo4j 5.x community edition's up to 5.6.22 (bolty limits to bolt 5.4). I've also used [DozerDB](https://dozerdb.org) 5.26.3 with multi-database. I don't recommend either Neo4j 4.x or Neo4 5.x with BOLT BOLT 4.x, while it *should* work I haven't regressioned tested these.
 
 ## Elixir, Ash and Neo4j Types
 
@@ -160,8 +160,8 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :boolean             | Ash.Type.Boolean                     | Boolean            | true                                                    | true                                                   | BOOLEAN        |
 | :ci_string           | Ash.Type.CiString                    | Ash.CiString       | Ash.CiString.new("Hello")                               | "Hello"                                                | STRING         |
 | :date                | Ash.Type.Date                        | Date               | ~D[2025-05-11]                                          | 2025-05-11                                             | DATE           |
-| :datetime            | Ash.Type.DateTime                    | DateTime           | ~U[2025-05-11 07:45:41Z]                                | "2025-05-11T07:45:41Z"                                 |STRING         |
-| :decimal             | Ash.Type.Decimal                     | Decimal            | Decimal.new("4.2")                                      | "\"4.2\"".                                             | STRING         |
+| :datetime            | Ash.Type.DateTime                    | DateTime           | ~U[2025-05-11 07:45:41Z]                                | 2025-05-11T07:45:41Z                                   | DATETIME       |
+| :decimal             | Ash.Type.Decimal                     | Decimal            | Decimal.new("4.2")                                      | "\"4.2\""                                              | STRING         |
 | :duration            | Ash.Type.Duration                    | Duration           | %Duration{month: 2}                                     | PT2H                                                   | DURATION       |
 | :duration_name       | Ash.Type.DurationName                | Atom               | :day                                                    | "day"                                                  | STRING         |
 | :integer             | Ash.Type.Integer                     | Integer            | 1                                                       | 1                                                      | INTEGER        |
@@ -179,14 +179,14 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :subtype_of :struct  | DogTypedStruct using Ash.TypedStruct | DogTypedStruct     | %DogTypedStruct{name: "Henry", age: 8, breed: :groodle} | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
 | :union               | Ash.Type.Union                       | Ash.Union          | %Ash.Union{type: :typed_struct, value: %Dog{age: 8}}    | "{\"type\":\"typed_struct\",\"value\":{\"age\":8}}"    | STRING         |
 | :url_encoded_binary  | Ash.Type.UrlEncodedBinary            | BitString          | <<1, 2, 3>>                                             | "AQID"                                                 | STRING         |
-| :utc_datetime        | Ash.Type.UtcDatetime                 | DateTime           | ~U[2025-05-11 07:45:41Z]                                | "2025-05-11T07:45:41Z"                                 | STRING         |
-| :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | "2025-05-11T07:45:41.429903000Z"                       | STRING         |
+| :utc_datetime        | Ash.Type.UtcDatetime                 | DateTime           | ~U[2025-05-11 07:45:41Z]                                | 2025-05-11T07:45:41Z                                   | DATETIME       |
+| :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | 2025-05-11T07:45:41.429903000Z.                        | DATETIME       |
 | :uuid                | Ash.Type.UUID                        | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                  | "0274972c-161c-4dc9-882f-6851704c2af9"                 | STRING         |
 | :uuid7               | Ash.Type.UUIDv7                      | BitString          | "019d85f7-8450-7695-9426-4ede74026140"                  | "019d85f7-8450-7695-9426-4ede74026140"                 | STRING         |
 
-Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. Neo4j doesn't store the timezone, just the offset so timezone information is lost.
+Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. 
 
-Struct is supported, however must implement Ash.Type. Ash arrays are supported.
+Struct is supported, however must implement Ash.Type. Ash arrays are supported as arrays in neo4j.
 
 Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 
@@ -206,7 +206,6 @@ Interestingly many Ash.Types have identical JSON representations (e.g. Map, Stru
 A few things to note:
 * Ash.Type.UUID, Ash.Type.UUIDv7 - we persist in the 'cast_input' format rather than as compacted binary for readability, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. However foreign keys aren't persisted using properties, we of course use relationships.
 * Ash.Type.Function - we persist external functions as a string MFA, rather than binary, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. Persisting local functions is not supported.
-* Ash.Type.DateTime, Ash.Type.UtcDatetime, Ash.Type.UtcDateTimeUsec - we persist as ISO8601 string as currently bolty uses BOLT 4.x formats incompatible with neo4j 5.x
 
 ## Keys
 

@@ -60,9 +60,13 @@ defmodule AshNeo4j.Test.Resource.Specification do
   end
 
   calculations do
-    calculate :version, :string, expr(
-      "v" <> type(major_version, :string) <> "." <> type(minor_version, :string) <> "." <> type(patch_version, :string)
-    )
+    calculate :version,
+              :string,
+              expr(
+                "v" <>
+                  type(major_version, :string) <>
+                  "." <> type(minor_version, :string) <> "." <> type(patch_version, :string)
+              )
   end
 
   preparations do

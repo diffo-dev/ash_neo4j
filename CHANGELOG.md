@@ -219,3 +219,11 @@ String.Chars is no longer required and JSON blobs/Base64 are employed. Native Ne
 * added encoding test and fixed json_encode for map by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/207
 * added defensive casting, returning error tuple by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/209
 * expression calculations in memory by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/210
+
+
+## [v0.3.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.3.0...v0.3.1) (2026-04-23)
+
+This release changes the storage type for Ash.Type.DateTime, Ash.Type.UtcDateTime and Ash.Type.UtcDateTimeUsec
+
+### What's Changed
+* use native neo4j 5.x datetime by @matt-beanland
