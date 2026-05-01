@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.DataLayer.TypeClassifierTest do
   @moduledoc false
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.DataLayer.TypeClassifier
 
   @native_types [

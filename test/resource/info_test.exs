@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.Resource.InfoTest do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.Test.Resource.Event
 

@@ -4,9 +4,9 @@
 
 defmodule AshNeo4j.UpsertTest do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.BoltyHelper
-  alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Upsert
 
   setup_all do
@@ -14,9 +14,8 @@ defmodule AshNeo4j.UpsertTest do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Upsert)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "Ash Upsert tests" do
