@@ -138,6 +138,40 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
 * attribute type requires unsupported term
 
+## Testing
+
+`AshNeo4j.Sandbox` provides test isolation analogous to `Ecto.Adapters.SQL.Sandbox`. Each test that calls `checkout/0` gets a dedicated Neo4j connection with an open transaction. All queries from that test run inside the transaction, which is rolled back automatically when the test process exits. Nothing is ever committed, so there is no data to clean up and tests can safely run in parallel.
+
+### Setup
+
+Replace any `Neo4jHelper.delete_all()` or `Neo4jHelper.delete_nodes/1` teardown with a sandbox checkout:
+
+```elixir
+setup_all do
+  AshNeo4j.BoltyHelper.start()
+end
+
+setup do
+  AshNeo4j.Sandbox.checkout()
+  on_exit(&AshNeo4j.Sandbox.rollback/0)
+end
+```
+
+The `on_exit` call is optional — the transaction is rolled back automatically when the test process exits — but is recommended for clarity.
+
+### Parallel tests
+
+Because each test's writes are confined to an uncommitted transaction, tests can run concurrently without interfering:
+
+```elixir
+use ExUnit.Case, async: true
+
+setup do
+  AshNeo4j.Sandbox.checkout()
+  on_exit(&AshNeo4j.Sandbox.rollback/0)
+end
+```
+
 ## Installing Neo4j and Configuring Bolty
 
 ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.

@@ -151,6 +151,13 @@ defmodule AshNeo4j.Cypher do
     Map.new(properties, fn {k, v} -> {"#{variable}_#{k}", v} end)
   end
 
+  defp sandboxed_query(cypher, params) do
+    case AshNeo4j.Sandbox.run(cypher, params) do
+      nil -> Bolty.query(Bolt, cypher, params)
+      result -> result
+    end
+  end
+
   @spec relationship(atom(), atom()) :: <<_::32, _::_*8>>
   @doc """
   Converts a relationship variable, label and optional direction to cypher relationship.
@@ -230,7 +237,7 @@ defmodule AshNeo4j.Cypher do
     AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
     """)
 
-    bolty_result = Bolty.query(Bolt, cypher, params)
+    bolty_result = sandboxed_query(cypher, params)
 
     if elem(bolty_result, 0) == :ok do
       Logger.debug("""
@@ -244,7 +251,7 @@ defmodule AshNeo4j.Cypher do
   def run_expecting_deletions(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
 
-    bolty_result = Bolty.query(Bolt, cypher, params)
+    bolty_result = sandboxed_query(cypher, params)
 
     if elem(bolty_result, 0) == :ok do
       response = elem(bolty_result, 1)
