@@ -103,7 +103,7 @@ defmodule AshNeo4j.MixProject do
     [
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, bolty_version(">= 0.0.10")},
+      {:bolty, bolty_version(">= 0.0.11")},
       {:jason, "~> 1.4"},
       {:igniter, ">= 0.6.29 and < 1.0.0-0", [env: :prod, hex: "igniter", repo: "hexpm", optional: true]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
