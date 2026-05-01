@@ -114,3 +114,6 @@ $RECYCLE.BIN/
 /documentation
 
 /.notes
+
+# agent related
+.claude
