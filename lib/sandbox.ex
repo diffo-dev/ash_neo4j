@@ -124,6 +124,10 @@ defmodule AshNeo4j.Sandbox do
   end
 
   @doc false
+  @spec active?() :: boolean()
+  def active?, do: Process.get(@pdict_key) != nil
+
+  @doc false
   @spec run(String.t(), map()) :: {:ok, Bolty.Response.t()} | {:error, any()} | nil
   def run(cypher, params) do
     case Process.get(@pdict_key) do

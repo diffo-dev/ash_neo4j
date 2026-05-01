@@ -53,6 +53,7 @@ defmodule AshNeo4j.DataLayer do
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
   def can?(_, {:filter_expr, _}), do: true
 
+  def can?(_, :transact), do: true
   def can?(_, _), do: false
 
   @neo4j %Spark.Dsl.Section{
@@ -519,24 +520,31 @@ defmodule AshNeo4j.DataLayer do
   def transaction(resource, fun, _timeout, _) do
     label = ResourceInfo.label(resource)
 
-    :global.trans(
-      {{:neo4j, label}, System.unique_integer()},
-      fn ->
+    if AshNeo4j.Sandbox.active?() do
+      Process.put({:neo4j_in_transaction, label}, true)
+
+      try do
+        {:ok, fun.()}
+      catch
+        {{:neo4j_rollback, ^label}, value} -> {:error, value}
+      after
+        Process.delete({:neo4j_in_transaction, label})
+      end
+    else
+      Bolty.transaction(Bolt, fn conn ->
+        stack = Process.get(:ash_neo4j_tx_stack, [])
+        Process.put(:ash_neo4j_tx_stack, [conn | stack])
+        Process.put({:neo4j_in_transaction, label}, true)
+
         try do
-          Process.put({:neo4j_in_transaction, label}, true)
-          {:res, fun.()}
+          fun.()
         catch
-          {{:neo4j_rollback, ^label}, value} ->
-            {:error, value}
+          {{:neo4j_rollback, ^label}, value} -> Bolty.rollback(conn, value)
+        after
+          Process.put(:ash_neo4j_tx_stack, stack)
+          Process.delete({:neo4j_in_transaction, label})
         end
-      end,
-      [node() | :erlang.nodes()],
-      0
-    )
-    |> case do
-      {:res, result} -> {:ok, result}
-      {:error, error} -> {:error, error}
-      :aborted -> {:error, "transaction failed"}
+      end)
     end
   end
 

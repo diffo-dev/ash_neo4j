@@ -152,9 +152,15 @@ defmodule AshNeo4j.Cypher do
   end
 
   defp sandboxed_query(cypher, params) do
-    case AshNeo4j.Sandbox.run(cypher, params) do
-      nil -> Bolty.query(Bolt, cypher, params)
-      result -> result
+    case Process.get(:ash_neo4j_tx_stack, []) do
+      [conn | _] ->
+        Bolty.query(conn, cypher, params)
+
+      [] ->
+        case AshNeo4j.Sandbox.run(cypher, params) do
+          nil -> Bolty.query(Bolt, cypher, params)
+          result -> result
+        end
     end
   end
 

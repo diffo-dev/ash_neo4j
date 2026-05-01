@@ -249,11 +249,15 @@ We've generally used :uuid_primary_key, which Ash creates. While it *may* be pos
 
 Generally attributes with nil value are not persisted, rather they are simply not created or removed on update to nil.
 
+## Other Notable
+
+Transactions are supported.
+
 ## Limitations and Future Work
 
 Ash Neo4j has support for Ash create, update, read, destroy actions. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
-Future work may include: calculations, aggregates, vectors/semantic search, transactions, geospatial support.
+Future work may include: calculations, aggregates, vectors/semantic search, geospatial support.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 
@@ -263,7 +267,7 @@ Thanks to the [Ash Core](https://github.com/ash-project) for [ash](https://githu
 
 Thanks to [Sagastume](https://github.com/sagastume) for [boltx](https://github.com/tiagodavi/ex4j) which was based on [bolt_sips](https://github.com/florinpatrascu/bolt_sips) by [Florin Patrascu](https://github.com/florinpatrascu).
 
-Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) and pioneering work on graph databases.
+Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) and pioneering work on graph databases. Thanks to [DozerDB](https://dozerdb.org) for enterprise features on community neo4j.
 
 ## Links
 
