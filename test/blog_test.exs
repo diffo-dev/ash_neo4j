@@ -4,9 +4,10 @@
 
 defmodule AshNeo4j.BlogTest do
   @moduledoc false
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.BoltyHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Author
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
@@ -19,12 +20,8 @@ defmodule AshNeo4j.BlogTest do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Author)
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_nodes(:Tag)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "Bolty configuration tests" do

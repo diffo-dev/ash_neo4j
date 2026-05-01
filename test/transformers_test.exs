@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.Test.Transformers do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.Resource.Info, as: ResourceInfo
 
   describe "Transformers tests" do

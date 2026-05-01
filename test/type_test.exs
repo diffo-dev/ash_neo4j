@@ -6,13 +6,14 @@ defmodule AshNeo4j.TypeTest do
   @moduledoc false
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Type
   alias AshNeo4j.Test.Resource.Money
   alias AshNeo4j.Test.Type.DogStruct
   alias AshNeo4j.Test.Type.DogTypedStruct
   alias AshNeo4j.Test.Util
 
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   import Ash.CiString
 
@@ -21,9 +22,8 @@ defmodule AshNeo4j.TypeTest do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Type)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   @type_attributes %{

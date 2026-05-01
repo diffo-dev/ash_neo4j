@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.DataLayer.CastTest do
   @moduledoc false
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.Test.Resource.Money
   alias AshNeo4j.Test.Type.DogKeyword

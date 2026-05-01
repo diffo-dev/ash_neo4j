@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.DataLayer.InfoTest do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.DataLayer.Info, as: DataLayerInfo
   alias AshNeo4j.Test.Resource.Specification
   alias AshNeo4j.Test.Resource.Event

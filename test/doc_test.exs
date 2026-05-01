@@ -4,9 +4,10 @@
 
 defmodule AshNeo4j.DocTest do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Cypher
   alias AshNeo4j.Util
 
@@ -15,9 +16,8 @@ defmodule AshNeo4j.DocTest do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_all()
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "doctests" do

@@ -4,9 +4,10 @@
 
 defmodule AshNeo4j.ServiceTest do
   @moduledoc false
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.BoltyHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Specification
   alias AshNeo4j.Test.Resource.Service
   alias AshNeo4j.Test.Resource.Resource
@@ -19,9 +20,8 @@ defmodule AshNeo4j.ServiceTest do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_all()
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "Bolty configuration tests" do
