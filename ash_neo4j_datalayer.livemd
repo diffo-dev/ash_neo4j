@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.3.1"}
+    {:ash_neo4j, "~> 0.4.0"}
   ],
   consolidate_protocols: false
 )
@@ -27,7 +27,7 @@ If already familiar with the [Ash Framework](https://ash-hq.org) in this liveboo
 
 ## Why have an Ash Neo4j DataLayer?
 
-I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last four years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
+I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last five years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
 
 Similarly I've found [Ash](https://ash-hq.org) to be an exceptional framework for declarative application development. It has a learning curve, however the Ash way is to use and build abstractions for exceptional maintainability.
 
@@ -380,8 +380,7 @@ Key points:
 * **UUID types** (`Ash.Type.UUID`, `Ash.Type.UUIDv7`) are stored as their printable string form — `"0274972c-161c-4dc9-882f-6851704c2af9"`
 * **Complex types** (maps, structs, tuples, keywords, unions, embedded resources, `Ash.Type.NewType`, `Ash.TypedStruct`) are JSON-encoded — `{"name":"Henry","age":8,"breed":"groodle"}`
 * **Binary types** (`Ash.Type.Binary`, `Ash.Type.UrlEncodedBinary`) are Base64-encoded — `"AQID"`
-* **Temporal types** (date, time, naive_datetime, duration) use native Neo4j types via Bolty PackStream
-* **DateTime types** (`Ash.Type.DateTime`, `Ash.Type.UtcDatetime`, `Ash.Type.UtcDatetimeUsec`) are stored as ISO8601 strings due to a current Bolty BOLT 5.x limitation
+* **Temporal types** (date, time, datetime, naive_datetime, duration) use native Neo4j types via Bolty PackStream
 * **CiString** (`Ash.Type.CiString`) is stored as a plain string using the casing applied during `cast_input`. Queries against CiString values use `toLower()` on both sides in Cypher since Neo4j has no native case-insensitive string type
 * **Arrays** use Neo4j native arrays — each element is individually encoded using the rules above
 * **nil values** are not persisted as properties — they are simply absent from the node, and removed on update to nil

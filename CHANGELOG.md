@@ -11,6 +11,16 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.4.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.3.1...v0.4.0) (2026-05-01)
+
+### Features:
+* real Neo4j transactions via `Bolty.transaction` — `can?(_, :transact)` now advertised, rollback genuinely aborts the database transaction
+* `AshNeo4j.Sandbox` — test isolation adapter analogous to `Ecto.Adapters.SQL.Sandbox`, enabling safe parallel test execution with `async: true`
+
+### Improvements:
+* silenced spurious runtime `Logger.warning` calls that fired on normal OPTIONAL MATCH traversal
+* full test suite parallelised with `async: true`
+
 ## [v0.1.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.1.0...v0.1.0) (2025-04-30)
 
 ### Features:

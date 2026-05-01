@@ -929,7 +929,9 @@ defmodule AshNeo4j.DataLayer do
     attribute = Ash.Resource.Info.attribute(resource, name)
 
     if attribute == nil do
-      Logger.debug("AshNeo4j.DataLayer: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value")
+      Logger.debug(
+        "AshNeo4j.DataLayer: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value"
+      )
 
       {:ok, value}
     else
