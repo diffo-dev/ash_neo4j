@@ -693,22 +693,14 @@ defmodule AshNeo4j.DataLayer do
               [{relationship.name, [dest_resource]} | acc]
 
             {:error, reason} ->
-              Logger.warning("AshNeo4j.DataLayer: unable to convert enrichment node: #{inspect(reason)}")
+              Logger.debug("AshNeo4j.DataLayer: unable to convert enrichment node: #{inspect(reason)}")
               acc
           end
 
         true ->
-          Logger.warning(
-            "AshNeo4j.DataLayer: unable to enrich source node #{inspect(ResourceInfo.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, unsupported"
-          )
-
           acc
       end
     else
-      Logger.warning(
-        "AshNeo4j.DataLayer: unable to enrich source node #{inspect(ResourceInfo.label(resource))} with edge #{inspect(edge.type)} and destination node #{inspect(dest_node.labels)}, no relationship"
-      )
-
       acc
     end
   end
@@ -929,9 +921,7 @@ defmodule AshNeo4j.DataLayer do
     attribute = Ash.Resource.Info.attribute(resource, name)
 
     if attribute == nil do
-      Logger.warning(
-        "AshNeo4j.DataLayer: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value"
-      )
+      Logger.debug("AshNeo4j.DataLayer: no attribute found for resource #{inspect(resource)} and name #{inspect(name)}, returning original value")
 
       {:ok, value}
     else

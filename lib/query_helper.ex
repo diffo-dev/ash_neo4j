@@ -45,7 +45,7 @@ defmodule AshNeo4j.QueryHelper do
       predicates = Map.get(simple_filter, :predicates, [])
 
       if predicates == [] do
-        Logger.warning("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
+        Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
         {base_match <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d", %{}}
       else
         build_filtered_cypher(ash_query, label, predicates)
@@ -105,7 +105,7 @@ defmodule AshNeo4j.QueryHelper do
         {cypher, %{param_key => to_param_value(predicate.right)}}
 
       true ->
-        Logger.warning("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
+        Logger.debug("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
 
         {"MATCH " <> Cypher.node(:s, [label]) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d", %{}}
     end
@@ -158,7 +158,7 @@ defmodule AshNeo4j.QueryHelper do
           {combined, new_params}
 
         _ ->
-          Logger.warning("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
+          Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
           {if(clauses == "", do: "TRUE", else: "#{clauses} AND TRUE"), params_acc}
       end
     end)
@@ -219,7 +219,7 @@ defmodule AshNeo4j.QueryHelper do
   defp convert_operator(:is_nil), do: "is_nil"
 
   defp convert_operator(operator) do
-    Logger.warning("AshNeo4j.QueryHelper: operator #{operator} not handled")
+    Logger.debug("AshNeo4j.QueryHelper: operator #{operator} not handled")
     nil
   end
 end
