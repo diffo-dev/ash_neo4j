@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.4.1"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -103,7 +103,7 @@ defmodule AshNeo4j.MixProject do
     [
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, bolty_version(">= 0.0.11")},
+      {:bolty, bolty_version(">= 0.0.12")},
       {:jason, "~> 1.4"},
       {:igniter, ">= 0.6.29 and < 1.0.0-0", [env: :prod, hex: "igniter", repo: "hexpm", optional: true]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
