@@ -6,492 +6,111 @@ defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
   require Logger
 
-  alias AshNeo4j.BoltyHelper
-
-  @struct_name_regex Regex.compile!("%(.*?){")
-  @struct_properties_regex Regex.compile!("{(.*?)}$")
+  alias AshNeo4j.DataLayer.TypeClassifier
+  alias AshNeo4j.Util
 
   @doc """
-  Casts an Ash.Resource.Attribute
+  Casts an Ash.Resource.Attribute, handles single values and arrays of values.
+  Values may be Elixir native types, Neo4j native types.
+  Returns {:ok, value} | {:error, reason}
   """
-  def cast(resource, name, value) do
-    attribute = Ash.Resource.Info.attribute(resource, name)
+  def cast(type, value, constraints \\ [])
 
-    if value == nil do
-      nil
-    else
-      if attribute == nil do
-        Logger.warning(
-          "AshNeo4j.Cast: cannot cast as name #{name} is not an attribute of resource #{inspect(resource)}"
-        )
+  def cast(_type, nil, _constraints) do
+    {:ok, nil}
+  end
 
-        value
-      else
-        case attribute.type do
-          Ash.Type.Atom ->
-            cast_atom(value)
+  def cast({:array, inner_type}, value, constraints) when is_list(value) do
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
 
-          Ash.Type.String ->
-            cast_string(value)
-
-          Ash.Type.UUID ->
-            cast_string(value)
-
-          Ash.Type.Boolean ->
-            value
-
-          Ash.Type.Integer ->
-            value
-
-          Ash.Type.Float ->
-            value
-
-          Ash.Type.Binary ->
-            value
-
-          Ash.Type.CiString ->
-            value
-
-          Ash.Type.Function ->
-            cast_function(value)
-
-          Ash.Type.Module ->
-            cast_atom(value)
-
-          Ash.Type.Date ->
-            cast_date(value)
-
-          Ash.Type.DateTime ->
-            cast_datetime(value, [])
-
-          Ash.Type.UtcDatetime ->
-            cast_datetime(value, precision: :microsecond)
-
-          Ash.Type.Duration ->
-            cast_duration(value)
-
-          Ash.Type.UtcDatetimeUsec ->
-            cast_datetime(value, precision: :microsecond)
-
-          Ash.Type.NaiveDatetime ->
-            cast_naivedatetime(value)
-
-          Ash.Type.Time ->
-            cast_time(value, [])
-
-          Ash.Type.TimeUsec ->
-            cast_time(value, precision: :microsecond)
-
-          Ash.Type.Map ->
-            cast_map(value)
-
-          Ash.Type.Struct ->
-            cast_struct(value)
-
-          Ash.Type.Keyword ->
-            cast_list(value)
-
-          Ash.Type.Tuple ->
-            cast_tuple(value)
-
-          Ash.Type.Decimal ->
-            cast_decimal(value)
-
-          Ash.Type.Term ->
-            cast(value)
-
-          Ash.Type.Union ->
-            cast(value)
-
-          Ash.Type.UrlEncodedBinary ->
-            cast_string(value)
-
-          {:array, _} ->
-            cast_list(value)
-
-          _name ->
-            cast(value)
-        end
+    Enum.reduce_while(value, {:ok, []}, fn item, {:ok, acc} ->
+      case cast(inner_type, item, item_constraints) do
+        {:ok, cast_item} -> {:cont, {:ok, [cast_item | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
       end
+    end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
     end
   end
 
-  defp cast_atom(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_atom(value) when is_binary(value) do
-    String.to_atom(String.replace_leading(value, ":", ""))
-  end
-
-  defp cast_function(value) when is_binary(value) do
-    [module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
-    module_function_splits = String.split(module_function, ".")
-    function = List.last(module_function_splits)
-    module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse())
-    Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))
-  end
-
-  defp cast_struct(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_struct(value) when is_binary(value) do
-    cond do
-      String.starts_with?(value, "Decimal.new(\"") && String.ends_with?(value, "\")") ->
-        cast_decimal(value)
-
-      String.starts_with?(value, "MapSet.new(") && String.ends_with?(value, ")") ->
-        cast_mapset(value)
-
-      String.starts_with?(value, "~r/") ->
-        cast_regex(value)
-
-      true ->
-        case struct_name(value) do
-          nil ->
-            value
-
-          name ->
-            module = Module.concat([name])
-            properties = cast_struct_properties(value)
-
-            struct(module, properties)
-            |> Map.replace(:__meta__, %Ecto.Schema.Metadata{
-              state: :loaded
-            })
-        end
-    end
-  end
-
-  defp struct_name(value) when is_binary(value) do
-    Regex.run(@struct_name_regex, value) |> Enum.at(1)
-  end
-
-  defp cast_struct_properties(value) when is_binary(value) do
-    Regex.run(@struct_properties_regex, value)
-    |> Enum.at(1)
-    |> split_properties()
-    |> Enum.into([], &cast_property(&1))
-  end
-
-  defp cast_property(property) when is_binary(property) do
-    trimmed = String.trim(property)
-
-    cond do
-      String.contains?(trimmed, "=>") ->
-        # "\"aEnd\"" => 1
-        unquoted = String.replace(trimmed, "\"", "")
-        splits = String.split(unquoted, "=>")
-        key = String.trim(hd(splits))
-        value = String.trim(hd(tl(splits)))
-        {cast(key), cast(value)}
-
-      true ->
-        splits = String.split(trimmed, ":")
-        key = hd(splits)
-        value = Enum.map_join(tl(splits), ":", &String.trim(&1))
-        {String.to_atom(key), cast(value)}
-    end
-  end
-
-  defp cast_date(value) do
-    case Ash.Type.Date.cast_input(value, []) do
-      {:ok, date} ->
-        date
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Date")
-        value
-    end
-  end
-
-  defp cast_datetime(value, opts) when is_struct(value, Bolty.Types.DateTimeWithTZOffset) do
-    datetime = BoltyHelper.convert_from_datetime_with_tz_offset(value)
-    cast_datetime(datetime, opts)
-  end
-
-  defp cast_datetime(value, opts) do
-    case Ash.Type.DateTime.cast_input(value, opts) do
-      {:ok, datetime} ->
-        datetime
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as DateTime")
-        value
-    end
-  end
-
-  defp cast_duration(value) do
-    case Ash.Type.Duration.cast_input(value, precision: :microsecond) do
-      {:ok, duration} ->
-        duration
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Duration")
-        value
-    end
-  end
-
-  defp cast_naivedatetime(value) do
-    case Ash.Type.NaiveDatetime.cast_input(value, precision: :microsecond) do
-      {:ok, naivedatetime} ->
-        naivedatetime
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as NaiveDateTime")
-        value
-    end
-  end
-
-  defp cast_time(value, opts) when is_struct(value, Bolty.Types.TimeWithTZOffset) do
-    time = BoltyHelper.convert_from_time_with_tz_offset(value)
-    cast_time(time, opts)
-  end
-
-  defp cast_time(value, opts) do
-    case Ash.Type.Time.cast_input(value, opts) do
-      {:ok, time} ->
-        time
-
-      _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Time")
-        value
-    end
-  end
-
-  defp cast(atom) when is_atom(atom) do
-    atom
-  end
-
-  defp cast(boolean) when is_boolean(boolean) do
-    boolean
-  end
-
-  defp cast(integer) when is_integer(integer) do
-    integer
-  end
-
-  defp cast(float) when is_float(float) do
-    float
-  end
-
-  defp cast(value) when is_binary(value) do
-    case value do
-      "nil" ->
-        nil
-
-      "true" ->
-        true
-
-      "false" ->
-        false
-
-      _ ->
-        cond do
-          String.starts_with?(value, ":") ->
-            cast_atom(value)
-
-          String.starts_with?(value, "\"") && String.ends_with?(value, "\"") ->
-            cast_string(value)
-
-          String.starts_with?(value, "[") && String.ends_with?(value, "]") ->
-            cast_list(value)
-
-          String.starts_with?(value, "%{") && String.ends_with?(value, "}") ->
-            cast_map(value)
-
-          String.starts_with?(value, "%") && String.contains?(value, "{") && String.ends_with?(value, "}") ->
-            cast_struct(value)
-
-          String.starts_with?(value, "{") && String.ends_with?(value, "}") ->
-            cast_tuple(value)
-
-          String.starts_with?(value, "MapSet.new(") && String.ends_with?(value, ")") ->
-            cast_mapset(value)
-
-          String.starts_with?(value, "Decimal.new(\"") && String.ends_with?(value, "\")") ->
-            cast_decimal(value)
-
-          String.starts_with?(value, "~r/") ->
-            cast_regex(value)
-
-          true ->
-            case Integer.parse(value) do
-              {integer, ""} ->
-                integer
-
-              {_integer, _} ->
-                case Float.parse(value) do
-                  {float, _} ->
-                    float
-
-                  :error ->
-                    Logger.warning("AshNeo4j.Cast: value #{value} has leading integer but isn't an integer or float")
-                    value
-                end
-
-              :error ->
-                Logger.warning("AshNeo4j.Cast: no cast for value #{value}")
-                value
-            end
-        end
-    end
-  end
-
-  defp cast(list) when is_list(list) do
-    cast_list(list)
-  end
-
-  defp cast(map) when is_map(map) do
-    cast_map(map)
-  end
-
-  defp cast_string(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_string(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("\"", "")
-    |> String.replace_trailing("\"", "")
-  end
-
-  defp cast_list(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_list(value) when is_list(value) do
-    value
-    |> Enum.into([], &cast(&1))
-  end
-
-  defp cast_list(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("[", "")
-    |> String.replace_trailing("]", "")
-    |> String.split(",")
-    |> Enum.into([], &cast(String.trim(&1)))
-  end
-
-  defp cast_map(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_map(value) when is_map(value) do
-    value
-    |> Enum.into(%{}, &cast(&1))
-  end
-
-  defp cast_map(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("%{", "")
-    |> String.replace_trailing("}", "")
-    |> String.split(",")
-    |> Enum.into(%{}, &cast_property(&1))
-  end
-
-  defp cast_tuple(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_tuple(value) when is_tuple(value) do
-    value
-  end
-
-  defp cast_tuple(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("{", "")
-    |> String.replace_trailing("}", "")
-    |> String.split(",")
-    |> Enum.into([], &cast(String.trim(&1)))
-    |> List.to_tuple()
-  end
-
-  defp cast_decimal(nil) when is_nil(nil) do
-    nil
-  end
-
-  defp cast_decimal(value) when is_bitstring(value) do
-    string =
-      value
-      |> String.replace_leading("Decimal.new(\"", "")
-      |> String.replace_trailing("\")", "")
-
-    case Decimal.parse(string) do
-      {decimal, _} ->
-        decimal
-
-      :error ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as a Decimal")
-        value
-    end
-  end
-
-  defp cast_mapset(value) when is_bitstring(value) do
-    value
-    |> String.replace_leading("MapSet.new(", "")
-    |> String.replace_trailing(")", "")
-    |> cast_list()
-    |> MapSet.new()
-  end
-
-  defp cast_regex(value) when is_bitstring(value) do
-    splits = String.split(value, "/")
-
-    case length(splits) do
-      2 ->
-        case Regex.compile(Enum.at(splits, 1)) do
-          {:ok, regex} ->
-            regex
-
-          {:error, _} ->
-            Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
-            value
+  def cast(type, value, constraints) do
+    case TypeClassifier.classify(type) do
+      {:ok, :native, _type} ->
+        {:ok, value}
+
+      {:ok, :ash_base64, ash_type} ->
+        case Util.base64_decode(value) do
+          {:ok, decoded} -> cast_ash_type(ash_type, decoded, constraints)
+          {:error, reason} -> {:error, reason}
         end
 
-      3 ->
-        case Regex.compile(Enum.at(splits, 1), Enum.at(splits, 2)) do
-          {:ok, regex} ->
-            regex
-
-          {:error, _} ->
-            Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
-            value
+      {:ok, :ash_json, ash_type} ->
+        case Util.json_decode(value) do
+          {:ok, decoded} -> cast_ash_type(ash_type, decoded, constraints)
+          {:error, reason} -> {:error, reason}
         end
 
+      {:ok, :ash_uuid, _ash_type} ->
+        {:ok, value}
+
+      {:ok, :ash, ash_type} ->
+        cast_ash_type(ash_type, value, constraints)
+
       _ ->
-        Logger.warning("AshNeo4j.Cast: value #{value} can't be parsed as Regex")
-        value
+        {:error, "AshNeo4j.DataLayer: cannot cast value #{inspect(value)} of type #{inspect(type)}"}
     end
   end
 
-  defp split_properties(str) do
-    {parts, buf, _depths, _in_string} =
-      String.graphemes(str)
-      |> Enum.reduce({[], "", %{curly: 0, square: 0}, false}, fn
-        "\"", {acc, buf, depths, in_string} ->
-          {acc, buf <> "\"", depths, !in_string}
+  defp cast_ash_type(Ash.Type.Function, value, _constraints) do
+    try do
+      [module_function | arity] = String.replace_leading(value, "&", "") |> String.split("/")
+      module_function_splits = String.split(module_function, ".")
+      function = List.last(module_function_splits)
+      module = Module.concat(module_function_splits |> Enum.reverse() |> tl() |> Enum.reverse())
 
-        "{", {acc, buf, depths, false} ->
-          {acc, buf <> "{", %{depths | curly: depths.curly + 1}, false}
+      case Code.ensure_loaded(module) do
+        {:module, _} ->
+          {:ok, Function.capture(module, String.to_atom(function), String.to_integer(hd(arity)))}
 
-        "}", {acc, buf, depths, false} ->
-          {acc, buf <> "}", %{depths | curly: depths.curly - 1}, false}
+        {:error, _} ->
+          {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Function: module cannot be loaded"}
+      end
+    rescue
+      e ->
+        {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Function: #{Exception.message(e)}"}
+    end
+  end
 
-        "[", {acc, buf, depths, false} ->
-          {acc, buf <> "[", %{depths | square: depths.square + 1}, false}
+  defp cast_ash_type(Ash.Type.Module, value, _constraints) do
+    try do
+      module = String.to_existing_atom(value)
 
-        "]", {acc, buf, depths, false} ->
-          {acc, buf <> "]", %{depths | square: depths.square - 1}, false}
+      case Code.ensure_loaded(module) do
+        {:module, _} -> {:ok, module}
+        {:error, _} -> {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Module: module cannot be loaded"}
+      end
+    rescue
+      _ -> {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as Module: not a known atom"}
+    end
+  end
 
-        ",", {acc, buf, %{curly: 0, square: 0}, false} ->
-          {acc ++ [String.trim(buf)], "", %{curly: 0, square: 0}, false}
+  defp cast_ash_type(type, value, constraints) do
+    try do
+      case Ash.Type.cast_stored(type, value, constraints) do
+        {:ok, casted} ->
+          {:ok, casted}
 
-        ch, {acc, buf, depths, in_string} ->
-          {acc, buf <> ch, depths, in_string}
-      end)
+        {:error, reason} ->
+          {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as #{inspect(type)}: #{inspect(reason)}"}
 
-    parts ++ [String.trim(buf)]
+        :error ->
+          {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as #{inspect(type)}"}
+      end
+    rescue
+      e ->
+        {:error, "AshNeo4j.DataLayer: cannot cast #{inspect(value)} as #{inspect(type)}: #{Exception.message(e)}"}
+    end
   end
 end

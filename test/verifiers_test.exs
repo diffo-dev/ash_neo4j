@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Verifiers do
+defmodule AshNeo4j.Verifiers.Test do
   @moduledoc false
 
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.Test.Util
 
   describe "Verifiers tests" do
-    test "label: invalid label warns DslError on compilation" do
+    test "label: invalid resource label warns DslError on compilation" do
       Util.assert_compile_time_warning(
         Spark.Error.DslError,
-        "label: neo4j label must be PascalCase",
+        "neo4j: neo4j labels must be PascalCase",
         fn ->
           defmodule InvalidLabel do
             use Ash.Resource,
@@ -20,8 +20,46 @@ defmodule AshNeo4j.Test.Verifiers do
               data_layer: AshNeo4j.DataLayer
 
             neo4j do
-              label :comment
+              label :External_Identifier
             end
+
+            attributes do
+              uuid_primary_key :id
+              attribute :title, :string, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "label: invalid resource warns DslError on compilation" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "neo4j: neo4j labels must be PascalCase",
+        fn ->
+          defmodule Invalid_Resource do
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            attributes do
+              uuid_primary_key :id
+              attribute :title, :string, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "label: invalid domain warns DslError on compilation" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "neo4j: neo4j labels must be PascalCase",
+        fn ->
+          defmodule InvalidDomainResource do
+            use Ash.Resource,
+              domain: AshNeo4j.Test.Invalid_Domain,
+              data_layer: AshNeo4j.DataLayer
 
             attributes do
               uuid_primary_key :id
@@ -267,6 +305,78 @@ defmodule AshNeo4j.Test.Verifiers do
             attributes do
               uuid_primary_key :id, writable?: true
               attribute :name, :string, public?: true, source: :_name
+            end
+          end
+        end
+      )
+    end
+
+    test "unsupported attribute type" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :name requires unsupported type Ash.Type.Term",
+        fn ->
+          defmodule InvalidAttributeType do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :name, :term, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "unsupported attribute type - within array" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :file_array requires unsupported type Ash.Type.File",
+        fn ->
+          defmodule InvalidAttributeTypeWithinArray do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :file_array, {:array, :file}, public?: true
+            end
+          end
+        end
+      )
+    end
+
+    test "unsupported attribute type - within typed struct" do
+      Util.assert_compile_time_warning(
+        Spark.Error.DslError,
+        "attribute :typed_struct requires unsupported type Ash.Type.Term",
+        fn ->
+          defmodule InvalidAttributeWithinTypedStruct do
+            @moduledoc false
+            use Ash.Resource,
+              domain: AshNeo4j.Test.SRM,
+              data_layer: AshNeo4j.DataLayer
+
+            neo4j do
+              label :Resource
+            end
+
+            attributes do
+              uuid_primary_key :id, writable?: true
+              attribute :typed_struct, AshNeo4j.Test.Type.InvalidTypedStruct, public?: true
             end
           end
         end

@@ -13,7 +13,8 @@ defmodule AshNeo4j.Verifiers.VerifyRelate do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    relate = Verifier.get_option(dsl, [:neo4j], :relate, [])
+    # we want to check against relate after we've added defaults
+    relate = Verifier.get_persisted(dsl, :relate, [])
     relationships = Verifier.get_entities(dsl, [:relationships])
 
     if length(relate) == length(relationships) do

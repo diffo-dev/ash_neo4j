@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformDefaultRelate do
+defmodule AshNeo4j.Persisters.PersistRelate do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
@@ -26,6 +26,6 @@ defmodule AshNeo4j.Transformers.TransformDefaultRelate do
 
     transformed_relate = relate ++ default_relate
 
-    {:ok, Transformer.set_option(dsl, [:neo4j], :relate, transformed_relate)}
+    {:ok, Transformer.persist(dsl, :relate, transformed_relate)}
   end
 end

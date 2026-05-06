@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Verifiers.VerifyPropertiesCamelCase do
-  @moduledoc "Verifies that Neo4j properties are camelCase"
+defmodule AshNeo4j.Verifiers.VerifyLabelsPascalCase do
+  @moduledoc "Verifies that Neo4j labels are PascalCase"
   use Spark.Dsl.Verifier
 
   alias Spark.Dsl.Verifier
@@ -13,20 +13,18 @@ defmodule AshNeo4j.Verifiers.VerifyPropertiesCamelCase do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-
-    translations = Verifier.get_persisted(dsl, :translations, [])
-    property_names = Keyword.values(translations)
+    labels = Verifier.get_persisted(dsl, :labels)
 
     cond do
-      property_names == [] ->
+      labels == [] ->
         :ok
 
       true ->
-        if !Enum.all?(property_names, &is_valid_property_name?(&1)) do
+        if !Enum.all?(labels, &is_valid_node_label?(&1)) do
           {:error,
            DslError.exception(
              module: resource,
-             message: "neo4j: neo4j property names must be camelCase"
+             message: "neo4j: neo4j labels must be PascalCase"
            )}
         else
           :ok

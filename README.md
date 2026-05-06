@@ -101,7 +101,7 @@ Relate clauses, whether specific or default must be unique {_, edge_label, edge_
 The DSL may be used to guard destroy actions, in the form {edge_label, edge_direction, destination_label}. By default incoming allow_nil? false belongs_to are guarded against deletion while relationships exist. Guards can be created independently of explicit relationships.
 ```elixir
   neo4j do
-    relate [{:WRITTEN_BY, :outgoing, :Post}]
+    guard [{:WRITTEN_BY, :outgoing, :Post}]
   end
 ```
 
@@ -136,6 +136,41 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 * edge direction must be in [:incoming, :outgoing]
 * relate: relationship_name must match the name of a relationship
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
+* attribute type requires unsupported term
+
+## Testing
+
+`AshNeo4j.Sandbox` provides test isolation analogous to `Ecto.Adapters.SQL.Sandbox`. Each test that calls `checkout/0` gets a dedicated Neo4j connection with an open transaction. All queries from that test run inside the transaction, which is rolled back automatically when the test process exits. Nothing is ever committed, so there is no data to clean up and tests can safely run in parallel.
+
+### Setup
+
+Replace any `Neo4jHelper.delete_all()` or `Neo4jHelper.delete_nodes/1` teardown with a sandbox checkout:
+
+```elixir
+setup_all do
+  AshNeo4j.BoltyHelper.start()
+end
+
+setup do
+  AshNeo4j.Sandbox.checkout()
+  on_exit(&AshNeo4j.Sandbox.rollback/0)
+end
+```
+
+The `on_exit` call is optional — the transaction is rolled back automatically when the test process exits — but is recommended for clarity.
+
+### Parallel tests
+
+Because each test's writes are confined to an uncommitted transaction, tests can run concurrently without interfering:
+
+```elixir
+use ExUnit.Case, async: true
+
+setup do
+  AshNeo4j.Sandbox.checkout()
+  on_exit(&AshNeo4j.Sandbox.rollback/0)
+end
+```
 
 ## Installing Neo4j and Configuring Bolty
 
@@ -145,90 +180,94 @@ ash_neo4j uses [bolty](https://github./com/diffo-dev/bolty), a reluctant fork of
 
 Your Ash application needs to configure, start and supervise bolty see [bolty documentation](https://hexdocs.pm/bolty/). Make sure to configure any required authorisation.
 
-I've used Neo4j community edition 4.4 (bolt 4.4) and 5.28 (bolty limits to bolt 5.4) and any version in between *should* work. 
+I've used a few Neo4j 5.x community edition's up to 5.6.22 (bolty limits to bolt 5.4). I've also used [DozerDB](https://dozerdb.org) 5.26.3 with multi-database. I don't recommend either Neo4j 4.x or Neo4 5.x with BOLT BOLT 4.x, while it *should* work I haven't regressioned tested these.
 
 ## Elixir, Ash and Neo4j Types
 
-We've made some decisions around how Ash/Elixir types are used to persist attributes as Neo4j properties. Where possible we've used 'native' Neo4j types, where this is not possible we've simply quoted to strings. Ash Array support is limited by Neo4j to lists of simple types which must be homogenous.
+We've made some decisions around how Ash/Elixir types are used to persist attributes as Neo4j properties. Where possible we've used Ash.Type.dump_to_native/cast_stored and 'native' Neo4j types, in many cases encoding to ISO8601, JSON or Base64 strings.
 
 
-| Ash Type shortname  | Ash Type Module           | Elixir Type Module | Attribute Value Example                                | Neo4j Node Property Value Cypher Example               | Cypher Type    |
-|---------------------|---------------------------|--------------------|--------------------------------------------------------|--------------------------------------------------------|----------------|
-| :atom               | Ash.Type.Atom             | Atom               | :a                                                     | ":a"                                                   | STRING         |
-| :binary             | Ash.Type.Binary           | BitString          | <<1, 2, 3>>                                            | "\u0001\u0002\u0003"                                   | STRING         |
-| :boolean            | Ash.Type.Boolean          | Boolean            | true                                                   | true                                                   | BOOLEAN        |
-| :integer            | Ash.Type.Integer          | Integer            | 1                                                      | 1                                                      | INTEGER        |
-| :float              | Ash.Type.Float            | Float              | 1.23456789                                             | 1.23456789                                             | FLOAT          |
-| :string             | Ash.Type.String           | BitString          | "hello"                                                | "hello"                                                | STRING         |
-| :tuple              | Ash.Type.Tuple            | Tuple              | \{:a, 1, false\}                                         | "\{:a, 1, false\}"                                       | STRING         |
-| :keyword            | Ash.Type.Keyword          | Keyword            | [\{:a, :atom\}, \{:s, "string"\}]                          | ["\{:a, :atom}\","\{:s, string\}"]                         | LIST           |
-| :map                | Ash.Type.Map              | Map                | %\{c: false, a: "a", b: 1, n: nil\}                      | "%\{c: false, a: "a", b: 1, n: nil\}"                    | STRING         |
-| :mapset             | Ash.Type.MapSet           | MapSet             | MapSet.new([1, false, :two])                           | "MapSet.new([1, false, :two])"                         | STRING         |
-| :struct             | Ash.Type.Struct           | Struct             | %MyApp.Struct{a: :a, s: "Hello"}                       | "%MyApp.Struct\{a: :a, s: \"Hello\"\}"                   | STRING         |
-| :uuid               | Ash.Type.UUID             | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                 | "0274972c-161c-4dc9-882f-6851704c2af9                  | STRING         |
-| :url_encoded_binary | Ash.Type.UrlEncodedBinary | BitString          | "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw"                       | "aHR0cHM6Ly93d3cuZGlmZm8uZGV2Lw                        | STRING         |
-| :decimal            | Ash.Type.Decimal          | Decimal            | Decimal.new("4.2")                                     | "Decimal.new(\"4.2\")"                                 | STRING         |
-| :ci_string          | Ash.Type.CiString         | BitString          | "HELLO"                                                | "HELLO"                                                | STRING         |
-| :function           | Ash.Type.Function         | Function           | &AshNeo4j.Neo4jHelper.create_node/2                    | "&AshNeo4j.Neo4jHelper.create_node/2"                  | STRING         |
-| :module             | Ash.Type.Module           | Module             | AshNeo4j.DataLayer                                     | ":Elixir.AshNeo4j.DataLayer"                           | STRING         |
-| :regex              | Ash.Type.Regex            | Regex              | ~r/foo/iu                                              | "~r/foo/iu"                                            | STRING         |
-| \{:array, :atom\}     | -                         | List               | [:a,:b,:c]                                             | [":a",":b",":c"]                                       | LIST           |
-| \{:array, :boolean\}  | -                         | List               | [true,true,false]                                      | [true,true,false]                                      | LIST           |
-| \{:array, :integer\}  | -                         | List               | [1,2,3]                                                | [1,2,3]                                                | LIST           |
-| \{:array, :map\}      | -                         | List               | [%MyApp.Struct\{a: :a, s: "Hello"\}]                     | ["%MyApp.Struct\{a: :a, s: \"Hello\"\}"]                 | LIST           |
-| \{:array, :term\}     | -                         | List               | [%MyApp.Struct\{a: :a, s: "Hello"\}]                     | ["%MyApp.Struct\{a: :a, s: \"Hello\"\}"]                 | LIST           |
-| :date               | Ash.Type.Date             | Date               | ~D[2025-02-25]                                         | 2025-05-11                                             | DATE           |
-| :datetime           | Ash.Type.DateTime         | DateTime           | ~U[2025-02-25 11:59:00Z]                               | 2025-05-11T07:45:41Z                                   | ZONED_DATETIME |
-| :utc_datetime_usec  | Ash.Type.UtcDateTimeUsec  | DateTime           | ~U[2025-02-25 11:59:00.123456Z]                        | 2025-05-11T07:45:41.429903000Z                         | ZONED_DATETIME |
-| :naive_datetime     | Ash.Type.NaiveDateTime    | NaiveDateTime      | ~N[2025-05-11 07:45:41]                                | 2025-05-11T07:45:41                                    | LOCAL_DATETIME |
-| :time               | Ash.Type.Time             | Time               | ~T[07:45:41Z]                                          | 07:45:41Z                                              | TIME           |
-| :time_usec          | Ash.Type.TimeUsec         | Time               | ~T[07:45:41.429903Z]                                   | 07:45:41.429903000Z                                    | TIME           |
-| :duration           | Ash.Type.Duration         | Duration           | %Duration{month: 2}                                    | PT2H                                                   | DURATION       |
+| Ash Type shortname   | Ash Type Module                      | Elixir Type Module | Attribute Value Example                                 | Neo4j Node Property Value Cypher Example               | Cypher Type    |
+|----------------------|--------------------------------------|--------------------|---------------------------------------------------------|--------------------------------------------------------|----------------|
+| :atom                | Ash.Type.Atom                        | Atom               | :a                                                      | "a"                                                    | STRING         |
+| :binary              | Ash.Type.Binary                      | BitString          | <<1, 2, 3>>                                             | "AQID"                                                 | STRING         |
+| :boolean             | Ash.Type.Boolean                     | Boolean            | true                                                    | true                                                   | BOOLEAN        |
+| :ci_string           | Ash.Type.CiString                    | Ash.CiString       | Ash.CiString.new("Hello")                               | "Hello"                                                | STRING         |
+| :date                | Ash.Type.Date                        | Date               | ~D[2025-05-11]                                          | 2025-05-11                                             | DATE           |
+| :datetime            | Ash.Type.DateTime                    | DateTime           | ~U[2025-05-11 07:45:41Z]                                | 2025-05-11T07:45:41Z                                   | DATETIME       |
+| :decimal             | Ash.Type.Decimal                     | Decimal            | Decimal.new("4.2")                                      | "\"4.2\""                                              | STRING         |
+| :duration            | Ash.Type.Duration                    | Duration           | %Duration{month: 2}                                     | PT2H                                                   | DURATION       |
+| :duration_name       | Ash.Type.DurationName                | Atom               | :day                                                    | "day"                                                  | STRING         |
+| :integer             | Ash.Type.Integer                     | Integer            | 1                                                       | 1                                                      | INTEGER        |
+| :float               | Ash.Type.Float                       | Float              | 1.23456789                                              | 1.23456789                                             | FLOAT          |
+| :function            | Ash.Type.Function                    | Function           | &AshNeo4j.Neo4jHelper.create_node/2                     | "&AshNeo4j.Neo4jHelper.create_node/2"                  | STRING         |
+| subtype_of: :keyword | DogKeyword using Ash.Type.NewType    | DogKeyword         | [name: "Henry", age: 8, breed: :groodle]                | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
+| :map                 | Ash.Type.Map                         | Map                | %{name: "Henry", age: 8, breed: :groodle}               | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
+| :module              | Ash.Type.Module                      | Module             | AshNeo4j.DataLayer                                      | "Elixir.AshNeo4j.DataLayer"                            | STRING         |
+| :naive_datetime      | Ash.Type.NaiveDateTime               | NaiveDateTime      | ~N[2025-05-11 07:45:41]                                 | 2025-05-11T07:45:41                                    | LOCAL_DATETIME |
+| :string              | Ash.Type.String                      | BitString          | "hello"                                                 | "hello"                                                | STRING         |
+| subtype_of: :struct  | DogStruct using Ash.Type.NewType     | DogStruct          | %DogStruct{name: "Henry", age: 8, breed: :groodle}      | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
+| :time                | Ash.Type.Time                        | Time               | ~T[07:45:41Z]                                           | 07:45:41Z                                              | TIME           |
+| :time_usec           | Ash.Type.TimeUsec                    | Time               | ~T[07:45:41.429903Z]                                    | 07:45:41.429903000Z                                    | TIME           |
+| subtype_of: :tuple   | DogTuple using Ash.Type.NewType      | Tuple              | {"Henry", 8, :groodle}                                  | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
+| :subtype_of :struct  | DogTypedStruct using Ash.TypedStruct | DogTypedStruct     | %DogTypedStruct{name: "Henry", age: 8, breed: :groodle} | "{\"age\":8,\"breed\":\"groodle\",\"name\":\"Henry\"}" | STRING         |
+| :union               | Ash.Type.Union                       | Ash.Union          | %Ash.Union{type: :typed_struct, value: %Dog{age: 8}}    | "{\"type\":\"typed_struct\",\"value\":{\"age\":8}}"    | STRING         |
+| :url_encoded_binary  | Ash.Type.UrlEncodedBinary            | BitString          | <<1, 2, 3>>                                             | "AQID"                                                 | STRING         |
+| :utc_datetime        | Ash.Type.UtcDatetime                 | DateTime           | ~U[2025-05-11 07:45:41Z]                                | 2025-05-11T07:45:41Z                                   | DATETIME       |
+| :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | 2025-05-11T07:45:41.429903000Z.                        | DATETIME       |
+| :uuid                | Ash.Type.UUID                        | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                  | "0274972c-161c-4dc9-882f-6851704c2af9"                 | STRING         |
+| :uuid7               | Ash.Type.UUIDv7                      | BitString          | "019d85f7-8450-7695-9426-4ede74026140"                  | "019d85f7-8450-7695-9426-4ede74026140"                 | STRING         |
 
-Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. Neo4j doesn't store the timezone, just the offset so timezone information is lost.
+Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. 
 
-## Structs and String.Chars
+Struct is supported, however must implement Ash.Type. Ash arrays are supported as arrays in neo4j.
 
-Structs (including Ash embedded resources) are supported and stored in their string representation, this requires String.Chars to be implemented using the representation common for Elixir structs. This is straightforward whether or not you own the module. For most structs you can simply use inspect(struct), however for an embedded Ash.Resource don't want the metadata in the property value. Here is an example for a simple embedded resource:
+Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 
-```elixir
-defmodule Money do
-  use Ash.Resource,
-    data_layer: :embedded
+Ash.Type.File, Ash.Type.Term and Ash.Type.Vector are not supported.
 
-  attributes do
-    attribute :amount, :integer
-    attribute :currency, :atom
-  end
+## Storage Types
 
-  defimpl String.Chars do
-    def to_string(struct) do
-      inspect(Ash.Test.strip_metadata(struct)) |> String.replace(", __meta__: #Ecto.Schema.Metadata<>", "")
-    end
-  end
-end
-```
+Generally AshNeo4j uses Ash.Type.dump_to_native and Ash.Type.cast_stored. Post/prior to this we may encode/decode either as JSON or Base64.
 
-Here is a resulting node property value 
-```elixir
-'%AshNeo4j.Test.Resource.Money{amount: 1000, currency: :sek}'
-```
+Ash.Type.Keyword, Ash.Type.Map, Ash.Type.Struct, Ash.Type.Tuple and Ash.Type.Union are stored as JSON.
+Ash.Type that have storage type map and aren't built in are also stored as JSON. This covers TypedStruct, embedded resources and Ash.Type.NewType you create subtype_of keyword, map, struct, tuple or union.
+
+JSON types are stored as maps. We encode with AshNeo4j.Util.json_encode, which erases Struct's and orders keys. It deliberately avoids using Jason.Encoder on structs other than those it has converted to Jason.OrderedObject. This means you are free to use Jason.Encoder (possibly via [ash_jason](https://hexdocs.pm/ash_jason/)) for other concerns such as presentation or communications.
+
+Interestingly many Ash.Types have identical JSON representations (e.g. Map, Struct, Tuple, Keyword). Neo4j lists are used for arrays since JSON and Base64 are strings.
+
+A few things to note:
+* Ash.Type.UUID, Ash.Type.UUIDv7 - we persist in the 'cast_input' format rather than as compacted binary for readability, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. However foreign keys aren't persisted using properties, we of course use relationships.
+* Ash.Type.Function - we persist external functions as a string MFA, rather than binary, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. Persisting local functions is not supported.
+
+## Keys
+
+We've generally used :uuid_primary_key, which Ash creates. While it *may* be possible to use other types for primary keys, we haven't done so yet.
 
 ## Elixir nil and Neo4j Null
 
-Generally attributes with nil value are not persisted, rather they are simply not created or removed on update to nil. However values of nil within string quoted 'Elixir' types (keyword, tuple, map and struct) are persisted.
+Generally attributes with nil value are not persisted, rather they are simply not created or removed on update to nil.
+
+## Other Notable
+
+Transactions are supported.
 
 ## Limitations and Future Work
 
-Ash Neo4j has initial support for Ash create, update, read, destroy actions. Calculations are supported but not evaluated in Neo4j itself. Aggregates are not yet supported. The DSL is likely to evolve further and this may break back compatibility. Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them.
+Ash Neo4j has support for Ash create, update, read, destroy actions. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+
+Future work may include: calculations, aggregates, vectors/semantic search, geospatial support.
+
+Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 
 ## Acknowledgements
 
-Thanks to the [Ash Core](https://github.com/ash-project) for [ash](https://github.com/ash-project/ash) 🚀, including [ash_csv](https://github.com/vonagam/ash_jason) which was an exemplar.
+Thanks to the [Ash Core](https://github.com/ash-project) for [ash](https://github.com/ash-project/ash) 🚀, including [ash_csv](https://github.com/ash-project/ash_csv) which was an exemplar.
 
 Thanks to [Sagastume](https://github.com/sagastume) for [boltx](https://github.com/tiagodavi/ex4j) which was based on [bolt_sips](https://github.com/florinpatrascu/bolt_sips) by [Florin Patrascu](https://github.com/florinpatrascu).
 
-Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) and pioneering work on graph databases.
+Thanks to the [Neo4j Core](https://github.com/neo4j) for [neo4j](https://github.com/neo4j/neo4j) and pioneering work on graph databases. Thanks to [DozerDB](https://dozerdb.org) for enterprise features on community neo4j.
 
 ## Links
 

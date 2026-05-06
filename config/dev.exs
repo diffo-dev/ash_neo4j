@@ -4,16 +4,25 @@
 
 import Config
 
+level =
+  if System.get_env("DEBUG") do
+    :debug
+  else
+    :info
+  end
+
 config :bolty, Bolt,
   uri: "bolt://localhost:7687",
   auth: [username: "neo4j", password: "password"],
+  versions: [5.4],
   user_agent: "boltyTest/1",
   pool_size: 15,
   max_overflow: 3,
   prefix: :default,
   name: Bolt,
   log: true,
-  log_hex: true
+  log_hex: true,
+  level: level
 
 config :git_ops,
   mix_project: Mix.Project.get!(),
@@ -44,13 +53,6 @@ config :git_ops,
   # Pass in `true` to use `"README.md"` or a string to customize
   manage_readme_version: "README.md",
   version_tag_prefix: "v"
-
-level =
-  if System.get_env("DEBUG") do
-    :debug
-  else
-    :info
-  end
 
 config :logger, :console,
   level: level,

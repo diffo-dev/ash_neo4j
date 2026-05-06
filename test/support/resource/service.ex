@@ -74,20 +74,14 @@ defmodule AshNeo4j.Test.Resource.Service do
   calculations do
     calculate :href,
               :string,
-              expr(
-                "serviceInventoryManagement/v" <>
-                  specification.tmf_version <>
-                  "/service/" <>
-                  specification.name <>
-                  "/" <> id
-              ) do
+              AshNeo4j.Test.Resource.Calculation.Href do
       description "the inventory href of the service"
     end
   end
 
   preparations do
     prepare build(
-              load: [:href, :specification, :services, :resources],
+              load: [:specification, :services, :resources],
               sort: [id: :asc]
             )
   end

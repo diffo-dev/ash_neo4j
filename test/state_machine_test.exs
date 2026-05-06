@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.StateMachine.Test do
+defmodule AshNeo4j.StateMachineTest do
   @moduledoc false
-  use ExUnit.Case, async: false
-  alias AshNeo4j.Neo4jHelper
+  use ExUnit.Case, async: true
   alias AshNeo4j.BoltyHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.StateMachine
   require Ash.Query
 
@@ -15,9 +15,8 @@ defmodule AshNeo4j.StateMachine.Test do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:StateMachine)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "StateMachine tests" do

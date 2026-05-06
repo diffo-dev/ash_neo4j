@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Transformers.TransformAddTranslations do
+defmodule AshNeo4j.Persisters.PersistTranslations do
   @moduledoc false
   use Spark.Dsl.Transformer
   alias Spark.Dsl.Transformer
@@ -11,12 +11,13 @@ defmodule AshNeo4j.Transformers.TransformAddTranslations do
 
   @impl true
   def transform(dsl) do
-    {:ok, add_translations(dsl)}
-  end
+    transformed_dsl =
+      dsl
+      |> add_translations()
+      |> ensure_id_translated()
 
-  @impl true
-  def after?(AshStateMachine.Transformers.AddState), do: true
-  def after?(_), do: false
+    {:ok, transformed_dsl}
+  end
 
   defp add_translations(dsl) do
     # collect source attributes from 1:1 belongs_to relationships to avoid translating them
@@ -47,6 +48,33 @@ defmodule AshNeo4j.Transformers.TransformAddTranslations do
       |> Enum.reject(fn {name, _} -> name in source_attributes end)
       |> Enum.reject(fn {name, _} -> name in Verifier.get_option(dsl, [:neo4j], :skip, []) end)
 
-    Transformer.set_option(dsl, [:neo4j], :translations, translations)
+    Transformer.persist(dsl, :translations, translations)
+  end
+
+  defp ensure_id_translated(dsl) do
+    translations = Verifier.get_persisted(dsl, :translations, [])
+
+    if Keyword.get(translations, :id) == :id do
+      attributes = Verifier.get_entities(dsl, [:attributes])
+
+      id_attribute =
+        Enum.find(
+          attributes,
+          fn attribute ->
+            Map.get(attribute, :name) == :id
+          end
+        )
+
+      if id_attribute do
+        # translate id using 'short' type converted to camelCase neo4j property style
+        short_type = String.to_atom(List.last(Module.split(id_attribute.type)))
+        transformation = translations |> Keyword.put(:id, to_camel_case(short_type))
+        Transformer.persist(dsl, :translations, transformation)
+      else
+        dsl
+      end
+    else
+      dsl
+    end
   end
 end

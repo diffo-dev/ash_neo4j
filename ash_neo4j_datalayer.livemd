@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.2.15"}
+    {:ash_neo4j, "~> 0.4.1"}
   ],
   consolidate_protocols: false
 )
@@ -27,7 +27,7 @@ If already familiar with the [Ash Framework](https://ash-hq.org) in this liveboo
 
 ## Why have an Ash Neo4j DataLayer?
 
-I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last four years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
+I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last five years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
 
 Similarly I've found [Ash](https://ash-hq.org) to be an exceptional framework for declarative application development. It has a learning curve, however the Ash way is to use and build abstractions for exceptional maintainability.
 
@@ -114,7 +114,7 @@ AshNeo4j.Neo4jHelper.delete_all()
 First we define a minimal Domain to hold our Ash Resources:
 
 ```elixir
-defmodule Domain do
+defmodule Demo do
   @moduledoc false
   use Ash.Domain
 
@@ -128,12 +128,12 @@ We'll start by defining an Ash Resource for a Specification. We intend to have a
 
 <!-- livebook:{"break_markdown":true} -->
 
-For the Specfication resource we simply declare the data_layer when using Ash.Resource. Usually we'll need to do some minor configuration with a 'neo4j do' declaration block:
+For the Specification resource we simply declare the data_layer when using Ash.Resource. Usually we'll need to do some minor configuration with a 'neo4j do' declaration block:
 
 ```elixir
 defmodule Specification do
   use Ash.Resource,
-    domain: Servo,
+    domain: Demo,
     data_layer: AshNeo4j.DataLayer
 
   actions do
@@ -141,14 +141,13 @@ defmodule Specification do
   end
 
   attributes do
-    uuid_primary_key :id, writable?: true
-    attribute :href, :string, public?: true
+    uuid_primary_key :id
+    attribute :href, :ci_string, constraints: [casing: :lower], public?: true
     attribute :name, :string, public?: true
     attribute :type, :atom, constraints: [one_of: [:service, :resource]], public?: true
     attribute :major_version, :integer, default: 1, public?: true
     attribute :minor_version, :integer, default: 0, public?: true
   end
-  
 end
 ```
 
@@ -160,7 +159,6 @@ nbn_ethernet_v1 = Specification |> Ash.create!(%{name: "nbnEthernet", type: :res
 mobile_backup_v2 = Specification |> Ash.create!(%{name: "mobileBackup", major_version: 2, minor_version: 3})
 esim_v1 = Specification |> Ash.create!(%{name: "esim", type: :resource})
 specifications = [broadband_v1, mobile_backup_v2, nbn_ethernet_v1, esim_v1]
-
 ```
 
 Next we define an Ash Resource for Resource, using the AshNeo4j datalayer. A Resource is specified by a Specification, can use other Resources, and also belong to a Service. We can use the default relates for Resource belongs to Service.
@@ -169,7 +167,7 @@ Next we define an Ash Resource for Resource, using the AshNeo4j datalayer. A Res
 defmodule Resource do
   @moduledoc false
   use Ash.Resource,
-    domain: Servo,
+    domain: Demo,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
@@ -206,12 +204,10 @@ defmodule Resource do
   end
 
   attributes do
-    uuid_primary_key :id, writable?: true
+    uuid_primary_key :id
     attribute :name, :string, public?: true
     attribute :state, :atom, public?: true
     attribute :status, :atom, public?: true
-    attribute :service_id, :uuid, public?: true
-    attribute :resource_id, :uuid, public?: true
   end
 
   relationships do
@@ -229,7 +225,7 @@ We also need to declare a Service, also defined by a Specification and can manag
 defmodule Service do
   @moduledoc false
   use Ash.Resource,
-    domain: Servo,
+    domain: Demo,
     data_layer: AshNeo4j.DataLayer
 
   neo4j do
@@ -240,6 +236,10 @@ defmodule Service do
       {:services, :BELONGS_TO, :incoming, :Service},
       {:resources, :IS_ASSIGNED, :incoming, :Resource},
       {:resource, :IS_ASSIGNED, :outgoing, :Resource}
+    ]
+
+    guard [
+      {:SPECIFIES, :incoming, :Specification}
     ]
   end
 
@@ -270,11 +270,10 @@ defmodule Service do
   end
 
   attributes do
-    uuid_primary_key :id, writable?: true
+    uuid_primary_key :id
     attribute :name, :string, public?: true
     attribute :state, :atom, public?: true
     attribute :status, :atom, public?: true
-    attribute :service_id, :uuid, public?: true
   end
 
   relationships do
@@ -303,30 +302,16 @@ mobile_backup_0001 = Service |> Ash.create!(%{name: "mobileBackup_0001", specifi
 services = [broadband_0001, mobile_backup_0001]
 ```
 
-Now we relate the services and resources with eachother, such that the broadband service USES the nbnEthernet resource, and manages the mobileBackup service which has the esim resource:
+Now we relate the services and resources with each other, such that the broadband service uses the nbnEthernet resource, and manages the mobileBackup service which has the esim resource:
 
 ```elixir
 mobile_backup_0001 |> Ash.update!(%{use_resources: [esim_0001.id]})
-broadband_0001 |> Ash.update!(%{manage_services: [mobile_backup_0001.id]}) 
+broadband_0001 
+|> Ash.update!(%{manage_services: [mobile_backup_0001.id]})
 |> Ash.update!(%{use_resources: [nbn_ethernet_0001.id]})
 ```
 
 ## How your Ash Resources and their relationships are stored in Neo4j
-
-We've made some decisions about how Ash attributes and relationships are stored as Neo4j properties:
-
-* We've used native Neo4j types, including string, integer, float, boolean.
-* We've used native Neo4j arrays, however they are limited to one of the four primitive types above.
-* We've used native Neo4j temporal types, and mapped the Elixir temporal types to these.
-* We've used Neo4j strings for Elixir maps, structs and struct based types, such as MapSet, Decimal, Regex, Module
-* We map atoms to strings, keeping a leading :
-* We enforce Neo4j label, property and relationship [naming conventions](https://neo4j.com/docs/cypher-manual/current/syntax/naming/) strictly at compile time using validators.
-* We only support a single 'static' label per resource.
-* Embedded resources are converted the same way, and stored in strings or Neo4j arrays of strings, rather than using json. It is possible to use :string attributes as json, however you'll need to encode/decode to jsonString yourself.
-
-For embedded resources and other or custom `Ash.Type`, you must implement `String.Chars` protocol using inspect.
-
-<!-- livebook:{"break_markdown":true} -->
 
 Now check your Neo4j browser and you should see the full broadband service and resource hierarchy.
 
@@ -336,27 +321,80 @@ Explore the nodes and relationships. We strictly enforce [Neo4j naming conventio
 * node properties are camelCase
 * relationships are UPPER_CASE
 
-By default Ash Neo4j labels each node with the rightmost `Module.split` of the Ash Domain and Resource names. The label derived from the resource name can be overridden using the DSL `label` to provide an atom that will be inspected to produce the label, such as `label :InternalService`. 
-All labels are verified to be PascalCase.
+### Labels
 
-By default Ash Neo4j converts snake cased attributes to PascalCase properties names but you can also use :source from `attribute` dsl to directly specify the property name in Neo4j. Neo4j reserves `id` for an internal node property so Ash Neo4j will translate `:id` to `:uuid`
+By default AshNeo4j labels each node with the rightmost `Module.split` of the Ash Resource module name. The label can be overridden using the DSL `label` to provide an atom, such as `label :InternalService`. All labels are verified to be PascalCase at compile time.
 
-We use `relate` to direct `relationships` where we don't want AshNeo4j defaults. Earlier on the Service we had:
+### Properties
 
-`relate [
-      {:specification, :SPECIFIES, :incoming, :Specification},
-      {:resources, :USES, :outgoing, :Resource}
-   ]`
-This directs the our Service's 'belongs_To Specification relationship to semantic cypher (:Specification)-[SPECIFIES]->(:Service)
+By default AshNeo4j translates snake_case attribute names to camelCase Neo4j property names. Neo4j reserves `id` as an internal node property, so AshNeo4j translates the `:id` attribute to the camelCased short name of the type — for example an `:id` attribute of `:uuid` type is translated to the `uuid` node property.
 
-We can use skip to avoid persisting transisent attributes.
+AshNeo4j also supports the `source:` field in the `attribute` DSL — if present it is used directly as the Neo4j property name.
 
-Currently Ash Neo4j doesn't support [relationship properties](https://github.com/diffo-dev/ash_neo4j/discussions/4) although we are discussing how to support this. You can of course use a 'connector' resource.
+### Relationships
+
+We use `relate` to direct relationships where we don't want AshNeo4j defaults. For the Service above:
+
+```elixir
+relate [
+  {:specification, :SPECIFIES, :incoming, :Specification},
+  {:services, :BELONGS_TO, :incoming, :Service},
+  {:resources, :IS_ASSIGNED, :incoming, :Resource},
+  {:resource, :IS_ASSIGNED, :outgoing, :Resource}
+]
+```
+
+This directs the Service's `belongs_to :specification` relationship to the semantic Cypher `(:Specification)-[:SPECIFIES]->(:InternalService)`.
+
+Default relate clauses are always `:outgoing` from the source resource, and the edge label is derived from the Ash relationship type.
+
+### Guard
+
+We use `guard` to prevent destruction of a node while relationships exist. In the Service above:
+
+```elixir
+guard [
+  {:SPECIFIES, :incoming, :Specification}
+]
+```
+
+This prevents a Specification from being destroyed while it SPECIFIES a Service. Guard is useful where a resource has no explicit relationships but other resources depend on it existing.
+
+### Skip
+
+We use `skip` to avoid persisting certain attributes as node properties. This is useful for transient attributes or attributes you want to default using the resource but not store explicitly:
+
+```elixir
+neo4j do
+  skip [:transient_field]
+end
+```
+
+### Types and Storage
+
+AshNeo4j handles the mapping between Ash/Elixir types and Neo4j property storage. Where possible it uses native Neo4j types — string, integer, float, boolean, and temporal types. For complex types it uses JSON-encoded strings. For raw binary types it uses Base64-encoded strings.
+
+Key points:
+
+* **Atoms** are stored as strings — `:groodle` is stored as `"groodle"`
+* **UUID types** (`Ash.Type.UUID`, `Ash.Type.UUIDv7`) are stored as their printable string form — `"0274972c-161c-4dc9-882f-6851704c2af9"`
+* **Complex types** (maps, structs, tuples, keywords, unions, embedded resources, `Ash.Type.NewType`, `Ash.TypedStruct`) are JSON-encoded — `{"name":"Henry","age":8,"breed":"groodle"}`
+* **Binary types** (`Ash.Type.Binary`, `Ash.Type.UrlEncodedBinary`) are Base64-encoded — `"AQID"`
+* **Temporal types** (date, time, datetime, naive_datetime, duration) use native Neo4j types via Bolty PackStream
+* **CiString** (`Ash.Type.CiString`) is stored as a plain string using the casing applied during `cast_input`. Queries against CiString values use `toLower()` on both sides in Cypher since Neo4j has no native case-insensitive string type
+* **Arrays** use Neo4j native arrays — each element is individually encoded using the rules above
+* **nil values** are not persisted as properties — they are simply absent from the node, and removed on update to nil
+
+Interestingly many Ash types have identical JSON representations (Map, Struct, TypedStruct, Tuple, Keyword). This means schema evolution between these types requires no data migration — you can change the Elixir type of an attribute without touching Neo4j.
+
+JSON encoding uses `AshNeo4j.Util.json_encode`, which converts structs to plain maps and sorts keys for consistency. It deliberately avoids calling `Jason.Encoder` on structs, so you are free to implement `Jason.Encoder` (possibly via [ash_jason](https://hexdocs.pm/ash_jason/)) for presentation or API concerns without affecting storage.
+
+For a complete type reference see the [AshNeo4j README](https://github.com/diffo-dev/ash_neo4j).
 
 ## What Next?
 
 In this tutorial you've used the AshNeo4j DataLayer to persist some Ash Resources.
 
-If you are already using Ash you may enjoy the simplicity of a schemaless DataLayer natural beauty of graphs.
+If you are already using Ash you may enjoy the simplicity of a schemaless DataLayer and the natural beauty of graphs.
 
-If you find Ash Neo4j useful please visit and star on [github](https://github.com/diffo-dev/ash_neo4j/). Feel free to join discussions and raise issues to discuss PR's.
+If you find Ash Neo4j useful please visit and star on [github](https://github.com/diffo-dev/ash_neo4j/). Feel free to join discussions and raise issues to discuss PRs.

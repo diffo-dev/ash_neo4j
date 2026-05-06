@@ -32,4 +32,9 @@ defmodule AshNeo4j.Test.Util do
     dt2 = DateTime.shift(now, d2)
     DateTime.compare(dt1, dt2) == :eq
   end
+
+  def init_constraints(type) do
+    {:ok, constraints} = Ash.Type.init(type, type.subtype_constraints())
+    constraints
+  end
 end

@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Test.Chain do
+defmodule AshNeo4j.ChainTest do
   @moduledoc false
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Chain
   import AshNeo4j.Test.Util, only: [check_enrichment: 5]
 
@@ -15,9 +16,8 @@ defmodule AshNeo4j.Test.Chain do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Chain)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "Ash Chain tests" do

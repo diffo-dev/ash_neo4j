@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Blog.Test do
+defmodule AshNeo4j.BlogTest do
   @moduledoc false
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.BoltyHelper
+  alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Author
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
@@ -19,12 +20,8 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   setup do
-    on_exit(fn ->
-      Neo4jHelper.delete_nodes(:Author)
-      Neo4jHelper.delete_nodes(:Post)
-      Neo4jHelper.delete_nodes(:Comment)
-      Neo4jHelper.delete_nodes(:Tag)
-    end)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
   end
 
   describe "Bolty configuration tests" do
@@ -629,8 +626,8 @@ defmodule AshNeo4j.Blog.Test do
   end
 
   describe "many-to-many relationship tests" do
-    # fails with Ash.Error.Unknown "couldn't relate notes, despite attributes containing post_id"
-    @tag bugged: true
+    @tag :skip
+    @tag bugged: "fails with Ash.Error.Unknown couldn't relate notes, despite attributes containing post_id"
     test "many posts can be tagged with each tag" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
       {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})

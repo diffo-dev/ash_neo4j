@@ -116,4 +116,91 @@ defmodule AshNeo4j.Util do
     name = Atom.to_string(atom)
     Regex.match?(~r/^[A-Z]+(_[A-Z]+)*$/, name)
   end
+
+  @doc """
+  Returns the reverse direction
+  """
+  def reverse(direction) when is_atom(direction) do
+    case direction do
+      :incoming -> :outgoing
+      :outgoing -> :incoming
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Whether the given module uses Ash.TypedStruct
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Util.typed_struct?(AshNeo4j.Test.Type.DogTypedStruct)
+  true
+  iex> AshNeo4j.Util.typed_struct?(List)
+  false
+  ```
+  """
+  def typed_struct?(module) do
+    Spark.Dsl.is?(module, Ash.TypedStruct)
+  rescue
+    _ -> false
+  end
+
+  @doc """
+  Encodes json, converting structs and maps to ordered objects sorted by key, even when in lists/nested
+  Deliberately does not call Jason.Encoder on structs, since Protocol may not be implemented for persistence/at all
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Util.json_encode(%{name: "Henry", age: 8, breed: :groodle})
+  {:ok, ~s({"age":8,"breed":"groodle","name":"Henry"})}
+  iex> AshNeo4j.Util.json_encode([%{currency: :aud, amount: 100}, %{currency: :sek, amount: 650}])
+  {:ok, ~s([{"amount":100,"currency":"aud"},{"amount":650,"currency":"sek"}])}
+  iex> AshNeo4j.Util.json_encode(%Ash.Union{type: :typed_struct, value: %AshNeo4j.Test.Type.DogTypedStruct{name: "Henry", age: 8, breed: "groodle"}})
+  {:ok, ~s({"type":"typed_struct","value":{"age":8,"breed":"groodle","name":"Henry"}})}
+  ```
+  """
+  def json_encode(value) do
+    value
+    |> to_json_safe()
+    |> Jason.encode()
+  end
+
+  defp to_json_safe(struct) when is_struct(struct) do
+    struct
+    |> Map.from_struct()
+    |> to_json_safe()
+  end
+
+  defp to_json_safe(map) when is_map(map) and not is_struct(map) do
+    map
+    |> Enum.reduce([], fn {k, v}, acc ->
+      if is_nil(v), do: acc, else: [{to_string(k), to_json_safe(v)} | acc]
+    end)
+    |> Enum.sort_by(fn {k, _} -> k end)
+    |> Jason.OrderedObject.new()
+  end
+
+  defp to_json_safe(list) when is_list(list) do
+    Enum.map(list, &to_json_safe/1)
+  end
+
+  defp to_json_safe(atom) when is_atom(atom) and not is_nil(atom) and not is_boolean(atom) do
+    to_string(atom)
+  end
+
+  defp to_json_safe(value), do: value
+
+  def base64_decode(value) do
+    case Base.decode64(value) do
+      {:ok, decoded} -> {:ok, decoded}
+      _ -> {:error, "AshNeo4j.DataLayer: cannot decode Base64 value #{inspect(value)}"}
+    end
+  end
+
+  def json_decode(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} -> {:ok, decoded}
+      {:error, reason} -> {:error, "AshNeo4j.DataLayer: cannot decode JSON value #{inspect(value)}: #{inspect(reason)}"}
+    end
+  end
 end
