@@ -521,6 +521,8 @@ defmodule AshNeo4j.DataLayer do
     label = ResourceInfo.label(resource)
 
     if AshNeo4j.Sandbox.active?() do
+      prev = Process.get(:ash_neo4j_in_sandbox_tx, false)
+      Process.put(:ash_neo4j_in_sandbox_tx, true)
       Process.put({:neo4j_in_transaction, label}, true)
 
       try do
@@ -528,6 +530,7 @@ defmodule AshNeo4j.DataLayer do
       catch
         {{:neo4j_rollback, ^label}, value} -> {:error, value}
       after
+        Process.put(:ash_neo4j_in_sandbox_tx, prev)
         Process.delete({:neo4j_in_transaction, label})
       end
     else
@@ -554,8 +557,9 @@ defmodule AshNeo4j.DataLayer do
   end
 
   @impl true
-  def in_transaction?(resource) do
-    Process.get({:neo4j_in_transaction, ResourceInfo.label(resource)}, false) == true
+  def in_transaction?(_resource) do
+    Process.get(:ash_neo4j_tx_stack, []) != [] or
+      Process.get(:ash_neo4j_in_sandbox_tx, false)
   end
 
   defp filter_matches(records, nil, _domain), do: records
