@@ -531,7 +531,7 @@ defmodule AshNeo4j.DataLayer do
           result -> {:ok, result}
         end
       catch
-        {{:neo4j_rollback, ^label}, value} -> {:error, value}
+        {{:neo4j_rollback, _}, value} -> {:error, value}
       after
         Process.put(:ash_neo4j_in_sandbox_tx, prev)
         Process.delete({:neo4j_in_transaction, label})
@@ -548,7 +548,7 @@ defmodule AshNeo4j.DataLayer do
             result -> result
           end
         catch
-          {{:neo4j_rollback, ^label}, value} -> Bolty.rollback(conn, value)
+          {{:neo4j_rollback, _}, value} -> Bolty.rollback(conn, value)
         after
           Process.put(:ash_neo4j_tx_stack, stack)
           Process.delete({:neo4j_in_transaction, label})
