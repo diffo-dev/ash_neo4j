@@ -526,7 +526,10 @@ defmodule AshNeo4j.DataLayer do
       Process.put({:neo4j_in_transaction, label}, true)
 
       try do
-        {:ok, fun.()}
+        case fun.() do
+          {:error, error} -> {:error, error}
+          result -> {:ok, result}
+        end
       catch
         {{:neo4j_rollback, ^label}, value} -> {:error, value}
       after
@@ -540,7 +543,10 @@ defmodule AshNeo4j.DataLayer do
         Process.put({:neo4j_in_transaction, label}, true)
 
         try do
-          fun.()
+          case fun.() do
+            {:error, error} -> Bolty.rollback(conn, error)
+            result -> result
+          end
         catch
           {{:neo4j_rollback, ^label}, value} -> Bolty.rollback(conn, value)
         after
