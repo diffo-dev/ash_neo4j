@@ -104,6 +104,27 @@ When `expr:` is used, AshNeo4j fetches full destination node records, casts them
 
 Note: `expr:` in aggregate declarations is a programmatic API (`Ash.aggregate/3`, `Ash.Query.aggregate/3`). It is not available in the resource-level `aggregates do` DSL block.
 
+## Calculations
+
+AshNeo4j supports **expression calculations** — calculations declared with `expr(...)` in the `calculations` block. They are evaluated in Elixir after records are loaded from Neo4j, so they work with any Ash expression including arithmetic, string concatenation, and references to other attributes.
+
+```elixir
+calculations do
+  calculate :score_doubled, :integer, expr(score * 2)
+  calculate :full_name, :string, expr(first_name <> " " <> last_name)
+  calculate :label, :string, expr(title <> " (" <> type <> ")")
+end
+```
+
+Calculations can be:
+- **Loaded** via `Ash.load!(records, [:score_doubled])`
+- **Filtered on** via `Ash.Query.filter(score_doubled > 10)` — AshNeo4j loads all matching nodes then evaluates the filter in Elixir
+- **Sorted on** via `Ash.Query.sort(score_doubled: :asc)` — sort is applied in Elixir after records are loaded
+
+Calculations on embedded struct fields (`Ash.TypedStruct`, nested types) work the same way — the expression is evaluated against the deserialized struct.
+
+Custom calculation modules (`:calculate` callback) are not currently supported — only expression (`expr(...)`) calculations.
+
 ## Naming conventions
 
 AshNeo4j enforces Neo4j conventions at compile time:

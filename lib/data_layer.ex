@@ -20,8 +20,6 @@ defmodule AshNeo4j.DataLayer do
   alias AshNeo4j.DataLayer.TypeClassifier
   alias AshNeo4j.Util
 
-  @filter_stream_size 100
-
   @impl true
   def can?(_, :read), do: true
   def can?(_, :create), do: true
@@ -59,6 +57,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, _}), do: true
 
   def can?(_, :transact), do: true
+  def can?(_, :expression_calculation), do: true
   def can?(_, {:aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:query_aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:aggregate_relationship, _}), do: true
@@ -147,7 +146,7 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, aggregates: %{}]
+    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, aggregates: %{}, calculations: %{}]
   end
 
   @impl true
@@ -166,16 +165,21 @@ defmodule AshNeo4j.DataLayer do
           {:ok, []}
 
         {:ok, groups} ->
-          results =
+          all_results =
             convert_groups_to_resources(query, groups)
-            |> filter_stream(query.domain, query.filter)
             |> Enum.to_list()
 
-          case Enum.find(results, &match?({:error, _}, &1)) do
+          case Enum.find(all_results, &match?({:error, _}, &1)) do
             nil ->
-              records = Enum.map(results, fn {:ok, r} -> r; r -> r end)
+              records = Enum.map(all_results, fn {:ok, r} -> r; r -> r end)
               aggregates = Map.values(Map.get(query, :aggregates) || %{})
-              apply_aggregates_to_records(records, aggregates, resource)
+              calculations = Map.values(Map.get(query, :calculations) || %{})
+
+              with {:ok, records} <- apply_calculations_to_records(records, calculations, resource),
+                   records <- filter_matches(records, query.filter, query.domain),
+                   {:ok, records} <- apply_aggregates_to_records(records, aggregates, resource) do
+                {:ok, apply_calculation_sort(records, query.sort, query.domain)}
+              end
 
             {:error, reason} ->
               {:error, reason}
@@ -192,6 +196,12 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def add_aggregates(query, aggregates, _resource) do
     {:ok, %{query | aggregates: Map.merge(query.aggregates || %{}, Map.new(aggregates, &{&1.name, &1}))}}
+  end
+
+  @impl true
+  def add_calculation(query, calculation, expression, _resource) do
+    calcs = Map.get(query, :calculations) || %{}
+    {:ok, %{query | calculations: Map.put(calcs, calculation.name, {calculation, expression})}}
   end
 
   @impl true
@@ -829,28 +839,6 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp filter_stream(stream, _domain, nil), do: stream
-
-  defp filter_stream(stream, domain, filter) do
-    stream
-    |> Stream.chunk_every(@filter_stream_size)
-    |> Stream.flat_map(fn chunk ->
-      valid_records =
-        chunk
-        |> Enum.filter(fn
-          {:ok, _} -> true
-          %{} -> true
-          _ -> false
-        end)
-        |> Enum.map(fn
-          {:ok, r} -> r
-          r -> r
-        end)
-
-      filter_matches(valid_records, filter, domain)
-    end)
-  end
-
   defp create_from_attributes(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
     properties = dump_properties(mapping, attributes)
 
@@ -1035,6 +1023,38 @@ defmodule AshNeo4j.DataLayer do
           {:halt, {:error, e}}
       end
     end)
+  end
+
+  defp apply_calculations_to_records(records, [], _resource), do: {:ok, records}
+
+  defp apply_calculations_to_records(records, calculations, resource) do
+    Enum.reduce_while(calculations, {:ok, records}, fn {calculation, expression}, {:ok, acc} ->
+      case Ash.Filter.hydrate_refs(expression, %{resource: resource, public?: false, eval?: true}) do
+        {:ok, hydrated} ->
+          updated =
+            Enum.map(acc, fn record ->
+              case Ash.Expr.eval_hydrated(hydrated, record: record, resource: resource, unknown_on_unknown_refs?: true) do
+                {:ok, value} -> Map.put(record, calculation.name, value)
+                _ -> record
+              end
+            end)
+
+          {:cont, {:ok, updated}}
+
+        {:error, e} ->
+          {:halt, {:error, e}}
+      end
+    end)
+  end
+
+  defp apply_calculation_sort(records, sort, _domain) when sort in [nil, []], do: records
+
+  defp apply_calculation_sort(records, sort, domain) do
+    if Enum.any?(sort, fn {term, _} -> is_struct(term, Ash.Query.Calculation) end) do
+      Ash.Actions.Sort.runtime_sort(records, sort, domain: domain, rekey?: false)
+    else
+      records
+    end
   end
 
   defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], aggregate, _mode) do
