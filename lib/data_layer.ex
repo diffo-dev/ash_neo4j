@@ -10,6 +10,7 @@ defmodule AshNeo4j.DataLayer do
   require Logger
   alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.ResourceMapping
+  alias AshNeo4j.EdgeDescriptor
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.DataLayer.Cast
@@ -364,8 +365,7 @@ defmodule AshNeo4j.DataLayer do
       else
         if changeset.relationships do
           Enum.reduce_while(changeset.relationships, nil, fn {relationship_name, relationship_change}, _acc ->
-            subject_node_relationship =
-              ResourceInfo.node_relationship(resource, relationship_name)
+            subject_edge = Enum.find(mapping.edges, &(&1.relationship == relationship_name))
 
             subject_relationship =
               Ash.Resource.Info.relationship(resource, relationship_name)
@@ -392,16 +392,13 @@ defmodule AshNeo4j.DataLayer do
                     {:halt, {:error, "couldn't unrelate nodes"}}
 
                   _ ->
-                    {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
-                      subject_node_relationship
-
                     case Neo4jHelper.unrelate_nodes(
                            subject_label,
                            subject_id,
                            object_label,
                            object_id,
-                           edge_label,
-                           subject_to_object_direction
+                           subject_edge.label,
+                           subject_edge.direction
                          ) do
                       {:ok, %Bolty.Response{results: []}} ->
                         {:halt, {:error, "no result to unrelate nodes"}}
@@ -429,9 +426,6 @@ defmodule AshNeo4j.DataLayer do
                         {:halt, {:error, "couldn't relate nodes using argument"}}
 
                       _ ->
-                        {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
-                          subject_node_relationship
-
                         subject_exclusive? = ResourceInfo.source_exclusive?(resource, relationship_name)
                         object_exclusive? = ResourceInfo.destination_exclusive?(resource, relationship_name)
 
@@ -440,8 +434,8 @@ defmodule AshNeo4j.DataLayer do
                                subject_id,
                                object_label,
                                object_id,
-                               edge_label,
-                               subject_to_object_direction,
+                               subject_edge.label,
+                               subject_edge.direction,
                                {subject_exclusive?, object_exclusive?}
                              ) do
                           {:ok, %Bolty.Response{results: []}} ->
@@ -642,7 +636,7 @@ defmodule AshNeo4j.DataLayer do
     related = elem(consolidated_group, 1)
 
     enrichments =
-      Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
+      Enum.reduce(related, [], &enrichments(mapping, &2, &1))
       |> consolidate_enrichments()
 
     convert_node_to_resource(mapping, source_node, enrichments)
@@ -673,25 +667,31 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  defp enrichments(resource, acc, {edge, dest_node})
-       when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
+  defp enrichments(%ResourceMapping{} = mapping, acc, {edge, dest_node})
+       when is_list(acc) and is_map(edge) and is_map(dest_node) do
     dest_labels = Enum.into(dest_node.labels, [], &String.to_atom(&1))
     edge_label = String.to_atom(edge.type)
     edge_direction = edge_direction(edge, dest_node)
 
+    dest_labels_filtered = List.delete(dest_labels, mapping.domain_label)
+
     relationship =
-      ResourceInfo.relationship(resource, edge_label, edge_direction, dest_labels)
+      Enum.find_value(dest_labels_filtered, fn dest_label ->
+        case Enum.find(mapping.edges, fn ed ->
+               ed.label == edge_label and ed.direction == edge_direction and
+                 ed.destination_label == dest_label
+             end) do
+          nil -> nil
+          ed -> Ash.Resource.Info.relationship(mapping.module, ed.relationship)
+        end
+      end)
 
     if relationship != nil do
-      reverse_node_relationship = ResourceInfo.reverse_node_relationship(resource, relationship.name)
+      reverse_node_relationship = ResourceInfo.reverse_node_relationship(mapping.module, relationship.name)
 
       reverse_relationship =
-        cond do
-          reverse_node_relationship == nil ->
-            nil
-
-          true ->
-            Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
+        if reverse_node_relationship != nil do
+          Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
         end
 
       cond do
@@ -706,7 +706,8 @@ defmodule AshNeo4j.DataLayer do
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
           source_property =
-            ResourceInfo.convert_to_property_name(relationship.source, relationship.source_attribute)
+            Keyword.get(mapping.properties, relationship.source_attribute, relationship.source_attribute)
+            |> to_string()
 
           [
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
@@ -847,10 +848,12 @@ defmodule AshNeo4j.DataLayer do
             fn {source_attribute, name}, acc ->
               relationship = Ash.Resource.Info.relationship(resource, name)
               dest_resource = relationship.destination
-              node_relationship = ResourceInfo.node_relationship(resource, name)
 
-              case node_relationship do
-                {^name, edge_label, edge_direction, destination_label} ->
+              case Enum.find(mapping.edges, &(&1.relationship == name)) do
+                nil ->
+                  acc
+
+                %EdgeDescriptor{label: edge_label, direction: edge_direction, destination_label: destination_label} ->
                   dest_node_property_name =
                     Keyword.get(ResourceInfo.translations(dest_resource), relationship.destination_attribute)
 
@@ -863,9 +866,6 @@ defmodule AshNeo4j.DataLayer do
                     exclusive = ResourceInfo.destination_exclusive?(resource, name)
                     [{destination_label, dest_id, edge_label, edge_direction, exclusive} | acc]
                   end
-
-                nil ->
-                  acc
               end
             end
           )
