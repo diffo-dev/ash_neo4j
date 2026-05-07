@@ -76,6 +76,13 @@ defmodule AshNeo4j.Test.Resource.Post do
     belongs_to :author, AshNeo4j.Test.Resource.Author, public?: true, allow_nil?: false
   end
 
+  aggregates do
+    count :comment_count, :comments
+    exists :has_comments, :comments
+    first :first_comment_title, :comments, field: :title
+    list :comment_titles, :comments, field: :title
+  end
+
   preparations do
     prepare build(load: [:comments, :author])
   end

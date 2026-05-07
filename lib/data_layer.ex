@@ -13,6 +13,8 @@ defmodule AshNeo4j.DataLayer do
   alias AshNeo4j.EdgeDescriptor
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.QueryHelper
+  alias AshNeo4j.Cypher
+  alias AshNeo4j.Cypher.Query, as: CypherQuery
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.DataLayer.Dump
   alias AshNeo4j.Util
@@ -56,6 +58,9 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, _}), do: true
 
   def can?(_, :transact), do: true
+  def can?(_, {:aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
+  def can?(_, {:query_aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
+  def can?(_, {:aggregate_relationship, _}), do: true
   def can?(_, _), do: false
 
   @neo4j %Spark.Dsl.Section{
@@ -141,7 +146,7 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain]
+    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, aggregates: %{}]
   end
 
   @impl true
@@ -167,11 +172,9 @@ defmodule AshNeo4j.DataLayer do
 
           case Enum.find(results, &match?({:error, _}, &1)) do
             nil ->
-              {:ok,
-               Enum.map(results, fn
-                 {:ok, r} -> r
-                 r -> r
-               end)}
+              records = Enum.map(results, fn {:ok, r} -> r; r -> r end)
+              aggregates = Map.values(Map.get(query, :aggregates) || %{})
+              apply_aggregates_to_records(records, aggregates, resource)
 
             {:error, reason} ->
               {:error, reason}
@@ -183,6 +186,33 @@ defmodule AshNeo4j.DataLayer do
     """)
 
     result
+  end
+
+  @impl true
+  def add_aggregates(query, aggregates, _resource) do
+    {:ok, %{query | aggregates: Map.merge(query.aggregates || %{}, Map.new(aggregates, &{&1.name, &1}))}}
+  end
+
+  @impl true
+  def run_aggregate_query(data_layer_query, aggregates, resource) do
+    mapping = ResourceInfo.mapping(resource)
+    pk_field = hd(Ash.Resource.Info.primary_key(resource))
+    neo4j_pk = Keyword.get(mapping.properties, pk_field, pk_field)
+
+    case run_query(data_layer_query, resource) do
+      {:ok, records} ->
+        ids = Enum.map(records, &Map.get(&1, pk_field))
+
+        Enum.reduce_while(aggregates, {:ok, %{}}, fn aggregate, {:ok, acc} ->
+          case run_aggregate_for_ids(mapping, neo4j_pk, ids, aggregate, :total) do
+            {:ok, value} -> {:cont, {:ok, Map.put(acc, aggregate.name, value)}}
+            {:error, e} -> {:halt, {:error, e}}
+          end
+        end)
+
+      {:error, e} ->
+        {:error, e}
+    end
   end
 
   @impl true
@@ -980,5 +1010,98 @@ defmodule AshNeo4j.DataLayer do
         acc
       end
     end)
+  end
+
+  defp apply_aggregates_to_records(records, [], _resource), do: {:ok, records}
+
+  defp apply_aggregates_to_records(records, aggregates, resource) do
+    mapping = ResourceInfo.mapping(resource)
+    pk_field = hd(Ash.Resource.Info.primary_key(resource))
+    neo4j_pk = Keyword.get(mapping.properties, pk_field, pk_field)
+    ids = Enum.map(records, &Map.get(&1, pk_field))
+
+    Enum.reduce_while(aggregates, {:ok, records}, fn aggregate, {:ok, acc_records} ->
+      case run_aggregate_for_ids(mapping, neo4j_pk, ids, aggregate, :per_record) do
+        {:ok, agg_map} ->
+          updated = Enum.map(acc_records, fn record ->
+            id = Map.get(record, pk_field)
+            value = Map.get(agg_map, id, aggregate.default_value)
+            Map.put(record, aggregate.name, value)
+          end)
+          {:cont, {:ok, updated}}
+
+        {:error, e} ->
+          {:halt, {:error, e}}
+      end
+    end)
+  end
+
+  defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], aggregate, _mode) do
+    {:ok, aggregate.default_value}
+  end
+
+  defp run_aggregate_for_ids(%ResourceMapping{} = mapping, neo4j_pk, ids, aggregate, mode) do
+    case resolve_aggregate_path(mapping, aggregate.relationship_path) do
+      {:ok, path_segments, dest_mapping} ->
+        neo4j_field =
+          if aggregate.field && is_atom(aggregate.field),
+            do: Keyword.get(dest_mapping.properties, aggregate.field, aggregate.field),
+            else: nil
+
+        query =
+          case mode do
+            :per_record ->
+              CypherQuery.aggregate_per_record(
+                mapping.label, neo4j_pk, ids, path_segments,
+                aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+              )
+
+            :total ->
+              CypherQuery.aggregate_total(
+                mapping.label, neo4j_pk, ids, path_segments,
+                aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+              )
+          end
+
+        case Cypher.run(query) do
+          {:ok, %Bolty.Response{results: rows}} ->
+            result =
+              case mode do
+                :per_record ->
+                  {:ok, Map.new(rows, fn row ->
+                    {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
+                  end)}
+
+                :total ->
+                  value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
+                  {:ok, value}
+              end
+            result
+
+          {:error, e} ->
+            {:error, e}
+        end
+
+      {:error, e} ->
+        {:error, e}
+    end
+  end
+
+  defp resolve_aggregate_path(%ResourceMapping{} = mapping, relationship_path) do
+    Enum.reduce_while(relationship_path, {mapping, []}, fn name, {current_mapping, segments} ->
+      case Enum.find(current_mapping.edges, &(&1.relationship == name)) do
+        nil ->
+          {:halt, {:error, "relationship #{name} not found on #{current_mapping.module}"}}
+
+        %EdgeDescriptor{label: edge_label, direction: direction, destination_label: dest_label} ->
+          relationship = Ash.Resource.Info.relationship(current_mapping.module, name)
+          next_mapping = ResourceInfo.mapping(relationship.destination)
+          {:cont, {next_mapping, [{edge_label, direction, dest_label} | segments]}}
+      end
+    end)
+    |> case do
+      {:error, _} = error -> error
+      {dest_mapping, segments} -> {:ok, Enum.reverse(segments), dest_mapping}
+    end
   end
 end

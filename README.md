@@ -272,11 +272,32 @@ Generally attributes with nil value are not persisted, rather they are simply no
 
 Transactions are supported.
 
+## Aggregates
+
+AshNeo4j supports Ash aggregates. Declare them in the standard Ash `aggregates` block:
+
+```elixir
+aggregates do
+  count :comment_count, :comments
+  exists :has_comments, :comments
+  sum :total_score, :comments, field: :score
+  avg :avg_score, :comments, field: :score
+  min :min_score, :comments, field: :score
+  max :max_score, :comments, field: :score
+  first :first_comment_title, :comments, field: :title
+  list :comment_titles, :comments, field: :title
+end
+```
+
+Supported kinds: `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported.
+
+Aggregates are computed in Cypher via `OPTIONAL MATCH` traversal. Single-hop and multi-hop relationship paths are both supported. The field being aggregated must be a **direct node property** on the destination resource — fields inside embedded structs are not supported.
+
 ## Limitations and Future Work
 
-Ash Neo4j has support for Ash create, update, read, destroy actions. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+Ash Neo4j has support for Ash create, update, read, destroy actions, and aggregates. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
-Future work may include: calculations, aggregates, vectors/semantic search, geospatial support.
+Future work may include: calculations, cached calculations and aggregates, vectors/semantic search, geospatial support.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 
