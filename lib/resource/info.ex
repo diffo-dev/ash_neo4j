@@ -54,17 +54,22 @@ defmodule AshNeo4j.Resource.Info do
   """
   @spec mapping(Ash.Resource.t()) :: ResourceMapping.t()
   def mapping(resource) do
-    %ResourceMapping{
-      module: resource,
-      domain_label: domain_label(resource),
-      module_label: module_label(resource),
-      label: label(resource),
-      labels: labels(resource),
-      properties: translations(resource),
-      edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
-      guards: AshNeo4j.DataLayer.Info.guard(resource),
-      skip: AshNeo4j.DataLayer.Info.skip(resource)
-    }
+    if function_exported?(resource, :__ash_neo4j_mapping__, 0) do
+      resource.__ash_neo4j_mapping__()
+    else
+      %ResourceMapping{
+        module: resource,
+        domain_label: domain_label(resource),
+        module_label: module_label(resource),
+        label: label(resource),
+        labels: labels(resource),
+        properties: translations(resource),
+        edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
+        relationship_attributes: relationship_attributes(resource),
+        guards: AshNeo4j.DataLayer.Info.guard(resource),
+        skip: AshNeo4j.DataLayer.Info.skip(resource)
+      }
+    end
   end
 
   @doc """

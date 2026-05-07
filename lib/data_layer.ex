@@ -127,7 +127,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Persisters.PersistLabels,
       AshNeo4j.Persisters.PersistTranslations,
       AshNeo4j.Persisters.PersistRelationshipAttributes,
-      AshNeo4j.Persisters.PersistRelate
+      AshNeo4j.Persisters.PersistRelate,
+      AshNeo4j.Persisters.PersistMapping
     ],
     verifiers: [
       AshNeo4j.Verifiers.VerifyLabelsPascalCase,
@@ -833,7 +834,7 @@ defmodule AshNeo4j.DataLayer do
 
   defp relate_nodes(source_resource, resource, attributes, %ResourceMapping{} = mapping)
        when is_struct(source_resource) and is_atom(resource) and is_map(attributes) do
-    relationship_attributes = ResourceInfo.relationship_attributes(resource) |> Keyword.delete(:id)
+    relationship_attributes = mapping.relationship_attributes |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
     case Enum.count(relationship_source_attributes) do

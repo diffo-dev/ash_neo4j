@@ -26,6 +26,8 @@ defmodule AshNeo4j.ResourceMapping do
   - `:properties` — keyword list of `{ash_attribute_name, neo4j_property_name}` translations;
     insertion order is preserved.
   - `:edges` — list of `AshNeo4j.EdgeDescriptor.t()` structs, one per `relate` entry.
+  - `:relationship_attributes` — keyword list of `{source_attribute, relationship_name}` pairs for
+    attributes that hold foreign keys; used to create edges during CREATE.
   - `:guards` — list of `{edge_label, direction, destination_label}` tuples that block deletion.
   - `:skip` — list of relationship names excluded from automatic edge management.
   """
@@ -40,6 +42,7 @@ defmodule AshNeo4j.ResourceMapping do
           labels: [atom()],
           properties: keyword(String.t()),
           edges: [EdgeDescriptor.t()],
+          relationship_attributes: keyword(atom()),
           guards: list(tuple()),
           skip: [atom()]
         }
@@ -52,6 +55,7 @@ defmodule AshNeo4j.ResourceMapping do
     :labels,
     :properties,
     :edges,
+    :relationship_attributes,
     :guards,
     :skip
   ]
