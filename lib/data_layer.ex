@@ -630,11 +630,13 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp convert_groups_to_resources(query, groups) when is_struct(query, Query) and is_list(groups) do
+    mapping = ResourceInfo.mapping(query.resource)
+
     consolidate_groups(groups)
-    |> Stream.map(&convert_to_resource(query, &1))
+    |> Stream.map(&convert_to_resource(query, mapping, &1))
   end
 
-  defp convert_to_resource(query, consolidated_group)
+  defp convert_to_resource(query, %ResourceMapping{} = mapping, consolidated_group)
        when is_struct(query, Query) and is_tuple(consolidated_group) do
     source_node = elem(consolidated_group, 0)
     related = elem(consolidated_group, 1)
@@ -643,7 +645,7 @@ defmodule AshNeo4j.DataLayer do
       Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
       |> consolidate_enrichments()
 
-    convert_node_to_resource(query.resource, source_node, enrichments)
+    convert_node_to_resource(mapping, source_node, enrichments)
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -741,16 +743,24 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp convert_node_to_resource(resource, node, enrichments \\ [])
+  defp convert_node_to_resource(subject, node, enrichments \\ [])
+
+  defp convert_node_to_resource(%ResourceMapping{} = mapping, node, enrichments)
+       when is_map(node) and is_list(enrichments) do
+    convert_node_to_resource_impl(mapping.module, mapping.properties, node, enrichments)
+  end
+
+  defp convert_node_to_resource(resource, node, enrichments)
        when is_atom(resource) and is_map(node) and is_list(enrichments) do
-    enriched =
-      Enum.into(enrichments, %{}, fn {field, value} ->
-        {field, value}
-      end)
+    convert_node_to_resource_impl(resource, ResourceInfo.translations(resource), node, enrichments)
+  end
+
+  defp convert_node_to_resource_impl(resource, translations, node, enrichments)
+       when is_atom(resource) and is_list(translations) and is_map(node) and is_list(enrichments) do
+    enriched = Enum.into(enrichments, %{}, fn {field, value} -> {field, value} end)
 
     fields_result =
-      Enum.reduce_while(ResourceInfo.translations(resource), {:ok, enriched}, fn {resource_field, node_field},
-                                                                                 {:ok, acc} ->
+      Enum.reduce_while(translations, {:ok, enriched}, fn {resource_field, node_field}, {:ok, acc} ->
         property_value = Map.get(node.properties, to_string(node_field))
 
         case cast_attribute(resource, resource_field, property_value) do
@@ -872,7 +882,7 @@ defmodule AshNeo4j.DataLayer do
                 cond do
                   length(consolidated_groups) == 1 ->
                     query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
-                    convert_to_resource(query, hd(consolidated_groups))
+                    convert_to_resource(query, mapping, hd(consolidated_groups))
 
                   true ->
                     {:error, "expected groups to consolidate to a single group (resource)"}
