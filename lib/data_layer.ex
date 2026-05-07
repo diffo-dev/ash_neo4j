@@ -9,6 +9,7 @@ defmodule AshNeo4j.DataLayer do
 
   require Logger
   alias AshNeo4j.Resource.Info, as: ResourceInfo
+  alias AshNeo4j.ResourceMapping
   alias AshNeo4j.Neo4jHelper
   alias AshNeo4j.QueryHelper
   alias AshNeo4j.DataLayer.Cast
@@ -191,14 +192,15 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: create(#{inspect(resource)}, #{inspect(changeset)})
     """)
 
-    primary_keys = Ash.Resource.Info.primary_key(resource)
+    mapping = ResourceInfo.mapping(resource)
+    primary_keys = Ash.Resource.Info.primary_key(mapping.module)
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
     result =
       if Enum.empty?(id_attributes) do
         {:error, "no values supplied for primary keys #{primary_keys}"}
       else
-        create_from_attributes(resource, changeset.attributes)
+        create_from_attributes(mapping, changeset.attributes)
       end
 
     Logger.debug("""
@@ -214,7 +216,8 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: upsert(#{inspect(resource)}, #{inspect(changeset)}, #{inspect(keys)})
     """)
 
-    id_properties = id_properties(resource, changeset.attributes)
+    mapping = ResourceInfo.mapping(resource)
+    id_properties = id_properties(mapping, changeset.attributes)
 
     result =
       if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
@@ -267,12 +270,13 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    subject_id = id_properties(resource, changeset.data)
-    subject_label = ResourceInfo.label(resource)
+    mapping = ResourceInfo.mapping(resource)
+    subject_id = id_properties(mapping, changeset.data)
+    subject_label = mapping.label
 
-    update_properties = dump_properties(resource, changeset.attributes)
+    update_properties = dump_properties(mapping, changeset.attributes)
 
-    remove_property_names = remove_property_names(resource, changeset.attributes)
+    remove_property_names = remove_property_names(mapping, changeset.attributes)
 
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
@@ -486,8 +490,9 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: destroy(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    label = ResourceInfo.label(resource)
-    id_properties = id_properties(resource, changeset.data)
+    mapping = ResourceInfo.mapping(resource)
+    label = mapping.label
+    id_properties = id_properties(mapping, changeset.data)
 
     result =
       case Neo4jHelper.safe_delete_nodes(label, id_properties, ResourceInfo.preserve_node_relationships(resource)) do
@@ -803,19 +808,19 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    properties = dump_properties(resource, attributes)
+  defp create_from_attributes(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
+    properties = dump_properties(mapping, attributes)
 
-    case create_node(resource, properties) do
+    case create_node(mapping, properties) do
       {:ok, source_resource} ->
-        relate_nodes(source_resource, resource, attributes)
+        relate_nodes(source_resource, mapping.module, attributes, mapping)
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  defp relate_nodes(source_resource, resource, attributes)
+  defp relate_nodes(source_resource, resource, attributes, %ResourceMapping{} = mapping)
        when is_struct(source_resource) and is_atom(resource) and is_map(attributes) do
     relationship_attributes = ResourceInfo.relationship_attributes(resource) |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
@@ -855,8 +860,8 @@ defmodule AshNeo4j.DataLayer do
             end
           )
 
-        label = ResourceInfo.label(resource)
-        id_properties = id_properties(resource, attributes)
+        label = mapping.label
+        id_properties = id_properties(mapping, attributes)
 
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
           :ok ->
@@ -883,21 +888,20 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
-    case ResourceInfo.labels(resource) |> Neo4jHelper.create_node(properties) do
+  defp create_node(%ResourceMapping{} = mapping, properties) when is_map(properties) do
+    case mapping.labels |> Neo4jHelper.create_node(properties) do
       {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
-        convert_node_to_resource(resource, node)
+        convert_node_to_resource(mapping.module, node)
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
-    primary_keys = Ash.Resource.Info.primary_key(resource)
-    translations = ResourceInfo.translations(resource)
-    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translations, key, key), Map.get(map, key)} end)
+  defp id_properties(%ResourceMapping{} = mapping, map) when is_map(map) do
+    primary_keys = Ash.Resource.Info.primary_key(mapping.module)
+    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(mapping.properties, key, key), Map.get(map, key)} end)
   end
 
   defp relationship_properties(source_resource, dest_resource, source_map, dest_relationship_name)
@@ -924,10 +928,10 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp remove_property_names(resource, map) when is_atom(resource) and is_map(map) do
+  defp remove_property_names(%ResourceMapping{} = mapping, map) when is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(ResourceInfo.translations(resource), field, nil) end)
+    |> Enum.into([], fn {field, _} -> Keyword.get(mapping.properties, field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
   end
 
@@ -949,13 +953,13 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp dump_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    ResourceInfo.translations(resource)
+  defp dump_properties(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
+    mapping.properties
     |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
       value = Map.get(attributes, key)
 
       if value != nil do
-        attribute = Ash.Resource.Info.attribute(resource, key)
+        attribute = Ash.Resource.Info.attribute(mapping.module, key)
 
         attribute_type =
           Ash.Type.get_type!(attribute.type)
