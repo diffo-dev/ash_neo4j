@@ -9,11 +9,23 @@ defmodule AshNeo4j.Resource.Info do
   alias AshNeo4j.Util
 
   @doc """
-  The resource label if set via the DSL, or defaulted as the PascalCase short name of the resource's Elixir Module name. It is used on all operations.
+  The match label used for read, update, and destroy operations. This is the value of `label` in
+  the `neo4j do` block — which may come from a fragment (e.g. `:Instance` from `BaseInstance`).
+  Defaults to the PascalCase short name of the resource module.
   """
   @spec label(Ash.Resource.t()) :: atom() | nil
   def label(resource) do
     Extension.get_persisted(resource, :label, nil)
+  end
+
+  @doc """
+  The label derived from the resource module's own short name (e.g. `:Shelf` for
+  `MyApp.Access.Shelf`). Always set regardless of any fragment label override.
+  Use this when you need to identify the specific resource type rather than its base type.
+  """
+  @spec module_label(Ash.Resource.t()) :: atom() | nil
+  def module_label(resource) do
+    Extension.get_persisted(resource, :module_label, nil)
   end
 
   @doc """
@@ -25,13 +37,14 @@ defmodule AshNeo4j.Resource.Info do
   end
 
   @doc """
-  Returns the list of labels for the resource. This will consist of any domain label then resource label.
+  Returns the full list of labels written to the node on CREATE. Always starts with the domain
+  label, followed by the module label, then any additional base type labels from fragments.
+  For example, `DiffoExample.Access.Shelf` (using `BaseInstance`) returns `[:Access, :Shelf, :Instance]`.
   """
   @spec labels(Ash.Resource.t()) :: list(atom()) | nil
   def labels(resource) do
-    [domain_label(resource), label(resource)]
-    |> Enum.uniq()
-    |> Enum.filter(& &1)
+    Extension.get_persisted(resource, :labels, nil) ||
+      ([domain_label(resource), label(resource)] |> Enum.uniq() |> Enum.filter(& &1))
   end
 
   @doc """

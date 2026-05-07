@@ -57,6 +57,7 @@ These helpers operate **below the Ash data layer** — they talk directly to Neo
 
 - Property names must be in Neo4j form (`camelCase`; `uuid` not `id` for a UUID primary key)
 - Property values must be in their stored Neo4j form (e.g. the raw UUID string, not an Ash struct)
+- **Labels**: any label present on the node is valid. The recommended approach is to pass both the domain label and the module label as a pair — this asserts both are present and uniquely identifies the resource type: `read_nodes([:Access, :Shelf], %{uuid: shelf.id})`. Use `AshNeo4j.Resource.Info.domain_label/1` and `module_label/1` to obtain these programmatically.
 
 Return values from `read_nodes` and similar are `{:ok, %Bolty.Response{}}` structs — not Ash records. `nodes_relate_how?` returns `true`, `false`, or `:error`.
 

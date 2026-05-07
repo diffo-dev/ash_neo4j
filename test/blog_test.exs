@@ -454,18 +454,18 @@ defmodule AshNeo4j.BlogTest do
       assert related_post.score == 1
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Post,
+               [:SRM, :Post],
                %{title: "post7"},
-               :Comment,
+               [:SRM, :Comment],
                %{title: "comment6"},
                :BELONGS_TO,
                :incoming
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Post,
+               [:SRM, :Post],
                %{title: "post7"},
-               :Comment,
+               [:SRM, :Comment],
                %{title: "comment7"},
                :BELONGS_TO,
                :incoming
@@ -501,18 +501,18 @@ defmodule AshNeo4j.BlogTest do
       refreshed_comment2 = comment2 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Post,
+               [:SRM, :Post],
                %{title: "post7"},
-               :Comment,
+               [:SRM, :Comment],
                %{title: "comment8"},
                :BELONGS_TO,
                :incoming
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Post,
+               [:SRM, :Post],
                %{title: "post7"},
-               :Comment,
+               [:SRM, :Comment],
                %{title: "comment9"},
                :BELONGS_TO,
                :incoming
@@ -651,9 +651,9 @@ defmodule AshNeo4j.BlogTest do
       # check relationships in neo4j
       for post <- posts, tag_id <- tag_ids do
         assert Neo4jHelper.nodes_relate_how?(
-                 :Post,
+                 [:SRM, :Post],
                  %{title: post.title},
-                 :Tag,
+                 [:SRM, :Tag],
                  %{uuid: tag_id},
                  :TAGS,
                  :incoming
@@ -682,40 +682,40 @@ defmodule AshNeo4j.BlogTest do
   end
 
   defp create_post_nodes(count) when is_integer(count) do
-    Neo4jHelper.create_node([:Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+    Neo4jHelper.create_node([:SRM, :Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
 
     for i <- 1..count do
-      Neo4jHelper.create_node([:Post], %{
+      Neo4jHelper.create_node([:SRM, :Post], %{
         title: "post#{i}",
         score: i,
         public: true,
         uuid: post_uuid = Ash.UUID.generate()
       })
 
-      Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
+      Neo4jHelper.relate_nodes([:SRM, :Author], %{uuid: author_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :WROTE, :outgoing)
     end
   end
 
   defp create_comment_nodes(count) when is_integer(count) do
     for i <- 1..count do
-      Neo4jHelper.create_node([:Comment], %{title: "comment#{i}", uuid: Ash.UUID.generate()})
+      Neo4jHelper.create_node([:SRM, :Comment], %{title: "comment#{i}", uuid: Ash.UUID.generate()})
     end
   end
 
   defp create_posts_with_comments(posts, comments) when is_integer(posts) and is_integer(comments) do
-    Neo4jHelper.create_node([:Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
+    Neo4jHelper.create_node([:SRM, :Author], %{name: "author1", uuid: author_uuid = Ash.UUID.generate()})
 
     for post <- 1..posts do
-      Neo4jHelper.create_node([:Post], %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
-      Neo4jHelper.relate_nodes(:Author, %{uuid: author_uuid}, :Post, %{uuid: post_uuid}, :WROTE, :outgoing)
+      Neo4jHelper.create_node([:SRM, :Post], %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
+      Neo4jHelper.relate_nodes([:SRM, :Author], %{uuid: author_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :WROTE, :outgoing)
 
       for comment <- 1..comments do
-        Neo4jHelper.create_node([:Comment], %{
+        Neo4jHelper.create_node([:SRM, :Comment], %{
           title: "comment#{post}.#{comment}",
           uuid: comment_uuid = Ash.UUID.generate()
         })
 
-        Neo4jHelper.relate_nodes(:Comment, %{uuid: comment_uuid}, :Post, %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
+        Neo4jHelper.relate_nodes([:SRM, :Comment], %{uuid: comment_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
       end
     end
   end

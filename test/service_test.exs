@@ -61,7 +61,7 @@ defmodule AshNeo4j.ServiceTest do
         |> Ash.create!(%{name: "broadband", href: "Catalog/Connectivity/Broadband"})
 
       {:ok, %{records: records}} =
-        Neo4jHelper.read_nodes(:Specification, %{name: "broadband", href: "catalog/connectivity/broadband"})
+        Neo4jHelper.read_nodes([:SRM, :Specification], %{name: "broadband", href: "catalog/connectivity/broadband"})
 
       assert length(records) == 1
 
@@ -207,27 +207,27 @@ defmodule AshNeo4j.ServiceTest do
         parent_resource |> Ash.Changeset.for_update(:update, use_resources: [child_resource.id]) |> Ash.update()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "parent_service"},
-               :Service,
+               [:SRM, :Service],
                %{name: "child_service"},
                :MANAGES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "child_service"},
-               :Resource,
+               [:SRM, :Resource],
                %{name: "parent_resource"},
                :CONFIGURES,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Resource,
+               [:SRM, :Resource],
                %{name: "parent_resource"},
-               :Resource,
+               [:SRM, :Resource],
                %{name: "child_resource"},
                :USES,
                :outgoing
@@ -260,36 +260,36 @@ defmodule AshNeo4j.ServiceTest do
         |> Ash.update()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "service1"},
-               :Specification,
+               [:SRM, :Specification],
                %{name: "specification1"},
                :SPECIFIES,
                :incoming
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "service2"},
-               :Specification,
+               [:SRM, :Specification],
                %{name: "specification2"},
                :SPECIFIES,
                :incoming
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "service3"},
-               :Specification,
+               [:SRM, :Specification],
                %{name: "specification2"},
                :SPECIFIES,
                :incoming
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "service2"},
-               :Specification,
+               [:SRM, :Specification],
                %{name: "specification1"},
                :SPECIFIES,
                :incoming
@@ -342,9 +342,9 @@ defmodule AshNeo4j.ServiceTest do
       {:ok, updated_service} = service |> Ash.update(%{fire_event: event.id})
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Service,
+               [:SRM, :Service],
                %{name: "service"},
-               :Event,
+               [:SRM, :Event],
                %{type: :create},
                :RAISED,
                :outgoing
@@ -367,9 +367,9 @@ defmodule AshNeo4j.ServiceTest do
       {:ok, updated_resource} = resource |> Ash.update(%{fire_event: event.id})
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Resource,
+               [:SRM, :Resource],
                %{name: "resource"},
-               :Event,
+               [:SRM, :Event],
                %{type: :create},
                :FIRED,
                :outgoing
