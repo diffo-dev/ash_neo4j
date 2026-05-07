@@ -9,8 +9,10 @@ defmodule AshNeo4j.DataLayer do
 
   require Logger
   alias AshNeo4j.Resource.Info, as: ResourceInfo
-  alias AshNeo4j.QueryHelper
+  alias AshNeo4j.ResourceMapping
+  alias AshNeo4j.EdgeDescriptor
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.QueryHelper
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.DataLayer.Dump
   alias AshNeo4j.Util
@@ -125,7 +127,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Persisters.PersistLabels,
       AshNeo4j.Persisters.PersistTranslations,
       AshNeo4j.Persisters.PersistRelationshipAttributes,
-      AshNeo4j.Persisters.PersistRelate
+      AshNeo4j.Persisters.PersistRelate,
+      AshNeo4j.Persisters.PersistMapping
     ],
     verifiers: [
       AshNeo4j.Verifiers.VerifyLabelsPascalCase,
@@ -191,14 +194,15 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: create(#{inspect(resource)}, #{inspect(changeset)})
     """)
 
-    primary_keys = Ash.Resource.Info.primary_key(resource)
+    mapping = ResourceInfo.mapping(resource)
+    primary_keys = Ash.Resource.Info.primary_key(mapping.module)
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
     result =
       if Enum.empty?(id_attributes) do
         {:error, "no values supplied for primary keys #{primary_keys}"}
       else
-        create_from_attributes(resource, changeset.attributes)
+        create_from_attributes(mapping, changeset.attributes)
       end
 
     Logger.debug("""
@@ -214,7 +218,8 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: upsert(#{inspect(resource)}, #{inspect(changeset)}, #{inspect(keys)})
     """)
 
-    id_properties = id_properties(resource, changeset.attributes)
+    mapping = ResourceInfo.mapping(resource)
+    id_properties = id_properties(mapping, changeset.attributes)
 
     result =
       if Enum.any?(Map.values(id_properties), &is_nil(&1)) do
@@ -267,12 +272,13 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: update(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    subject_id = id_properties(resource, changeset.data)
-    subject_label = ResourceInfo.label(resource)
+    mapping = ResourceInfo.mapping(resource)
+    subject_id = id_properties(mapping, changeset.data)
+    subject_label = mapping.label
 
-    update_properties = dump_properties(resource, changeset.attributes)
+    update_properties = dump_properties(mapping, changeset.attributes)
 
-    remove_property_names = remove_property_names(resource, changeset.attributes)
+    remove_property_names = remove_property_names(mapping, changeset.attributes)
 
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
@@ -360,8 +366,7 @@ defmodule AshNeo4j.DataLayer do
       else
         if changeset.relationships do
           Enum.reduce_while(changeset.relationships, nil, fn {relationship_name, relationship_change}, _acc ->
-            subject_node_relationship =
-              ResourceInfo.node_relationship(resource, relationship_name)
+            subject_edge = Enum.find(mapping.edges, &(&1.relationship == relationship_name))
 
             subject_relationship =
               Ash.Resource.Info.relationship(resource, relationship_name)
@@ -388,16 +393,13 @@ defmodule AshNeo4j.DataLayer do
                     {:halt, {:error, "couldn't unrelate nodes"}}
 
                   _ ->
-                    {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
-                      subject_node_relationship
-
                     case Neo4jHelper.unrelate_nodes(
                            subject_label,
                            subject_id,
                            object_label,
                            object_id,
-                           edge_label,
-                           subject_to_object_direction
+                           subject_edge.label,
+                           subject_edge.direction
                          ) do
                       {:ok, %Bolty.Response{results: []}} ->
                         {:halt, {:error, "no result to unrelate nodes"}}
@@ -425,9 +427,6 @@ defmodule AshNeo4j.DataLayer do
                         {:halt, {:error, "couldn't relate nodes using argument"}}
 
                       _ ->
-                        {_relationship_name, edge_label, subject_to_object_direction, _destination_label} =
-                          subject_node_relationship
-
                         subject_exclusive? = ResourceInfo.source_exclusive?(resource, relationship_name)
                         object_exclusive? = ResourceInfo.destination_exclusive?(resource, relationship_name)
 
@@ -436,8 +435,8 @@ defmodule AshNeo4j.DataLayer do
                                subject_id,
                                object_label,
                                object_id,
-                               edge_label,
-                               subject_to_object_direction,
+                               subject_edge.label,
+                               subject_edge.direction,
                                {subject_exclusive?, object_exclusive?}
                              ) do
                           {:ok, %Bolty.Response{results: []}} ->
@@ -486,8 +485,9 @@ defmodule AshNeo4j.DataLayer do
     AshNeo4j.DataLayer: destroy(#{inspect(resource)}, #{inspect(changeset)}})
     """)
 
-    label = ResourceInfo.label(resource)
-    id_properties = id_properties(resource, changeset.data)
+    mapping = ResourceInfo.mapping(resource)
+    label = mapping.label
+    id_properties = id_properties(mapping, changeset.data)
 
     result =
       case Neo4jHelper.safe_delete_nodes(label, id_properties, ResourceInfo.preserve_node_relationships(resource)) do
@@ -625,20 +625,22 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp convert_groups_to_resources(query, groups) when is_struct(query, Query) and is_list(groups) do
+    mapping = ResourceInfo.mapping(query.resource)
+
     consolidate_groups(groups)
-    |> Stream.map(&convert_to_resource(query, &1))
+    |> Stream.map(&convert_to_resource(query, mapping, &1))
   end
 
-  defp convert_to_resource(query, consolidated_group)
+  defp convert_to_resource(query, %ResourceMapping{} = mapping, consolidated_group)
        when is_struct(query, Query) and is_tuple(consolidated_group) do
     source_node = elem(consolidated_group, 0)
     related = elem(consolidated_group, 1)
 
     enrichments =
-      Enum.reduce(related, [], &enrichments(query.resource, &2, &1))
+      Enum.reduce(related, [], &enrichments(mapping, &2, &1))
       |> consolidate_enrichments()
 
-    convert_node_to_resource(query.resource, source_node, enrichments)
+    convert_node_to_resource(mapping, source_node, enrichments)
   end
 
   defp consolidate_enrichments(enrichments) when is_list(enrichments) do
@@ -666,25 +668,31 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  defp enrichments(resource, acc, {edge, dest_node})
-       when is_atom(resource) and is_list(acc) and is_map(edge) and is_map(dest_node) do
+  defp enrichments(%ResourceMapping{} = mapping, acc, {edge, dest_node})
+       when is_list(acc) and is_map(edge) and is_map(dest_node) do
     dest_labels = Enum.into(dest_node.labels, [], &String.to_atom(&1))
     edge_label = String.to_atom(edge.type)
     edge_direction = edge_direction(edge, dest_node)
 
+    dest_labels_filtered = List.delete(dest_labels, mapping.domain_label)
+
     relationship =
-      ResourceInfo.relationship(resource, edge_label, edge_direction, dest_labels)
+      Enum.find_value(dest_labels_filtered, fn dest_label ->
+        case Enum.find(mapping.edges, fn ed ->
+               ed.label == edge_label and ed.direction == edge_direction and
+                 ed.destination_label == dest_label
+             end) do
+          nil -> nil
+          ed -> Ash.Resource.Info.relationship(mapping.module, ed.relationship)
+        end
+      end)
 
     if relationship != nil do
-      reverse_node_relationship = ResourceInfo.reverse_node_relationship(resource, relationship.name)
+      reverse_node_relationship = ResourceInfo.reverse_node_relationship(mapping.module, relationship.name)
 
       reverse_relationship =
-        cond do
-          reverse_node_relationship == nil ->
-            nil
-
-          true ->
-            Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
+        if reverse_node_relationship != nil do
+          Ash.Resource.Info.relationship(relationship.destination, elem(reverse_node_relationship, 0))
         end
 
       cond do
@@ -699,7 +707,8 @@ defmodule AshNeo4j.DataLayer do
         reverse_relationship != nil &&
             (reverse_relationship.cardinality == :one && reverse_relationship.type == :has_one) ->
           source_property =
-            ResourceInfo.convert_to_property_name(relationship.source, relationship.source_attribute)
+            Keyword.get(mapping.properties, relationship.source_attribute, relationship.source_attribute)
+            |> to_string()
 
           [
             {relationship.destination_attribute, Map.get(dest_node.properties, source_property)} | acc
@@ -736,16 +745,24 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp convert_node_to_resource(resource, node, enrichments \\ [])
+  defp convert_node_to_resource(subject, node, enrichments \\ [])
+
+  defp convert_node_to_resource(%ResourceMapping{} = mapping, node, enrichments)
+       when is_map(node) and is_list(enrichments) do
+    convert_node_to_resource_impl(mapping.module, mapping.properties, node, enrichments)
+  end
+
+  defp convert_node_to_resource(resource, node, enrichments)
        when is_atom(resource) and is_map(node) and is_list(enrichments) do
-    enriched =
-      Enum.into(enrichments, %{}, fn {field, value} ->
-        {field, value}
-      end)
+    convert_node_to_resource_impl(resource, ResourceInfo.translations(resource), node, enrichments)
+  end
+
+  defp convert_node_to_resource_impl(resource, translations, node, enrichments)
+       when is_atom(resource) and is_list(translations) and is_map(node) and is_list(enrichments) do
+    enriched = Enum.into(enrichments, %{}, fn {field, value} -> {field, value} end)
 
     fields_result =
-      Enum.reduce_while(ResourceInfo.translations(resource), {:ok, enriched}, fn {resource_field, node_field},
-                                                                                 {:ok, acc} ->
+      Enum.reduce_while(translations, {:ok, enriched}, fn {resource_field, node_field}, {:ok, acc} ->
         property_value = Map.get(node.properties, to_string(node_field))
 
         case cast_attribute(resource, resource_field, property_value) do
@@ -803,21 +820,21 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
-  defp create_from_attributes(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    properties = dump_properties(resource, attributes)
+  defp create_from_attributes(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
+    properties = dump_properties(mapping, attributes)
 
-    case create_node(resource, properties) do
+    case create_node(mapping, properties) do
       {:ok, source_resource} ->
-        relate_nodes(source_resource, resource, attributes)
+        relate_nodes(source_resource, mapping.module, attributes, mapping)
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  defp relate_nodes(source_resource, resource, attributes)
+  defp relate_nodes(source_resource, resource, attributes, %ResourceMapping{} = mapping)
        when is_struct(source_resource) and is_atom(resource) and is_map(attributes) do
-    relationship_attributes = ResourceInfo.relationship_attributes(resource) |> Keyword.delete(:id)
+    relationship_attributes = mapping.relationship_attributes |> Keyword.delete(:id)
     relationship_source_attributes = Map.take(attributes, Keyword.keys(relationship_attributes))
 
     case Enum.count(relationship_source_attributes) do
@@ -832,10 +849,12 @@ defmodule AshNeo4j.DataLayer do
             fn {source_attribute, name}, acc ->
               relationship = Ash.Resource.Info.relationship(resource, name)
               dest_resource = relationship.destination
-              node_relationship = ResourceInfo.node_relationship(resource, name)
 
-              case node_relationship do
-                {^name, edge_label, edge_direction, destination_label} ->
+              case Enum.find(mapping.edges, &(&1.relationship == name)) do
+                nil ->
+                  acc
+
+                %EdgeDescriptor{label: edge_label, direction: edge_direction, destination_label: destination_label} ->
                   dest_node_property_name =
                     Keyword.get(ResourceInfo.translations(dest_resource), relationship.destination_attribute)
 
@@ -848,15 +867,12 @@ defmodule AshNeo4j.DataLayer do
                     exclusive = ResourceInfo.destination_exclusive?(resource, name)
                     [{destination_label, dest_id, edge_label, edge_direction, exclusive} | acc]
                   end
-
-                nil ->
-                  acc
               end
             end
           )
 
-        label = ResourceInfo.label(resource)
-        id_properties = id_properties(resource, attributes)
+        label = mapping.label
+        id_properties = id_properties(mapping, attributes)
 
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
           :ok ->
@@ -867,7 +883,7 @@ defmodule AshNeo4j.DataLayer do
                 cond do
                   length(consolidated_groups) == 1 ->
                     query = resource_to_query(resource, Ash.Resource.Info.domain(resource))
-                    convert_to_resource(query, hd(consolidated_groups))
+                    convert_to_resource(query, mapping, hd(consolidated_groups))
 
                   true ->
                     {:error, "expected groups to consolidate to a single group (resource)"}
@@ -883,21 +899,20 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp create_node(resource, properties) when is_atom(resource) and is_map(properties) do
-    case ResourceInfo.labels(resource) |> Neo4jHelper.create_node(properties) do
+  defp create_node(%ResourceMapping{} = mapping, properties) when is_map(properties) do
+    case mapping.labels |> Neo4jHelper.create_node(properties) do
       {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
-        convert_node_to_resource(resource, node)
+        convert_node_to_resource(mapping.module, node)
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  defp id_properties(resource, map) when is_atom(resource) and is_map(map) do
-    primary_keys = Ash.Resource.Info.primary_key(resource)
-    translations = ResourceInfo.translations(resource)
-    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(translations, key, key), Map.get(map, key)} end)
+  defp id_properties(%ResourceMapping{} = mapping, map) when is_map(map) do
+    primary_keys = Ash.Resource.Info.primary_key(mapping.module)
+    Enum.into(primary_keys, %{}, fn key -> {Keyword.get(mapping.properties, key, key), Map.get(map, key)} end)
   end
 
   defp relationship_properties(source_resource, dest_resource, source_map, dest_relationship_name)
@@ -924,10 +939,10 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp remove_property_names(resource, map) when is_atom(resource) and is_map(map) do
+  defp remove_property_names(%ResourceMapping{} = mapping, map) when is_map(map) do
     map
     |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(ResourceInfo.translations(resource), field, nil) end)
+    |> Enum.into([], fn {field, _} -> Keyword.get(mapping.properties, field, nil) end)
     |> Enum.reject(fn field -> field == nil end)
   end
 
@@ -949,13 +964,13 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp dump_properties(resource, attributes) when is_atom(resource) and is_map(attributes) do
-    ResourceInfo.translations(resource)
+  defp dump_properties(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
+    mapping.properties
     |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
       value = Map.get(attributes, key)
 
       if value != nil do
-        attribute = Ash.Resource.Info.attribute(resource, key)
+        attribute = Ash.Resource.Info.attribute(mapping.module, key)
 
         attribute_type =
           Ash.Type.get_type!(attribute.type)
