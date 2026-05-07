@@ -43,7 +43,13 @@ defmodule AshNeo4j.QueryHelper do
       Query.node_read(mapping.label)
     else
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
-      predicates = Map.get(simple_filter, :predicates, [])
+
+      predicates =
+        simple_filter
+        |> Map.get(:predicates, [])
+        |> Enum.reject(fn pred ->
+          match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(pred, :left))
+        end)
 
       if predicates == [] do
         Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
@@ -128,7 +134,9 @@ defmodule AshNeo4j.QueryHelper do
         []
 
       sort ->
-        Enum.map(sort, fn {name, order} ->
+        sort
+        |> Enum.reject(fn {name, _order} -> is_struct(name, Ash.Query.Calculation) end)
+        |> Enum.map(fn {name, order} ->
           {Keyword.get(mapping.properties, name, name), order}
         end)
     end

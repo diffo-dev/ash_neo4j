@@ -313,9 +313,9 @@ For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the
 
 ## Limitations and Future Work
 
-Ash Neo4j has support for Ash create, update, read, destroy actions, and aggregates. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, and expression calculations. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
-Future work may include: calculations, cached calculations and aggregates, vectors/semantic search, geospatial support.
+Future work may include: cached calculations and aggregates, vectors/semantic search, geospatial support.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 

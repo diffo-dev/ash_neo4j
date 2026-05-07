@@ -34,6 +34,12 @@ defmodule AshNeo4j.Test.Resource.Comment do
     belongs_to :post, AshNeo4j.Test.Resource.Post, destination_attribute: :id, public?: true
   end
 
+  calculations do
+    calculate :score_doubled, :integer, expr(score * 2)
+    calculate :titled, :string, expr(title <> " (comment)")
+    calculate :dog_age, :integer, expr(get_path(dog, [:age]))
+  end
+
   preparations do
     prepare build(sort: [title: :asc])
   end
