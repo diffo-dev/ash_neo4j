@@ -87,7 +87,7 @@ defmodule AshNeo4j.QueryHelper do
         prop_name = property_name(mapping, predicate.left)
         relationship_name = elem(ResourceInfo.relationship(mapping.module, prop_name), 1)
         relationship = Ash.Resource.Info.relationship(mapping.module, relationship_name)
-        node_relationship = ResourceInfo.node_relationship(mapping.module, relationship_name)
+        edge = Enum.find(mapping.edges, &(&1.relationship == relationship_name))
         dest_label = ResourceInfo.label(relationship.destination)
 
         dest_property_name =
@@ -98,7 +98,7 @@ defmodule AshNeo4j.QueryHelper do
         cypher =
           "MATCH " <>
             Cypher.node(:s, [mapping.label]) <>
-            Cypher.relationship(node_relationship) <>
+            Cypher.relationship(:r, edge.label, edge.direction) <>
             Cypher.node(:d, [dest_label]) <>
             " WHERE " <>
             Cypher.expression(:d, dest_property_name, operator, "$#{param_key}") <>

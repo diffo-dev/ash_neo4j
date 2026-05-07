@@ -253,20 +253,6 @@ defmodule AshNeo4j.Resource.Info do
   end
 
   @doc """
-  Returns the source node property name given the source resource, dest_resource and destination attribute name, i.e. post_id returns uuid
-  """
-  @spec source_node_property_name(Ash.Resource.t(), atom(), atom()) :: atom() | nil
-  def source_node_property_name(source_resource, dest_resource, dest_attribute_name)
-      when is_atom(source_resource) and is_atom(dest_resource) and is_atom(dest_attribute_name) do
-    # TODO use dest resource to figure out the dest_prefix
-    dest_prefix = String.downcase("#{Ash.Resource.Info.short_name(source_resource)}_")
-    attribute_name = String.to_atom(String.replace_leading(Atom.to_string(dest_attribute_name), dest_prefix, ""))
-
-    translations(source_resource)
-    |> Keyword.get(attribute_name, attribute_name)
-  end
-
-  @doc """
   Converts an attribute name to a node property name string, translating if necessary
   """
   @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil

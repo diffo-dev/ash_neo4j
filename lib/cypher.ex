@@ -205,22 +205,7 @@ defmodule AshNeo4j.Cypher do
     end
   end
 
-  @doc """
-  Converts a node_relationship tuple to cypher clause, ignoring the label
-
-  ## Examples
-  ```
-  iex> AshNeo4j.Cypher.relationship({:movies, :ACTED_IN, :outgoing})
-  "-[r:ACTED_IN]->"
-  iex> AshNeo4j.Cypher.relationship(nil)
-  "-[r]-"
-  ```
-  """
-  def relationship(node_relationship) when is_tuple(node_relationship) do
-    relationship(:r, elem(node_relationship, 1), elem(node_relationship, 2))
-  end
-
-  def relationship(nil) when is_nil(nil), do: "-[r]-"
+  def relationship(nil), do: "-[r]-"
 
   @doc """
   Runs some cypher
