@@ -16,15 +16,27 @@ Ash DataLayer for Neo4j, configurable using a simple DSL
 
 ## Installation
 
-Add to the deps:
+### With Igniter (recommended)
+
+```bash
+mix igniter.install ash_neo4j
+```
+
+This automatically configures the formatter, adds Bolty connection config to `config/runtime.exs`, and wires Bolty into your supervision tree.
+
+### Manual
+
+Add to deps in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.15"},
+    {:ash_neo4j, "~> 0.4"},
   ]
 end
 ```
+
+Then follow the [Bolty configuration](#installing-neo4j-and-configuring-bolty) steps below.
 
 ## Tutorial
 
