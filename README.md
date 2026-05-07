@@ -291,7 +291,16 @@ end
 
 Supported kinds: `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported.
 
-Aggregates are computed in Cypher via `OPTIONAL MATCH` traversal. Single-hop and multi-hop relationship paths are both supported. The field being aggregated must be a **direct node property** on the destination resource — fields inside embedded structs are not supported.
+Aggregates are computed in Cypher via `OPTIONAL MATCH` traversal. Single-hop and multi-hop relationship paths are both supported.
+
+**Embedded struct and JSON-type fields are supported.** When `field:` refers to an attribute stored as JSON — `Ash.TypedStruct`, `Ash.Type.NewType` with map storage, embedded resources, `Ash.Type.Map`, `Ash.Type.Union`, etc. — AshNeo4j collects the raw JSON strings from Neo4j and deserializes them in Elixir using `Ash.Type.cast_stored/3`. `:list` and `:first` aggregates return fully deserialized struct values. `:sum`, `:avg`, `:min`, `:max` work when the deserialized values are directly comparable/numeric.
+
+```elixir
+aggregates do
+  list :all_metadata, :related_things, field: :metadata   # returns [%MetadataStruct{}, ...]
+  first :first_metadata, :related_things, field: :metadata # returns %MetadataStruct{}
+end
+```
 
 ## Limitations and Future Work
 

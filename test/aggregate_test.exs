@@ -10,6 +10,7 @@ defmodule AshNeo4j.AggregateTest do
   alias AshNeo4j.Test.Resource.Author
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Type.DogTypedStruct
   require Ash.Query
 
   setup_all do
@@ -34,6 +35,12 @@ defmodule AshNeo4j.AggregateTest do
   defp create_comment(post, title) do
     Comment
     |> Ash.Changeset.for_create(:create, %{title: title, post_id: post.id})
+    |> Ash.create!()
+  end
+
+  defp create_comment_with_dog(post, title, dog) do
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: title, post_id: post.id, dog: dog})
     |> Ash.create!()
   end
 
@@ -111,6 +118,37 @@ defmodule AshNeo4j.AggregateTest do
 
       [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_count])
       assert loaded.comment_count == 0
+    end
+  end
+
+  describe "aggregates on embedded struct fields" do
+    test "list aggregate returns deserialized typed structs" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_dog(post, "a", %DogTypedStruct{name: "Rex", age: 3})
+      create_comment_with_dog(post, "b", %DogTypedStruct{name: "Spot", age: 7})
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_dogs])
+      names = loaded.comment_dogs |> Enum.map(& &1.name) |> Enum.sort()
+      assert names == ["Rex", "Spot"]
+    end
+
+    test "first aggregate returns a single typed struct" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_dog(post, "a", %DogTypedStruct{name: "Rex", age: 3})
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:first_comment_dog])
+      assert %DogTypedStruct{name: "Rex", age: 3} = loaded.first_comment_dog
+    end
+
+    test "list aggregate returns empty list when no structs stored" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment(post, "no dog here")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_dogs])
+      assert loaded.comment_dogs == []
     end
   end
 end

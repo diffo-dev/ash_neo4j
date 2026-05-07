@@ -81,6 +81,8 @@ defmodule AshNeo4j.Test.Resource.Post do
     exists :has_comments, :comments
     first :first_comment_title, :comments, field: :title
     list :comment_titles, :comments, field: :title
+    list :comment_dogs, :comments, field: :dog
+    first :first_comment_dog, :comments, field: :dog
   end
 
   preparations do

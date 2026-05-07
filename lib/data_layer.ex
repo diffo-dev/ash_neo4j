@@ -17,6 +17,7 @@ defmodule AshNeo4j.DataLayer do
   alias AshNeo4j.Cypher.Query, as: CypherQuery
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.DataLayer.Dump
+  alias AshNeo4j.DataLayer.TypeClassifier
   alias AshNeo4j.Util
 
   @filter_stream_size 100
@@ -1048,44 +1049,122 @@ defmodule AshNeo4j.DataLayer do
             do: Keyword.get(dest_mapping.properties, aggregate.field, aggregate.field),
             else: nil
 
-        query =
-          case mode do
-            :per_record ->
-              CypherQuery.aggregate_per_record(
-                mapping.label, neo4j_pk, ids, path_segments,
-                aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
-              )
+        case embedded_field_type(dest_mapping.module, aggregate.field) do
+          {field_type, field_constraints} ->
+            run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints)
 
-            :total ->
-              CypherQuery.aggregate_total(
-                mapping.label, neo4j_pk, ids, path_segments,
-                aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
-              )
-          end
-
-        case Cypher.run(query) do
-          {:ok, %Bolty.Response{results: rows}} ->
-            result =
+          nil ->
+            query =
               case mode do
                 :per_record ->
-                  {:ok, Map.new(rows, fn row ->
-                    {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
-                  end)}
+                  CypherQuery.aggregate_per_record(
+                    mapping.label, neo4j_pk, ids, path_segments,
+                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                  )
 
                 :total ->
-                  value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
-                  {:ok, value}
+                  CypherQuery.aggregate_total(
+                    mapping.label, neo4j_pk, ids, path_segments,
+                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                  )
               end
-            result
 
-          {:error, e} ->
-            {:error, e}
+            case Cypher.run(query) do
+              {:ok, %Bolty.Response{results: rows}} ->
+                case mode do
+                  :per_record ->
+                    {:ok, Map.new(rows, fn row ->
+                      {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
+                    end)}
+
+                  :total ->
+                    value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
+                    {:ok, value}
+                end
+
+              {:error, e} ->
+                {:error, e}
+            end
         end
 
       {:error, e} ->
         {:error, e}
     end
   end
+
+  defp embedded_field_type(resource_module, field_name) when is_atom(field_name) do
+    case Ash.Resource.Info.attribute(resource_module, field_name) do
+      nil -> nil
+      attr ->
+        type = Ash.Type.get_type(attr.type)
+        case TypeClassifier.classify(type) do
+          {:ok, :ash_json, _} -> {type, attr.constraints}
+          _ -> nil
+        end
+    end
+  end
+  defp embedded_field_type(_, _), do: nil
+
+  defp run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints) do
+    query =
+      case mode do
+        :per_record ->
+          CypherQuery.aggregate_per_record(
+            mapping.label, neo4j_pk, ids, path_segments,
+            :list, neo4j_field, aggregate.name, aggregate.uniq?
+          )
+
+        :total ->
+          CypherQuery.aggregate_total(
+            mapping.label, neo4j_pk, ids, path_segments,
+            :list, neo4j_field, aggregate.name, aggregate.uniq?
+          )
+      end
+
+    case Cypher.run(query) do
+      {:ok, %Bolty.Response{results: rows}} ->
+        agg_key = to_string(aggregate.name)
+
+        case mode do
+          :per_record ->
+            {:ok, Map.new(rows, fn row ->
+              source_id = Map.get(row, "source_id")
+              raw_list = Map.get(row, agg_key, [])
+              cast_list = cast_raw_list(raw_list, field_type, field_constraints)
+              {source_id, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
+            end)}
+
+          :total ->
+            raw_list = rows |> List.first(%{}) |> Map.get(agg_key, [])
+            cast_list = cast_raw_list(raw_list, field_type, field_constraints)
+            {:ok, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
+        end
+
+      {:error, e} ->
+        {:error, e}
+    end
+  end
+
+  defp cast_raw_list(raw_list, field_type, field_constraints) when is_list(raw_list) do
+    case Cast.cast({:array, field_type}, raw_list, field_constraints) do
+      {:ok, values} -> values
+      {:error, _} -> []
+    end
+  end
+  defp cast_raw_list(_, _, _), do: []
+
+  defp apply_elixir_aggregate(:list, values, _default), do: values
+  defp apply_elixir_aggregate(:first, values, default), do: List.first(values, default)
+  defp apply_elixir_aggregate(:count, values, _default), do: length(values)
+  defp apply_elixir_aggregate(:exists, values, _default), do: values != []
+  defp apply_elixir_aggregate(:sum, [], default), do: default
+  defp apply_elixir_aggregate(:sum, values, _default), do: Enum.sum(values)
+  defp apply_elixir_aggregate(:avg, [], default), do: default
+  defp apply_elixir_aggregate(:avg, values, _default), do: Enum.sum(values) / length(values)
+  defp apply_elixir_aggregate(:min, [], default), do: default
+  defp apply_elixir_aggregate(:min, values, _default), do: Enum.min(values)
+  defp apply_elixir_aggregate(:max, [], default), do: default
+  defp apply_elixir_aggregate(:max, values, _default), do: Enum.max(values)
 
   defp resolve_aggregate_path(%ResourceMapping{} = mapping, relationship_path) do
     Enum.reduce_while(relationship_path, {mapping, []}, fn name, {current_mapping, segments} ->

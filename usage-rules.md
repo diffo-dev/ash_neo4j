@@ -38,7 +38,7 @@ Do not carry SQL assumptions into AshNeo4j. The differences are fundamental:
 - There is no `Ecto.Repo`. The Neo4j connection pool is a Bolty named process (`Bolt`), configured in `runtime.exs` and added to your supervision tree.
 - **Every node is created with at least two labels**: the domain label (PascalCase short name of the Ash domain module) and the resource label. When a resource uses a fragment that declares a `label`, that fragment label is also written on create — so a resource extending `BaseInstance` (which declares `label :Instance`) will produce nodes with three labels: `[:Domain, :ResourceName, :Instance]`. Only the resource label is used when reading, updating, or destroying. The domain label cannot be overridden.
 - **Transactions are supported.** A test sandbox (`AshNeo4j.Sandbox`) provides per-test transaction isolation — see `usage-rules/testing.md`.
-- **Aggregates are supported** for kinds `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported. See the Aggregates section below.
+- **Aggregates are supported** for kinds `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported. Fields stored as JSON (embedded resources, `Ash.TypedStruct`, `Ash.Type.NewType`, `Ash.Type.Map`, etc.) are also aggregatable — see the Aggregates section below.
 
 ## Aggregates
 
@@ -57,9 +57,35 @@ end
 
 Aggregates are executed as Cypher `OPTIONAL MATCH` traversals from the source node through the relationship path. Both single-hop and multi-hop paths are supported — AshNeo4j resolves each hop via the resource mapping and builds the full chain in a single query.
 
-**The aggregated field must be a direct node property** on the destination resource. Aggregating over a calculation result or a value stored inside an embedded struct is not supported — ensure the value is stored as a flat property on the destination node.
-
 Aggregates are available both standalone (`Ash.aggregate/3`) and when loading on records (`Ash.load/2`).
+
+### Flat property fields
+
+For scalar fields (`:string`, `:integer`, `:boolean`, etc.) the aggregation is fully pushed down to Cypher — `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `collect()` all run in the database.
+
+### Embedded struct and JSON-type fields
+
+When `field:` points to an attribute whose type is stored as JSON — `Ash.TypedStruct`, `Ash.Type.NewType` with a map storage type, embedded resources, `Ash.Type.Map`, `Ash.Type.Union`, etc. — AshNeo4j automatically switches to a two-phase strategy:
+
+1. **Cypher** `collect(d.prop)` gathers the raw JSON strings from Neo4j.
+2. **Elixir** deserializes each value using `AshNeo4j.DataLayer.Cast` (which calls `Ash.Type.cast_stored/3`), then applies the aggregate kind in memory.
+
+This means you can declare `:list` and `:first` aggregates directly on typed struct fields and get back fully deserialized structs:
+
+```elixir
+# On the destination resource
+attribute :metadata, MyApp.MetadataStruct, public?: true
+
+# On the source resource
+aggregates do
+  list :all_metadata, :related_things, field: :metadata
+  first :first_metadata, :related_things, field: :metadata
+end
+```
+
+For `:sum`, `:avg`, `:min`, `:max` the deserialized values must be directly comparable/numeric — if you need to aggregate a sub-field within a struct, expose it as a flat property on the resource (via a calculation or an elevated attribute) and aggregate on that.
+
+Aggregating over a calculation result is not supported — the field must be a stored attribute.
 
 ## Naming conventions
 
