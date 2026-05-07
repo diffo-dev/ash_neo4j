@@ -311,6 +311,28 @@ Ash.aggregate(MyResource, {:total_bandwidth, :sum, [
 
 For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and aggregates in Elixir. Any valid Ash expression works — `get_path` for nested struct navigation, arithmetic, etc. Note: `expr:` is a programmatic API and is not available in the resource-level `aggregates do` DSL block.
 
+## Calculations
+
+AshNeo4j supports **expression calculations** — calculations declared with `expr(...)` in the `calculations` block. They are evaluated in Elixir after records are loaded from Neo4j.
+
+```elixir
+calculations do
+  calculate :score_doubled, :integer, expr(score * 2)
+  calculate :full_name, :string, expr(first_name <> " " <> last_name)
+  calculate :dog_age, :integer, expr(get_path(dog, [:age]))
+end
+```
+
+Calculations can be:
+
+- **Loaded** — `Ash.load!(records, [:score_doubled])`
+- **Filtered on** — `Ash.Query.filter(score_doubled > 10)` — AshNeo4j loads all matching nodes then evaluates the filter in Elixir
+- **Sorted on** — `Ash.Query.sort(score_doubled: :asc)` — applied in Elixir after records are loaded via `Ash.Actions.Sort.runtime_sort/3`
+
+**Embedded struct fields work without elevation.** `get_path(dog, [:age])` navigates into a `DogTypedStruct` directly — records arrive with embedded types fully deserialized, so any Ash expression that works in-memory works in a calculation.
+
+Only `expr(...)` calculations are currently supported. Custom `:calculate` callback modules are not.
+
 ## Limitations and Future Work
 
 Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, and expression calculations. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
