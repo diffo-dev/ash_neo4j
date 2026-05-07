@@ -244,6 +244,28 @@ defmodule AshNeo4j.Cypher.Query do
   # ---------------------------------------------------------------------------
 
   @doc """
+  Related-nodes query — returns one row per (source, destination) pair for expression-based
+  aggregates that need full destination records for Elixir-side evaluation.
+
+  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, d AS dest_node`
+  """
+  @spec related_nodes(atom(), atom(), [any()], [{atom(), atom(), atom()}]) :: t()
+  def related_nodes(source_label, pk_field, ids, path_segments)
+      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) do
+    path = build_agg_path(path_segments)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: "(s:#{source_label})"},
+        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+        %OptionalMatch{pattern: "(s)#{path}"},
+        %Return{items: ["s.#{pk_field} AS source_id", "d AS dest_node"]}
+      ],
+      params: %{"agg_ids" => ids}
+    }
+  end
+
+  @doc """
   Per-record aggregate — returns one row per source node with the aggregate value.
 
   `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, agg_fn AS name`

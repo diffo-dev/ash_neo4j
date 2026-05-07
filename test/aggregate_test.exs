@@ -10,7 +10,9 @@ defmodule AshNeo4j.AggregateTest do
   alias AshNeo4j.Test.Resource.Author
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
+  alias AshNeo4j.Test.Type.DogTypedStruct
   require Ash.Query
+  require Ash.Expr
 
   setup_all do
     BoltyHelper.start()
@@ -34,6 +36,18 @@ defmodule AshNeo4j.AggregateTest do
   defp create_comment(post, title) do
     Comment
     |> Ash.Changeset.for_create(:create, %{title: title, post_id: post.id})
+    |> Ash.create!()
+  end
+
+  defp create_comment_with_dog(post, title, dog) do
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: title, post_id: post.id, dog: dog})
+    |> Ash.create!()
+  end
+
+  defp create_comment_with_score(post, title, score) do
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: title, post_id: post.id, score: score})
     |> Ash.create!()
   end
 
@@ -111,6 +125,74 @@ defmodule AshNeo4j.AggregateTest do
 
       [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_count])
       assert loaded.comment_count == 0
+    end
+  end
+
+  describe "expr aggregates (Ash.Query.Calculation field, programmatic API)" do
+    test "sum expr totals a scalar field across all related records" do
+      author = create_author()
+      post1 = create_post(author, "post1")
+      post2 = create_post(author, "post2")
+      create_comment_with_score(post1, "a", 10)
+      create_comment_with_score(post1, "b", 25)
+      create_comment_with_score(post2, "c", 5)
+
+      {:ok, %{total_score: total}} =
+        Ash.aggregate(Post, {:total_score, :sum, [path: [:comments], expr: Ash.Expr.expr(score), expr_type: :integer]})
+
+      assert total == 40
+    end
+
+    test "sum expr returns nil default when no related records" do
+      create_author() |> create_post("empty post")
+
+      {:ok, %{total_score: total}} =
+        Ash.aggregate(Post, {:total_score, :sum, [path: [:comments], expr: Ash.Expr.expr(score), expr_type: :integer]})
+
+      assert is_nil(total)
+    end
+
+    test "sum expr on embedded struct field navigates via Ash expression" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_dog(post, "a", %DogTypedStruct{name: "Rex", age: 3})
+      create_comment_with_dog(post, "b", %DogTypedStruct{name: "Spot", age: 7})
+
+      {:ok, %{total_dog_age: total}} =
+        Ash.aggregate(Post, {:total_dog_age, :sum, [path: [:comments], expr: Ash.Expr.expr(get_path(dog, [:age])), expr_type: :integer]})
+
+      assert total == 10
+    end
+  end
+
+  describe "aggregates on embedded struct fields" do
+    test "list aggregate returns deserialized typed structs" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_dog(post, "a", %DogTypedStruct{name: "Rex", age: 3})
+      create_comment_with_dog(post, "b", %DogTypedStruct{name: "Spot", age: 7})
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_dogs])
+      names = loaded.comment_dogs |> Enum.map(& &1.name) |> Enum.sort()
+      assert names == ["Rex", "Spot"]
+    end
+
+    test "first aggregate returns a single typed struct" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_dog(post, "a", %DogTypedStruct{name: "Rex", age: 3})
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:first_comment_dog])
+      assert %DogTypedStruct{name: "Rex", age: 3} = loaded.first_comment_dog
+    end
+
+    test "list aggregate returns empty list when no structs stored" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment(post, "no dog here")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_dogs])
+      assert loaded.comment_dogs == []
     end
   end
 end
