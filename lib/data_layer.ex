@@ -9,8 +9,8 @@ defmodule AshNeo4j.DataLayer do
 
   require Logger
   alias AshNeo4j.Resource.Info, as: ResourceInfo
-  alias AshNeo4j.QueryHelper
   alias AshNeo4j.Neo4jHelper
+  alias AshNeo4j.QueryHelper
   alias AshNeo4j.DataLayer.Cast
   alias AshNeo4j.DataLayer.Dump
   alias AshNeo4j.Util

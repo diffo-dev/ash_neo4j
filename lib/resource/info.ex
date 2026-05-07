@@ -7,6 +7,7 @@ defmodule AshNeo4j.Resource.Info do
 
   alias Spark.Dsl.Extension
   alias AshNeo4j.Util
+  alias AshNeo4j.{EdgeDescriptor, ResourceMapping}
 
   @doc """
   The match label used for read, update, and destroy operations. This is the value of `label` in
@@ -45,6 +46,25 @@ defmodule AshNeo4j.Resource.Info do
   def labels(resource) do
     Extension.get_persisted(resource, :labels, nil) ||
       ([domain_label(resource), label(resource)] |> Enum.uniq() |> Enum.filter(& &1))
+  end
+
+  @doc """
+  Returns the complete graph mapping for a resource as a `%AshNeo4j.ResourceMapping{}` struct.
+  This is the single source of truth for how an Ash resource maps to the Neo4j graph.
+  """
+  @spec mapping(Ash.Resource.t()) :: ResourceMapping.t()
+  def mapping(resource) do
+    %ResourceMapping{
+      module: resource,
+      domain_label: domain_label(resource),
+      module_label: module_label(resource),
+      label: label(resource),
+      labels: labels(resource),
+      properties: translations(resource),
+      edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
+      guards: AshNeo4j.DataLayer.Info.guard(resource),
+      skip: AshNeo4j.DataLayer.Info.skip(resource)
+    }
   end
 
   @doc """
