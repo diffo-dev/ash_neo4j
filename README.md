@@ -38,6 +38,13 @@ end
 
 Then follow the [Bolty configuration](#installing-neo4j-and-configuring-bolty) steps below.
 
+## AI Coding Assistants
+
+AshNeo4j ships usage rules for AI coding assistants. If your project uses
+[`usage_rules`](https://hex.pm/packages/usage_rules), add `ash_neo4j` to your
+`:usage_rules` config and run `mix usage_rules.sync` to merge the rules into
+your `AGENTS.md` (or `CLAUDE.md`).
+
 ## Tutorial
 
 To get started you need a running instance of [Livebook](https://livebook.dev/)
