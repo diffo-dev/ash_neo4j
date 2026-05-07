@@ -12,6 +12,11 @@ defmodule AshNeo4j.Cypher do
 
   require Logger
 
+  alias AshNeo4j.Cypher.{
+    Query, Match, OptionalMatch, Create, Merge, Where, With,
+    Set, Remove, Delete, DetachDelete, Return, OrderBy, Skip, Limit
+  }
+
   @spec remove_properties(atom(), maybe_improper_list()) :: binary()
   @doc """
   Converts a list of property names into a remove properties string.
@@ -205,22 +210,50 @@ defmodule AshNeo4j.Cypher do
     end
   end
 
+  def relationship(nil), do: "-[r]-"
+
   @doc """
-  Converts a node_relationship tuple to cypher clause, ignoring the label
+  Renders a `%Cypher.Query{}` to a `{cypher_string, params}` tuple.
 
   ## Examples
   ```
-  iex> AshNeo4j.Cypher.relationship({:movies, :ACTED_IN, :outgoing})
-  "-[r:ACTED_IN]->"
-  iex> AshNeo4j.Cypher.relationship(nil)
-  "-[r]-"
+  iex> query = %AshNeo4j.Cypher.Query{
+  ...>   clauses: [
+  ...>     %AshNeo4j.Cypher.Match{pattern: "(s:Actor)"},
+  ...>     %AshNeo4j.Cypher.Return{items: ["s"]},
+  ...>     %AshNeo4j.Cypher.Limit{value: 5}
+  ...>   ],
+  ...>   params: %{}
+  ...> }
+  iex> AshNeo4j.Cypher.render(query)
+  {"MATCH (s:Actor) RETURN s LIMIT 5", %{}}
   ```
   """
-  def relationship(node_relationship) when is_tuple(node_relationship) do
-    relationship(:r, elem(node_relationship, 1), elem(node_relationship, 2))
+  def render(%Query{clauses: clauses, params: params}) do
+    {Enum.map_join(clauses, " ", &render_clause/1), params}
   end
 
-  def relationship(nil) when is_nil(nil), do: "-[r]-"
+  defp render_clause(%Match{pattern: p}), do: "MATCH #{p}"
+  defp render_clause(%OptionalMatch{pattern: p}), do: "OPTIONAL MATCH #{p}"
+  defp render_clause(%Create{pattern: p}), do: "CREATE #{p}"
+  defp render_clause(%Merge{pattern: p}), do: "MERGE #{p}"
+  defp render_clause(%Where{conditions: conds}), do: "WHERE #{Enum.join(conds, " AND ")}"
+  defp render_clause(%With{items: items}), do: "WITH #{Enum.join(items, ", ")}"
+  defp render_clause(%Set{expression: e}), do: "SET #{e}"
+  defp render_clause(%Remove{items: items}), do: "REMOVE #{Enum.join(items, ", ")}"
+  defp render_clause(%Delete{items: items}), do: "DELETE #{Enum.join(items, ", ")}"
+  defp render_clause(%DetachDelete{items: items}), do: "DETACH DELETE #{Enum.join(items, ", ")}"
+  defp render_clause(%Return{items: items}), do: "RETURN #{Enum.join(items, ", ")}"
+  defp render_clause(%Skip{value: n}), do: "SKIP #{n}"
+  defp render_clause(%Limit{value: n}), do: "LIMIT #{n}"
+
+  defp render_clause(%OrderBy{terms: terms}) do
+    "ORDER BY " <>
+      Enum.map_join(terms, ", ", fn
+        {prop, :desc} -> "#{prop} DESC"
+        {prop, _} -> "#{prop} ASC"
+      end)
+  end
 
   @doc """
   Runs some cypher
@@ -238,6 +271,11 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
+  def run(%Query{} = query) do
+    {cypher, params} = render(query)
+    run(cypher, params)
+  end
+
   def run(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("""
     AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
@@ -252,6 +290,11 @@ defmodule AshNeo4j.Cypher do
     end
 
     bolty_result
+  end
+
+  def run_expecting_deletions(%Query{} = query) do
+    {cypher, params} = render(query)
+    run_expecting_deletions(cypher, params)
   end
 
   def run_expecting_deletions(cypher, params \\ %{}) when is_bitstring(cypher) do

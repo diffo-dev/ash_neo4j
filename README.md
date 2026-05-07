@@ -16,15 +16,34 @@ Ash DataLayer for Neo4j, configurable using a simple DSL
 
 ## Installation
 
-Add to the deps:
+### With Igniter (recommended)
+
+```bash
+mix igniter.install ash_neo4j
+```
+
+This automatically configures the formatter, adds Bolty connection config to `config/runtime.exs`, and wires Bolty into your supervision tree.
+
+### Manual
+
+Add to deps in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.2.15"},
+    {:ash_neo4j, "~> 0.4"},
   ]
 end
 ```
+
+Then follow the [Bolty configuration](#installing-neo4j-and-configuring-bolty) steps below.
+
+## AI Coding Assistants
+
+AshNeo4j ships usage rules for AI coding assistants. If your project uses
+[`usage_rules`](https://hex.pm/packages/usage_rules), add `ash_neo4j` to your
+`:usage_rules` config and run `mix usage_rules.sync` to merge the rules into
+your `AGENTS.md` (or `CLAUDE.md`).
 
 ## Tutorial
 
@@ -253,11 +272,72 @@ Generally attributes with nil value are not persisted, rather they are simply no
 
 Transactions are supported.
 
+## Aggregates
+
+AshNeo4j supports Ash aggregates. Declare them in the standard Ash `aggregates` block:
+
+```elixir
+aggregates do
+  count :comment_count, :comments
+  exists :has_comments, :comments
+  sum :total_score, :comments, field: :score
+  avg :avg_score, :comments, field: :score
+  min :min_score, :comments, field: :score
+  max :max_score, :comments, field: :score
+  first :first_comment_title, :comments, field: :title
+  list :comment_titles, :comments, field: :title
+end
+```
+
+Supported kinds: `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported.
+
+Aggregates are computed in Cypher via `OPTIONAL MATCH` traversal. Single-hop and multi-hop relationship paths are both supported.
+
+**Embedded struct and JSON-type fields are supported.** When `field:` refers to an attribute stored as JSON — `Ash.TypedStruct`, `Ash.Type.NewType` with map storage, embedded resources, `Ash.Type.Map`, `Ash.Type.Union`, etc. — AshNeo4j collects the raw JSON strings from Neo4j and deserializes them in Elixir using `Ash.Type.cast_stored/3`. `:list` and `:first` aggregates return fully deserialized struct values. `:sum`, `:avg`, `:min`, `:max` work when the deserialized values are directly comparable/numeric. To aggregate a sub-field within a struct, use an `expr:` aggregate.
+
+```elixir
+aggregates do
+  list :all_metadata, :related_things, field: :metadata   # returns [%MetadataStruct{}, ...]
+  first :first_metadata, :related_things, field: :metadata # returns %MetadataStruct{}
+end
+
+# No elevation needed — navigate into the struct with an expression aggregate:
+Ash.aggregate(MyResource, {:total_bandwidth, :sum, [
+  path: [:characteristics],
+  expr: Ash.Expr.expr(get_path(value, [:bandwidth])),
+  expr_type: :integer
+]})
+```
+
+For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and aggregates in Elixir. Any valid Ash expression works — `get_path` for nested struct navigation, arithmetic, etc. Note: `expr:` is a programmatic API and is not available in the resource-level `aggregates do` DSL block.
+
+## Calculations
+
+AshNeo4j supports **expression calculations** — calculations declared with `expr(...)` in the `calculations` block. They are evaluated in Elixir after records are loaded from Neo4j.
+
+```elixir
+calculations do
+  calculate :score_doubled, :integer, expr(score * 2)
+  calculate :full_name, :string, expr(first_name <> " " <> last_name)
+  calculate :dog_age, :integer, expr(get_path(dog, [:age]))
+end
+```
+
+Calculations can be:
+
+- **Loaded** — `Ash.load!(records, [:score_doubled])`
+- **Filtered on** — `Ash.Query.filter(score_doubled > 10)` — AshNeo4j loads all matching nodes then evaluates the filter in Elixir
+- **Sorted on** — `Ash.Query.sort(score_doubled: :asc)` — applied in Elixir after records are loaded via `Ash.Actions.Sort.runtime_sort/3`
+
+**Embedded struct fields work without elevation.** `get_path(dog, [:age])` navigates into a `DogTypedStruct` directly — records arrive with embedded types fully deserialized, so any Ash expression that works in-memory works in a calculation.
+
+Only `expr(...)` calculations are currently supported. Custom `:calculate` callback modules are not.
+
 ## Limitations and Future Work
 
-Ash Neo4j has support for Ash create, update, read, destroy actions. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, and expression calculations. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
-Future work may include: calculations, aggregates, vectors/semantic search, geospatial support.
+Future work may include: cached calculations and aggregates, vectors/semantic search, geospatial support.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 

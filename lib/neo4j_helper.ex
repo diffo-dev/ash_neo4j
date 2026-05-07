@@ -5,6 +5,7 @@
 defmodule AshNeo4j.Neo4jHelper do
   require Logger
   alias AshNeo4j.Cypher
+  alias AshNeo4j.Cypher.Query
 
   @moduledoc """
   AshNeo4j DataLayer Neo4j Helper
@@ -21,10 +22,8 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def create_node(labels, properties) when is_list(labels) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, labels, properties)
-
-    ("CREATE " <> node_cypher <> " RETURN n")
-    |> Cypher.run(parameters)
+    Query.create_node(labels, properties)
+    |> Cypher.run()
   end
 
   @spec delete_all() ::
@@ -41,8 +40,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def delete_all() do
-    "MATCH (n) DETACH DELETE n"
-    |> Cypher.run()
+    Cypher.run("MATCH (n) DETACH DELETE n")
   end
 
   @spec delete_nodes(atom()) ::
@@ -62,14 +60,9 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def delete_nodes(label, properties \\ %{})
-      when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
-
-    ("MATCH " <>
-       node_cypher <>
-       " DETACH DELETE n")
-    |> Cypher.run(parameters)
+  def delete_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
+    Query.delete_nodes(label, properties)
+    |> Cypher.run()
   end
 
   @doc """
@@ -90,35 +83,9 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def safe_delete_nodes(label, properties, relationships)
-      when is_atom(label) and length(relationships) != 0 do
-    node_relationships =
-      Enum.map_join(relationships, " AND NOT ", fn {edge_label, edge_direction, dest_label} ->
-        case edge_direction do
-          :incoming ->
-            "(n)<-[:#{edge_label}]-(:#{dest_label})"
-
-          :outgoing ->
-            "(n)-[:#{edge_label}]->(:#{dest_label})"
-
-          _ ->
-            "(n)-[:#{edge_label}]-(:#{dest_label})"
-        end
-      end)
-
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
-
-    ("MATCH " <>
-       node_cypher <>
-       " WHERE NOT " <>
-       node_relationships <>
-       " DETACH DELETE n")
-    |> Cypher.run_expecting_deletions(parameters)
-  end
-
-  def safe_delete_nodes(label, properties, relationships)
-      when is_atom(label) and length(relationships) == 0 do
-    delete_nodes(label, properties)
+  def safe_delete_nodes(label, properties, relationships) when is_atom(label) do
+    Query.delete_nodes_guarded(label, properties, relationships)
+    |> Cypher.run_expecting_deletions()
   end
 
   @spec merge_node(atom(), map()) ::
@@ -134,12 +101,9 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def merge_node(label, properties)
-      when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
-
-    ("MERGE " <> node_cypher <> " RETURN n")
-    |> Cypher.run(parameters)
+  def merge_node(label, properties) when is_atom(label) and is_map(properties) do
+    Query.merge_node(label, properties)
+    |> Cypher.run()
   end
 
   @spec update_node(atom(), map(), map(), list()) ::
@@ -157,47 +121,9 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def update_node(label, match_properties, set_properties, remove_properties \\ [])
-
-  def update_node(label, match_properties, set_properties, [])
       when is_atom(label) and is_map(set_properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], match_properties)
-    {set_properties_cypher, set_parameters} = Cypher.parameterized_properties(:n, set_properties)
-
-    ("MATCH " <>
-       node_cypher <>
-       " SET n += " <>
-       set_properties_cypher <>
-       " RETURN n")
-    |> Cypher.run(Map.merge(parameters, set_parameters))
-  end
-
-  def update_node(label, match_properties, set_properties, remove_properties)
-      when is_atom(label) and map_size(set_properties) == 0 do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], match_properties)
-    remove_properties_cypher = Cypher.remove_properties(:n, remove_properties)
-
-    ("MATCH " <>
-       node_cypher <>
-       " REMOVE " <>
-       remove_properties_cypher <>
-       " RETURN n")
-    |> Cypher.run(parameters)
-  end
-
-  def update_node(label, match_properties, set_properties, remove_properties)
-      when is_atom(label) and map_size(set_properties) != 0 and length(remove_properties) != 0 do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], match_properties)
-    {set_properties_cypher, set_parameters} = Cypher.parameterized_properties(:n, set_properties)
-    remove_properties_cypher = Cypher.remove_properties(:n, remove_properties)
-
-    ("MATCH " <>
-       node_cypher <>
-       " SET n += " <>
-       set_properties_cypher <>
-       " REMOVE " <>
-       remove_properties_cypher <>
-       " RETURN n")
-    |> Cypher.run(Map.merge(parameters, set_parameters))
+    Query.update_node(label, match_properties, set_properties, remove_properties)
+    |> Cypher.run()
   end
 
   @spec relate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
@@ -215,19 +141,11 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
-
-    ("MATCH " <>
-       source_node_cypher <>
-       " OPTIONAL MATCH " <>
-       dest_node_cypher <>
-       " MERGE (s)" <>
-       Cypher.relationship(:r, edge_label, edge_direction) <>
-       "(d) RETURN s, r, d")
-    |> Cypher.run(Map.merge(source_parameters, dest_parameters))
+    Query.relate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    |> Cypher.run()
   end
 
   @spec unrelate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
@@ -248,16 +166,8 @@ defmodule AshNeo4j.Neo4jHelper do
   def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
-
-    ("MATCH " <>
-       source_node_cypher <>
-       " " <>
-       Cypher.relationship(:r, edge_label, edge_direction) <>
-       dest_node_cypher <>
-       " DELETE r RETURN s, d")
-    |> Cypher.run(Map.merge(source_parameters, dest_parameters))
+    Query.unrelate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    |> Cypher.run()
   end
 
   @spec relate_nodes_unrelating_source(atom(), map(), atom(), map(), atom(), atom()) ::
@@ -276,28 +186,11 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_source(
-        source_label,
-        source_properties,
-        dest_label,
-        dest_properties,
-        edge_label,
-        edge_direction
-      )
+  def relate_nodes_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
-
-    ("MATCH " <>
-       source_node_cypher <>
-       " WITH s OPTIONAL MATCH (s)" <>
-       Cypher.relationship(:r0, edge_label, edge_direction) <>
-       Cypher.node(:d0, [dest_label]) <>
-       " DELETE r0 WITH s MATCH " <>
-       dest_node_cypher <>
-       " MERGE (s)" <> Cypher.relationship(:r, edge_label, edge_direction) <> "(d) RETURN s, r, d")
-    |> Cypher.run(Map.merge(source_parameters, dest_parameters))
+    Query.relate_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    |> Cypher.run()
   end
 
   @spec relate_nodes_unrelating_destination(atom(), map(), atom(), map(), atom(), atom()) ::
@@ -316,32 +209,11 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_destination(
-        source_label,
-        source_properties,
-        dest_label,
-        dest_properties,
-        edge_label,
-        edge_direction
-      )
+  def relate_nodes_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    # cypher is a bit verbose but attempts to not delete/replace existing relationship while avoiding cartesian product
-    # "MATCH (s:Movie {title: 'Bend it Like Beckham'}) WITH s OPTIONAL MATCH (s0:Movie) <-[r0:FAVOURITE]-(d:Fan {name: 'Matt'}) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)<-[r:FAVOURITE]-(d:Fan {name: 'Matt'} RETURN s, r, d"
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
-
-    ("MATCH " <>
-       source_node_cypher <>
-       " OPTIONAL MATCH " <>
-       dest_node_cypher <>
-       " WITH s, d OPTIONAL MATCH " <>
-       Cypher.node(:s0, [source_label]) <>
-       Cypher.relationship(:r0, edge_label, edge_direction) <>
-       " (d) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)" <>
-       Cypher.relationship(:r, edge_label, edge_direction) <>
-       "(d) RETURN s, r, d")
-    |> Cypher.run(Map.merge(source_parameters, dest_parameters))
+    Query.relate_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    |> Cypher.run()
   end
 
   @spec relate_nodes_unrelating_source_and_destination(atom(), map(), atom(), map(), atom(), atom()) ::
@@ -362,86 +234,29 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_source_and_destination(
-        source_label,
-        source_properties,
-        dest_label,
-        dest_properties,
-        edge_label,
-        edge_direction
-      )
+  def relate_nodes_unrelating_source_and_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
-
-    ("MATCH " <>
-       source_node_cypher <>
-       " WITH s OPTIONAL MATCH (s)" <>
-       Cypher.relationship(:r0, edge_label, edge_direction) <>
-       dest_node_cypher <>
-       " DELETE r0 WITH s OPTIONAL MATCH " <>
-       dest_node_cypher <>
-       " WITH s, d OPTIONAL MATCH " <>
-       Cypher.node(:s0, [source_label]) <>
-       Cypher.relationship(:r0, edge_label, edge_direction) <>
-       " (d) WHERE s0 <> s DELETE r0 WITH s, d MERGE (s)" <>
-       Cypher.relationship(:r, edge_label, edge_direction) <>
-       "(d) RETURN s, r, d")
-    |> Cypher.run(Map.merge(source_parameters, dest_parameters))
+    Query.relate_unrelating_both(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    |> Cypher.run()
   end
 
-  def relate_nodes(
-        source_label,
-        source_properties,
-        dest_label,
-        dest_properties,
-        edge_label,
-        edge_direction,
-        options
-      )
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+  def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, options)
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) and is_tuple(options) do
     case options do
       {false, false} ->
-        relate_nodes(
-          source_label,
-          source_properties,
-          dest_label,
-          dest_properties,
-          edge_label,
-          edge_direction
-        )
+        relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
 
       {true, false} ->
-        relate_nodes_unrelating_source(
-          source_label,
-          source_properties,
-          dest_label,
-          dest_properties,
-          edge_label,
-          edge_direction
-        )
+        relate_nodes_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
 
       {false, true} ->
-        relate_nodes_unrelating_destination(
-          source_label,
-          source_properties,
-          dest_label,
-          dest_properties,
-          edge_label,
-          edge_direction
-        )
+        relate_nodes_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
 
       {true, true} ->
-        relate_nodes_unrelating_source_and_destination(
-          source_label,
-          source_properties,
-          dest_label,
-          dest_properties,
-          edge_label,
-          edge_direction
-        )
+        relate_nodes_unrelating_source_and_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
     end
   end
 
@@ -466,43 +281,24 @@ defmodule AshNeo4j.Neo4jHelper do
   def relate_nodes(label, properties, relationships)
       when is_atom(label) and is_map(properties) and is_list(relationships) do
     results =
-      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive},
-                                              acc ->
+      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive}, acc ->
         if exclusive do
-          case relate_nodes_unrelating_destination(
-                 label,
-                 properties,
-                 dest_label,
-                 dest_properties,
-                 edge_label,
-                 edge_direction
-               ) do
-            {:ok, result} ->
-              {:cont, [result, acc]}
-
-            {:error, _error} ->
-              {:halt, :error}
+          case relate_nodes_unrelating_destination(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
+            {:ok, result} -> {:cont, [result | acc]}
+            {:error, _} -> {:halt, :error}
           end
         else
           case relate_nodes(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
-            {:ok, result} ->
-              {:cont, [result, acc]}
-
-            {:error, _error} ->
-              {:halt, :error}
+            {:ok, result} -> {:cont, [result | acc]}
+            {:error, _} -> {:halt, :error}
           end
         end
       end)
 
     case results do
-      :error ->
-        {:error, "error relating nodes"}
-
-      [] ->
-        {:error, "unexpected empty result relating nodes"}
-
-      _ ->
-        :ok
+      :error -> {:error, "error relating nodes"}
+      [] -> {:error, "unexpected empty result relating nodes"}
+      _ -> :ok
     end
   end
 
@@ -519,21 +315,16 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, List.wrap(source_label), source_properties)
+    {dest_pattern, dest_params} = Cypher.parameterized_node(:d, List.wrap(dest_label), dest_properties)
 
-    cypher =
-      "MATCH " <>
-        source_node_cypher <>
-        Cypher.relationship(:r, edge_label, edge_direction) <>
-        dest_node_cypher <> " RETURN s, r, d"
+    cypher = "MATCH #{src_pattern}#{Cypher.relationship(:r, edge_label, edge_direction)}#{dest_pattern} RETURN s, r, d"
 
-    case Cypher.run(cypher, Map.merge(source_parameters, dest_parameters)) do
-      {:ok, %{records: records}} ->
-        length(records) > 0
-
+    case Cypher.run(cypher, Map.merge(src_params, dest_params)) do
+      {:ok, %{records: records}} -> length(records) > 0
       {:error, error} ->
         Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
         :error
@@ -555,29 +346,23 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edges)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_list(edges) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, List.wrap(source_label), source_properties)
+    {dest_pattern, dest_params} = Cypher.parameterized_node(:d, List.wrap(dest_label), dest_properties)
 
-    cypher =
-      "MATCH " <>
-        source_node_cypher <>
-        Enum.reduce(edges, "", fn {edge_label, edge_direction}, acc ->
-          variable = String.to_atom("r#{String.length(acc)}")
+    path =
+      Enum.reduce(edges, "", fn {edge_label, edge_direction}, acc ->
+        variable = String.to_atom("r#{String.length(acc)}")
+        if acc == "", do: Cypher.relationship(variable, edge_label, edge_direction),
+        else: acc <> "()" <> Cypher.relationship(variable, edge_label, edge_direction)
+      end)
 
-          if acc == "" do
-            acc <> Cypher.relationship(variable, edge_label, edge_direction)
-          else
-            acc <> "()" <> Cypher.relationship(variable, edge_label, edge_direction)
-          end
-        end) <>
-        dest_node_cypher <> " RETURN s, d"
+    cypher = "MATCH #{src_pattern}#{path}#{dest_pattern} RETURN s, d"
 
-    case Cypher.run(cypher, Map.merge(source_parameters, dest_parameters)) do
-      {:ok, %{records: records}} ->
-        length(records) > 0
-
+    case Cypher.run(cypher, Map.merge(src_params, dest_params)) do
+      {:ok, %{records: records}} -> length(records) > 0
       {:error, error} ->
         Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
         :error
@@ -598,11 +383,9 @@ defmodule AshNeo4j.Neo4jHelper do
   1
   ```
   """
-  def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
-
-    ("MATCH " <> node_cypher <> " RETURN n")
-    |> Cypher.run(parameters)
+  def read_nodes(label, properties \\ %{}) when (is_atom(label) or is_list(label)) and is_map(properties) do
+    Query.match_nodes(label, properties)
+    |> Cypher.run()
   end
 
   @spec read_limited(atom(), nil | integer()) ::
@@ -620,16 +403,9 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def read_limited(label, limit, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
-
-    case limit do
-      nil ->
-        "MATCH " <> node_cypher <> " RETURN n"
-
-      _ ->
-        "MATCH " <> node_cypher <> " RETURN n LIMIT #{limit}"
-    end
-    |> Cypher.run(parameters)
+    Query.match_nodes(label, properties)
+    |> Query.add_limit(limit)
+    |> Cypher.run()
   end
 
   @spec read_nodes(atom()) ::
@@ -651,9 +427,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def read_nodes_related(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:s, [label], properties)
-
-    ("MATCH " <> node_cypher <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d")
-    |> Cypher.run(parameters)
+    Query.node_read_with_properties(label, properties)
+    |> Cypher.run()
   end
 end

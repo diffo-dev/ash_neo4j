@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.4.1"
+  @version "0.5.0"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -84,7 +84,7 @@ defmodule AshNeo4j.MixProject do
     [
       name: :ash_neo4j,
       licenses: ["MIT"],
-      files: ~w(lib .formatter.exs mix.exs README* LICENSE* documentation),
+      files: ~w(lib .formatter.exs mix.exs README* LICENSE* documentation usage-rules.md usage-rules),
       links: %{
         GitHub: "https://github.com/diffo-dev/ash_neo4j"
       }
@@ -113,7 +113,8 @@ defmodule AshNeo4j.MixProject do
       {:dialyxir, ">= 1.4.3", only: [:dev, :test], runtime: false},
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18.0", only: [:dev, :test]},
-      {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false}
+      {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:usage_rules, "~> 1.2", optional: true}
     ]
   end
 

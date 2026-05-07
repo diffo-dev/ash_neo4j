@@ -11,6 +11,21 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.5.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.4.1...v0.5.0) (2026-05-08)
+
+### Features
+
+* **Aggregates** — full support for `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list` aggregate kinds, declared in the standard Ash `aggregates` block. Aggregates are executed as Cypher `OPTIONAL MATCH` traversals; single-hop and multi-hop relationship paths are both supported.
+* **Aggregates on embedded/JSON-type fields** — when `field:` points to an attribute stored as JSON (`Ash.TypedStruct`, `Ash.Type.NewType`, embedded resources, `Ash.Type.Map`, etc.) AshNeo4j collects raw JSON from Neo4j and deserializes in Elixir. `:list` and `:first` return fully-typed structs; `:sum`/`:avg`/`:min`/`:max` work on directly comparable values.
+* **Expression aggregates (`expr:`)** — programmatic aggregate API (`Ash.aggregate/3`) accepts `expr:` to aggregate over a sub-field of an embedded struct or any Ash expression, without needing to elevate the field. Uses `Ash.Expr.eval_hydrated/2` on full destination records.
+* **Expression calculations** — `calculate :name, :type, expr(...)` declarations are now evaluated in Elixir after records are loaded. Supports load (`Ash.load!`), filter (`Ash.Query.filter`), and sort (`Ash.Query.sort`). Embedded struct fields work directly via `get_path` — no elevation needed.
+
+### Improvements
+
+* Cypher query struct family extended; `Neo4jHelper` refactored to use it
+* Calculation-based filter predicates are excluded from Cypher WHERE and evaluated in-memory via `Ash.Filter.Runtime`
+* Calculation-based sort terms are applied post-load via `Ash.Actions.Sort.runtime_sort/3`
+
 ## [v0.4.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.4.0...v0.4.1) (2026-05-06)
 
 ## What's Changed
