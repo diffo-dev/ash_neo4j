@@ -240,6 +240,57 @@ defmodule AshNeo4j.Cypher.Query do
   def add_limit(%__MODULE__{} = query, n), do: %{query | clauses: query.clauses ++ [%Limit{value: n}]}
 
   # ---------------------------------------------------------------------------
+  # Aggregate builders
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Per-record aggregate — returns one row per source node with the aggregate value.
+
+  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, agg_fn AS name`
+
+  `path_segments` is a list of `{edge_label, direction, dest_label}` tuples describing
+  the traversal from source to the node being aggregated.
+  """
+  @spec aggregate_per_record(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) :: t()
+  def aggregate_per_record(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
+      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
+    path = build_agg_path(path_segments)
+    expr = aggregate_expr(kind, field, name, uniq?)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: "(s:#{source_label})"},
+        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+        %OptionalMatch{pattern: "(s)#{path}"},
+        %Return{items: ["s.#{pk_field} AS source_id", expr]}
+      ],
+      params: %{"agg_ids" => ids}
+    }
+  end
+
+  @doc """
+  Total aggregate — returns a single row with the aggregate value across all source nodes.
+
+  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN agg_fn AS name`
+  """
+  @spec aggregate_total(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) :: t()
+  def aggregate_total(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
+      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
+    path = build_agg_path(path_segments)
+    expr = aggregate_expr(kind, field, name, uniq?)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: "(s:#{source_label})"},
+        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+        %OptionalMatch{pattern: "(s)#{path}"},
+        %Return{items: [expr]}
+      ],
+      params: %{"agg_ids" => ids}
+    }
+  end
+
+  # ---------------------------------------------------------------------------
   # Write builders
   # ---------------------------------------------------------------------------
 
@@ -485,4 +536,38 @@ defmodule AshNeo4j.Cypher.Query do
   defp convert_operator(:>), do: ">"
   defp convert_operator(:>=), do: ">="
   defp convert_operator(:contains), do: "contains"
+
+  defp build_agg_path(path_segments) do
+    last_idx = length(path_segments) - 1
+
+    path_segments
+    |> Enum.with_index()
+    |> Enum.reduce("", fn {{edge_label, direction, dest_label}, i}, acc ->
+      node_var = if i == last_idx, do: "d", else: "h#{i}"
+      rel = case direction do
+        :outgoing -> "-[:#{edge_label}]->"
+        :incoming -> "<-[:#{edge_label}]-"
+        _ -> "-[:#{edge_label}]-"
+      end
+      acc <> rel <> "(#{node_var}:#{dest_label})"
+    end)
+  end
+
+  defp aggregate_expr(kind, field, name, uniq?) do
+    distinct = if uniq?, do: "DISTINCT ", else: ""
+    field_ref = if field, do: "d.#{field}", else: "d"
+
+    fn_str = case kind do
+      :count  -> "COUNT(#{distinct}d)"
+      :exists -> "COUNT(d) > 0"
+      :sum    -> "sum(#{distinct}#{field_ref})"
+      :avg    -> "avg(#{distinct}#{field_ref})"
+      :min    -> "min(#{field_ref})"
+      :max    -> "max(#{field_ref})"
+      :list   -> "collect(#{distinct}#{field_ref})"
+      :first  -> "head(collect(#{field_ref}))"
+    end
+
+    "#{fn_str} AS #{name}"
+  end
 end

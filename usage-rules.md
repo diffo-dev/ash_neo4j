@@ -38,6 +38,28 @@ Do not carry SQL assumptions into AshNeo4j. The differences are fundamental:
 - There is no `Ecto.Repo`. The Neo4j connection pool is a Bolty named process (`Bolt`), configured in `runtime.exs` and added to your supervision tree.
 - **Every node is created with at least two labels**: the domain label (PascalCase short name of the Ash domain module) and the resource label. When a resource uses a fragment that declares a `label`, that fragment label is also written on create — so a resource extending `BaseInstance` (which declares `label :Instance`) will produce nodes with three labels: `[:Domain, :ResourceName, :Instance]`. Only the resource label is used when reading, updating, or destroying. The domain label cannot be overridden.
 - **Transactions are supported.** A test sandbox (`AshNeo4j.Sandbox`) provides per-test transaction isolation — see `usage-rules/testing.md`.
+- **Aggregates are supported** for kinds `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported. See the Aggregates section below.
+
+## Aggregates
+
+AshNeo4j supports the standard Ash aggregate kinds: `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported.
+
+Declare aggregates in the standard Ash `aggregates` block — no AshNeo4j-specific DSL is required:
+
+```elixir
+aggregates do
+  count :comment_count, :comments
+  exists :has_comments, :comments
+  sum :total_score, :comments, field: :score
+  list :comment_titles, :comments, field: :title
+end
+```
+
+Aggregates are executed as Cypher `OPTIONAL MATCH` traversals from the source node through the relationship path. Both single-hop and multi-hop paths are supported — AshNeo4j resolves each hop via the resource mapping and builds the full chain in a single query.
+
+**The aggregated field must be a direct node property** on the destination resource. Aggregating over a calculation result or a value stored inside an embedded struct is not supported — ensure the value is stored as a flat property on the destination node.
+
+Aggregates are available both standalone (`Ash.aggregate/3`) and when loading on records (`Ash.load/2`).
 
 ## Naming conventions
 
