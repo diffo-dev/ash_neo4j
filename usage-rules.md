@@ -36,7 +36,7 @@ Do not carry SQL assumptions into AshNeo4j. The differences are fundamental:
 - **Never add foreign key attributes** to an AshNeo4j resource for the purpose of expressing a relationship. Relationships are graph edges managed by the `relate` DSL and the Ash `relationships` block.
 - **Many-to-many requires a joiner resource** — a dedicated node with two `belongs_to` relationships. AshNeo4j does not use edge properties. Do not attempt a direct many-to-many edge.
 - There is no `Ecto.Repo`. The Neo4j connection pool is a Bolty named process (`Bolt`), configured in `runtime.exs` and added to your supervision tree.
-- **Every node is created with two labels**: the domain label (PascalCase short name of the Ash domain module) and the resource label. Only the resource label is used when reading, updating, or destroying. The domain label cannot be overridden.
+- **Every node is created with at least two labels**: the domain label (PascalCase short name of the Ash domain module) and the resource label. When a resource uses a fragment that declares a `label`, that fragment label is also written on create — so a resource extending `BaseInstance` (which declares `label :Instance`) will produce nodes with three labels: `[:Domain, :ResourceName, :Instance]`. Only the resource label is used when reading, updating, or destroying. The domain label cannot be overridden.
 - **Transactions are supported.** A test sandbox (`AshNeo4j.Sandbox`) provides per-test transaction isolation — see `usage-rules/testing.md`.
 
 ## Naming conventions

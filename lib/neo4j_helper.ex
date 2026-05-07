@@ -215,10 +215,11 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
+    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, List.wrap(source_label), source_properties)
+    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, List.wrap(dest_label), dest_properties)
 
     ("MATCH " <>
        source_node_cypher <>
@@ -400,7 +401,8 @@ defmodule AshNeo4j.Neo4jHelper do
         edge_direction,
         options
       )
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) and is_tuple(options) do
     case options do
       {false, false} ->
@@ -519,10 +521,11 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
+    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, List.wrap(source_label), source_properties)
+    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, List.wrap(dest_label), dest_properties)
 
     cypher =
       "MATCH " <>
@@ -555,10 +558,11 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def nodes_relate_how?(source_label, source_properties, dest_label, dest_properties, edges)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
              is_list(edges) do
-    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, [source_label], source_properties)
-    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, [dest_label], dest_properties)
+    {source_node_cypher, source_parameters} = Cypher.parameterized_node(:s, List.wrap(source_label), source_properties)
+    {dest_node_cypher, dest_parameters} = Cypher.parameterized_node(:d, List.wrap(dest_label), dest_properties)
 
     cypher =
       "MATCH " <>
@@ -598,8 +602,8 @@ defmodule AshNeo4j.Neo4jHelper do
   1
   ```
   """
-  def read_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    {node_cypher, parameters} = Cypher.parameterized_node(:n, [label], properties)
+  def read_nodes(label, properties \\ %{}) when (is_atom(label) or is_list(label)) and is_map(properties) do
+    {node_cypher, parameters} = Cypher.parameterized_node(:n, List.wrap(label), properties)
 
     ("MATCH " <> node_cypher <> " RETURN n")
     |> Cypher.run(parameters)

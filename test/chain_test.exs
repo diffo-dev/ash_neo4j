@@ -50,9 +50,9 @@ defmodule AshNeo4j.ChainTest do
         |> Ash.create!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -76,9 +76,9 @@ defmodule AshNeo4j.ChainTest do
         |> Ash.create!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :incoming
@@ -106,18 +106,18 @@ defmodule AshNeo4j.ChainTest do
         |> Ash.create!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
                :HEAD_TO_TAIL,
                :incoming
@@ -151,18 +151,18 @@ defmodule AshNeo4j.ChainTest do
         |> Ash.load!([[:tail, :tail_id, :head, :head_id]])
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -183,9 +183,9 @@ defmodule AshNeo4j.ChainTest do
       chain2 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain2", head_id: chain1.id}) |> Ash.create!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outcoming
@@ -195,9 +195,9 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain1 = chain1 |> Ash.reload!()
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outcoming
@@ -220,18 +220,18 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -261,18 +261,18 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -307,18 +307,18 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain2 = chain2 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -348,18 +348,18 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -382,18 +382,18 @@ defmodule AshNeo4j.ChainTest do
       chain3 = Chain |> Ash.Changeset.for_create(:create, %{name: "chain3", head_id: chain2.id}) |> Ash.create!()
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -410,18 +410,18 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -456,36 +456,36 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -520,36 +520,36 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
@@ -584,36 +584,36 @@ defmodule AshNeo4j.ChainTest do
       refreshed_chain3 = chain3 |> Ash.reload!()
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       refute Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain2"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain1"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
                :HEAD_TO_TAIL,
                :outgoing
              )
 
       assert Neo4jHelper.nodes_relate_how?(
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain4"},
-               :Chain,
+               [:SRM, :Chain],
                %{name: "chain3"},
                :HEAD_TO_TAIL,
                :outgoing

@@ -15,13 +15,19 @@ defmodule AshNeo4j.Persisters.PersistLabels do
     domain_label = short_name(domain_module)
 
     resource_module = Verifier.get_persisted(dsl, :module)
-    default_resource_label = short_name(resource_module)
-    resource_label = Transformer.get_option(dsl, [:neo4j], :label, default_resource_label)
+    module_label = short_name(resource_module)
+    resource_label = Transformer.get_option(dsl, [:neo4j], :label, module_label)
+
+    # module_label is always the short name of the resource module itself (:Shelf).
+    # resource_label may differ when a fragment contributes a base type label (e.g. :Instance from BaseInstance).
+    # Both are written on CREATE so polymorphic traversals work; reads match on resource_label only.
+    labels = [domain_label | Enum.uniq([module_label, resource_label])]
 
     {:ok,
      dsl
      |> Transformer.persist(:domain_label, domain_label)
+     |> Transformer.persist(:module_label, module_label)
      |> Transformer.persist(:label, resource_label)
-     |> Transformer.persist(:labels, [domain_label, resource_label])}
+     |> Transformer.persist(:labels, labels)}
   end
 end

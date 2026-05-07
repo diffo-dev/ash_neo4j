@@ -29,11 +29,22 @@ If omitted, the label defaults to the PascalCase short name of the resource modu
 label :BlogComment
 ```
 
-### Two labels per node
+### Labels per node
 
-Every node is created with **two** labels: the domain label and the resource label. The domain label is the PascalCase short name of the Ash domain module (e.g. `MyApp.Blog` → `:Blog`). It is applied automatically — you do not declare it.
+Every node is created with **at least two** labels: the domain label and the resource label.
 
-On **read, update, and destroy**, only the resource label is used to match nodes. The domain label is a namespace marker visible in Neo4j but not used for query routing. The domain label is always derived from the domain module name and cannot be overridden.
+- The **domain label** is the PascalCase short name of the Ash domain module (e.g. `MyApp.Blog` → `:Blog`). It is applied automatically and cannot be overridden.
+- The **resource label** is the value of `label` in the `neo4j do` block, defaulting to the PascalCase short name of the resource module. This is the label used to match nodes on read, update, and destroy.
+
+When a resource uses a fragment that declares its own `label`, that fragment label is also written on CREATE as an additional label. A resource using `BaseInstance` (which declares `label :Instance`) will store nodes with `[:Domain, :ResourceName, :Instance]`. This enables polymorphic graph traversals — a relationship targeting `:Instance` will match any resource that extends `BaseInstance`, regardless of domain. A resource can only extend one fragment this way since full resources are not fragments.
+
+Because reads match on the base type label (`:Instance`), `Provider.Instance.read()` and `Access.Shelf.read()` both issue `MATCH (n:Instance)` — they will return the same nodes from the graph. This is intentional: the Provider domain provides a broad cross-domain API, while domain-specific resources like `Access.Shelf` provide a typed view into the same underlying nodes. Use domain-specific resources when you need a typed API; use the base resource when you need to traverse or query across domains.
+
+The `AshNeo4j.Resource.Info` module exposes three distinct label accessors:
+
+- `label/1` — the match label used for read/update/destroy (e.g. `:Instance` if set by a fragment)
+- `module_label/1` — the label derived from the resource module's own short name (e.g. `:Shelf`)
+- `labels/1` — the full list written on CREATE (e.g. `[:Access, :Shelf, :Instance]`)
 
 ## relate
 
