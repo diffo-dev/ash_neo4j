@@ -12,6 +12,8 @@ defmodule AshNeo4j.Cypher do
 
   require Logger
 
+  alias AshNeo4j.Cypher.{Query, Match, OptionalMatch, Where, With, Return, OrderBy, Skip, Limit}
+
   @spec remove_properties(atom(), maybe_improper_list()) :: binary()
   @doc """
   Converts a list of property names into a remove properties string.
@@ -208,6 +210,43 @@ defmodule AshNeo4j.Cypher do
   def relationship(nil), do: "-[r]-"
 
   @doc """
+  Renders a `%Cypher.Query{}` to a `{cypher_string, params}` tuple.
+
+  ## Examples
+  ```
+  iex> query = %AshNeo4j.Cypher.Query{
+  ...>   clauses: [
+  ...>     %AshNeo4j.Cypher.Match{pattern: "(s:Actor)"},
+  ...>     %AshNeo4j.Cypher.Return{items: ["s"]},
+  ...>     %AshNeo4j.Cypher.Limit{value: 5}
+  ...>   ],
+  ...>   params: %{}
+  ...> }
+  iex> AshNeo4j.Cypher.render(query)
+  {"MATCH (s:Actor) RETURN s LIMIT 5", %{}}
+  ```
+  """
+  def render(%Query{clauses: clauses, params: params}) do
+    {Enum.map_join(clauses, " ", &render_clause/1), params}
+  end
+
+  defp render_clause(%Match{pattern: p}), do: "MATCH #{p}"
+  defp render_clause(%OptionalMatch{pattern: p}), do: "OPTIONAL MATCH #{p}"
+  defp render_clause(%Where{conditions: conds}), do: "WHERE #{Enum.join(conds, " AND ")}"
+  defp render_clause(%With{items: items}), do: "WITH #{Enum.join(items, ", ")}"
+  defp render_clause(%Return{items: items}), do: "RETURN #{Enum.join(items, ", ")}"
+  defp render_clause(%Skip{value: n}), do: "SKIP #{n}"
+  defp render_clause(%Limit{value: n}), do: "LIMIT #{n}"
+
+  defp render_clause(%OrderBy{terms: terms}) do
+    "ORDER BY " <>
+      Enum.map_join(terms, ", ", fn
+        {prop, :desc} -> "#{prop} DESC"
+        {prop, _} -> "#{prop} ASC"
+      end)
+  end
+
+  @doc """
   Runs some cypher
 
   ## Examples
@@ -223,6 +262,11 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
+  def run(%Query{} = query) do
+    {cypher, params} = render(query)
+    run(cypher, params)
+  end
+
   def run(cypher, params \\ %{}) when is_bitstring(cypher) do
     Logger.debug("""
     AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})

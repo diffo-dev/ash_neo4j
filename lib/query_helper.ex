@@ -7,6 +7,7 @@ defmodule AshNeo4j.QueryHelper do
   require Ash.Query
 
   alias AshNeo4j.Cypher
+  alias AshNeo4j.Cypher.{Query, Match, OptionalMatch, Where, With, Return, OrderBy, Skip, Limit}
   alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.ResourceMapping
 
@@ -21,41 +22,49 @@ defmodule AshNeo4j.QueryHelper do
   def query_nodes(ash_query) when is_struct(ash_query) do
     mapping = ResourceInfo.mapping(ash_query.resource)
 
-    {cypher, params} =
+    query =
       ash_query
-      |> cypher(mapping)
-      |> order_by(ash_query, mapping)
-      |> skip(ash_query)
-      |> limit(ash_query)
+      |> build_query(mapping)
+      |> add_order_by(ash_query, mapping)
+      |> add_skip(ash_query)
+      |> add_limit(ash_query)
 
-    case Cypher.run(cypher, params) do
+    case Cypher.run(query) do
       {:ok, %Bolty.Response{results: results}} ->
         {:ok, results}
 
       {:error, _} ->
-        {:error, "Error running cypher #{cypher}"}
+        {:error, "Error running cypher query"}
     end
   end
 
-  defp cypher(ash_query, %ResourceMapping{} = mapping) do
-    base_match = "MATCH " <> Cypher.node(:s, [mapping.label])
-
+  defp build_query(ash_query, %ResourceMapping{} = mapping) do
     if ash_query.filter == nil do
-      {base_match <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d", %{}}
+      base_query(mapping.label)
     else
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
       predicates = Map.get(simple_filter, :predicates, [])
 
       if predicates == [] do
         Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
-        {base_match <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d", %{}}
+        base_query(mapping.label)
       else
-        build_filtered_cypher(mapping, predicates)
+        build_filtered_query(mapping, predicates)
       end
     end
   end
 
-  defp build_filtered_cypher(%ResourceMapping{} = mapping, predicates) do
+  defp base_query(label) do
+    %Query{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, [label])},
+        %OptionalMatch{pattern: "(s)-[r]-(d)"},
+        %Return{items: ["s", "r", "d"]}
+      ]
+    }
+  end
+
+  defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
     relationship_predicates =
       Enum.reduce(predicates, [], fn predicate, acc ->
         if Map.has_key?(predicate, :operator) do
@@ -77,9 +86,17 @@ defmodule AshNeo4j.QueryHelper do
 
     cond do
       Enum.empty?(relationship_predicates) ->
-        {where_clause, params} = predicates(mapping, property_predicates)
-        cypher = "MATCH (s:#{mapping.label}) WHERE #{where_clause} OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
-        {cypher, params}
+        {where_string, params} = predicates(mapping, property_predicates)
+
+        %Query{
+          clauses: [
+            %Match{pattern: Cypher.node(:s, [mapping.label])},
+            %Where{conditions: [where_string]},
+            %OptionalMatch{pattern: "(s)-[r]-(d)"},
+            %Return{items: ["s", "r", "d"]}
+          ],
+          params: params
+        }
 
       length(relationship_predicates) == 1 ->
         predicate = hd(relationship_predicates)
@@ -95,21 +112,57 @@ defmodule AshNeo4j.QueryHelper do
 
         param_key = "d_#{dest_property_name}"
 
-        cypher =
-          "MATCH " <>
-            Cypher.node(:s, [mapping.label]) <>
+        match_pattern =
+          Cypher.node(:s, [mapping.label]) <>
             Cypher.relationship(:r, edge.label, edge.direction) <>
-            Cypher.node(:d, [dest_label]) <>
-            " WHERE " <>
-            Cypher.expression(:d, dest_property_name, operator, "$#{param_key}") <>
-            " WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
+            Cypher.node(:d, [dest_label])
 
-        {cypher, %{param_key => to_param_value(predicate.right)}}
+        where_condition = Cypher.expression(:d, dest_property_name, operator, "$#{param_key}")
+
+        %Query{
+          clauses: [
+            %Match{pattern: match_pattern},
+            %Where{conditions: [where_condition]},
+            %With{items: ["s"]},
+            %Match{pattern: "(s)-[r0]-(d0)"},
+            %Return{items: ["s", "r0", "d0"]}
+          ],
+          params: %{param_key => to_param_value(predicate.right)}
+        }
 
       true ->
         Logger.debug("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
+        base_query(mapping.label)
+    end
+  end
 
-        {"MATCH " <> Cypher.node(:s, [mapping.label]) <> " OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d", %{}}
+  defp add_order_by(%Query{} = query, ash_query, %ResourceMapping{} = mapping) do
+    case ash_query.sort do
+      sort when sort in [nil, []] ->
+        query
+
+      sort ->
+        terms =
+          Enum.map(sort, fn {name, order} ->
+            prop = Keyword.get(mapping.properties, name, name)
+            {"s.#{prop}", order}
+          end)
+
+        %{query | clauses: query.clauses ++ [%OrderBy{terms: terms}]}
+    end
+  end
+
+  defp add_skip(%Query{} = query, ash_query) do
+    case ash_query.offset do
+      offset when offset in [nil, 0] -> query
+      n -> %{query | clauses: query.clauses ++ [%Skip{value: n}]}
+    end
+  end
+
+  defp add_limit(%Query{} = query, ash_query) do
+    case ash_query.limit do
+      nil -> query
+      n -> %{query | clauses: query.clauses ++ [%Limit{value: n}]}
     end
   end
 
@@ -179,45 +232,6 @@ defmodule AshNeo4j.QueryHelper do
   defp case_insensitive?(%ResourceMapping{} = mapping, predicate_left, predicate_right) do
     ResourceInfo.attribute_type(mapping.module, predicate_left) in [Ash.Type.CiString, :ci_string] or
       match?(%Ash.CiString{}, predicate_right)
-  end
-
-  defp order_by({cypher, params}, ash_query, %ResourceMapping{} = mapping)
-       when is_bitstring(cypher) and is_struct(ash_query) do
-    case ash_query.sort do
-      nil ->
-        {cypher, params}
-
-      [] ->
-        {cypher, params}
-
-      _ ->
-        terms =
-          Enum.map_join(ash_query.sort, ", ", fn {name, order} ->
-            prop = Keyword.get(mapping.properties, name, name)
-
-            case order do
-              :desc -> "s.#{prop} DESC"
-              _ -> "s.#{prop} ASC"
-            end
-          end)
-
-        {cypher <> " " <> "ORDER BY " <> terms, params}
-    end
-  end
-
-  defp limit({cypher, params}, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
-    case ash_query.limit do
-      nil -> {cypher, params}
-      _ -> {cypher <> " LIMIT #{ash_query.limit}", params}
-    end
-  end
-
-  defp skip({cypher, params}, ash_query) when is_bitstring(cypher) and is_struct(ash_query) do
-    case ash_query.offset do
-      nil -> {cypher, params}
-      0 -> {cypher, params}
-      _ -> {cypher <> " SKIP #{ash_query.offset}", params}
-    end
   end
 
   defp convert_operator(:==), do: "="
