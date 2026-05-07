@@ -293,14 +293,23 @@ Supported kinds: `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, 
 
 Aggregates are computed in Cypher via `OPTIONAL MATCH` traversal. Single-hop and multi-hop relationship paths are both supported.
 
-**Embedded struct and JSON-type fields are supported.** When `field:` refers to an attribute stored as JSON — `Ash.TypedStruct`, `Ash.Type.NewType` with map storage, embedded resources, `Ash.Type.Map`, `Ash.Type.Union`, etc. — AshNeo4j collects the raw JSON strings from Neo4j and deserializes them in Elixir using `Ash.Type.cast_stored/3`. `:list` and `:first` aggregates return fully deserialized struct values. `:sum`, `:avg`, `:min`, `:max` work when the deserialized values are directly comparable/numeric.
+**Embedded struct and JSON-type fields are supported.** When `field:` refers to an attribute stored as JSON — `Ash.TypedStruct`, `Ash.Type.NewType` with map storage, embedded resources, `Ash.Type.Map`, `Ash.Type.Union`, etc. — AshNeo4j collects the raw JSON strings from Neo4j and deserializes them in Elixir using `Ash.Type.cast_stored/3`. `:list` and `:first` aggregates return fully deserialized struct values. `:sum`, `:avg`, `:min`, `:max` work when the deserialized values are directly comparable/numeric. To aggregate a sub-field within a struct, use an `expr:` aggregate.
 
 ```elixir
 aggregates do
   list :all_metadata, :related_things, field: :metadata   # returns [%MetadataStruct{}, ...]
   first :first_metadata, :related_things, field: :metadata # returns %MetadataStruct{}
 end
+
+# No elevation needed — navigate into the struct with an expression aggregate:
+Ash.aggregate(MyResource, {:total_bandwidth, :sum, [
+  path: [:characteristics],
+  expr: Ash.Expr.expr(get_path(value, [:bandwidth])),
+  expr_type: :integer
+]})
 ```
+
+For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and aggregates in Elixir. Any valid Ash expression works — `get_path` for nested struct navigation, arithmetic, etc. Note: `expr:` is a programmatic API and is not available in the resource-level `aggregates do` DSL block.
 
 ## Limitations and Future Work
 

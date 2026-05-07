@@ -1049,11 +1049,17 @@ defmodule AshNeo4j.DataLayer do
             do: Keyword.get(dest_mapping.properties, aggregate.field, aggregate.field),
             else: nil
 
-        case embedded_field_type(dest_mapping.module, aggregate.field) do
-          {field_type, field_constraints} ->
+        embedded = embedded_field_type(dest_mapping.module, aggregate.field)
+
+        cond do
+          is_struct(aggregate.field, Ash.Query.Calculation) ->
+            run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
+
+          embedded ->
+            {field_type, field_constraints} = embedded
             run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints)
 
-          nil ->
+          true ->
             query =
               case mode do
                 :per_record ->
@@ -1142,6 +1148,54 @@ defmodule AshNeo4j.DataLayer do
 
       {:error, e} ->
         {:error, e}
+    end
+  end
+
+  defp run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
+    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    dest_resource = dest_mapping.module
+    calc = aggregate.field
+    expr = calc.opts[:expr]
+
+    case Ash.Filter.hydrate_refs(expr, %{resource: dest_resource, public?: false, eval?: true}) do
+      {:ok, hydrated} ->
+        case Cypher.run(query) do
+          {:ok, %Bolty.Response{results: rows}} ->
+            pairs =
+              Enum.flat_map(rows, fn row ->
+                source_id = Map.get(row, "source_id")
+                dest_node = Map.get(row, "dest_node")
+
+                if dest_node do
+                  case convert_node_to_resource(dest_resource, dest_node) do
+                    {:ok, record} ->
+                      case Ash.Expr.eval_hydrated(hydrated, record: record, resource: dest_resource, unknown_on_unknown_refs?: true) do
+                        {:ok, value} when not is_nil(value) -> [{source_id, value}]
+                        _ -> []
+                      end
+                    _ -> []
+                  end
+                else
+                  []
+                end
+              end)
+
+            case mode do
+              :per_record ->
+                grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
+                {:ok, Map.new(grouped, fn {source_id, values} ->
+                  {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+                end)}
+
+              :total ->
+                values = Enum.map(pairs, &elem(&1, 1))
+                {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+            end
+
+          {:error, e} -> {:error, e}
+        end
+
+      {:error, e} -> {:error, e}
     end
   end
 

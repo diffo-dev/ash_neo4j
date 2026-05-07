@@ -83,9 +83,26 @@ aggregates do
 end
 ```
 
-For `:sum`, `:avg`, `:min`, `:max` the deserialized values must be directly comparable/numeric — if you need to aggregate a sub-field within a struct, expose it as a flat property on the resource (via a calculation or an elevated attribute) and aggregate on that.
+For `:sum`, `:avg`, `:min`, `:max` the deserialized values must be directly comparable/numeric — if you need to aggregate a sub-field within a struct, use an expression aggregate (see below).
 
 Aggregating over a calculation result is not supported — the field must be a stored attribute.
+
+### Expression aggregates (no elevation needed)
+
+For aggregating over a sub-field of an embedded struct or any Ash expression, use the programmatic aggregate API with `expr:`:
+
+```elixir
+# Sum the age field within a DogTypedStruct stored on each Comment
+Ash.aggregate(Post, {:total_dog_age, :sum, [
+  path: [:comments],
+  expr: Ash.Expr.expr(get_path(dog, [:age])),
+  expr_type: :integer
+]})
+```
+
+When `expr:` is used, AshNeo4j fetches full destination node records, casts them to resource structs, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and applies the aggregate kind in Elixir. This supports arbitrary Ash expressions — field access, `get_path` for nested struct navigation, arithmetic, etc.
+
+Note: `expr:` in aggregate declarations is a programmatic API (`Ash.aggregate/3`, `Ash.Query.aggregate/3`). It is not available in the resource-level `aggregates do` DSL block.
 
 ## Naming conventions
 

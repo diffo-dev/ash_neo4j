@@ -26,6 +26,7 @@ defmodule AshNeo4j.Test.Resource.Comment do
   attributes do
     uuid_primary_key :id
     attribute :title, :string, public?: true
+    attribute :score, :integer, public?: true, allow_nil?: true
     attribute :dog, DogTypedStruct, public?: true, allow_nil?: true
   end
 
