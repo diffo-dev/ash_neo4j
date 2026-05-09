@@ -30,23 +30,10 @@ defmodule AshNeo4j.MixProject do
       ],
       consolidate_protocols: Mix.env() == :prod,
       aliases: aliases(),
-      # ex_doc
       name: @name,
       source_url: @github_url,
       homepage_url: "https://diffo.dev/diffo/ash_neo4j",
-      docs: [main: "readme", extras: ["README.md"]],
-      # hex.pm stuff
-      description: @description,
-      package: [
-        name: "ash_neo4j",
-        licenses: ["MIT"],
-        files: ["lib", "mix.exs", "README*", "VERSION*"],
-        maintainers: ["Matt Beanland"],
-        links: %{
-          "GitHub" => @github_url,
-          "Author's home page" => "https://www.diffo.dev"
-        }
-      ]
+      description: @description
     ]
   end
 
@@ -68,25 +55,60 @@ defmodule AshNeo4j.MixProject do
       source_url: @github_url,
       source_ref: "v#{@version}",
       main: "readme",
-      logo: "logos/diffo.jpg",
       extras: [
-        "README.md": [title: "Guide"],
-        "LICENSES/MIT.md": [title: "License"],
-        "documentation/dsls/DSL-AshNeo4j.DataLayer.md": [
-          title: "DSL: AshNeo4j.DataLayer",
-          search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)
+        {"README.md", title: "Home"},
+        {"LICENSES/MIT.md", title: "License"},
+        {"ash_neo4j_datalayer.livemd", title: "AshNeo4j Livebook"},
+        {"documentation/dsls/DSL-AshNeo4j.DataLayer.md",
+          search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)},
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        Tutorials: ~r'documentation/tutorials',
+        "How To": [~r'documentation/how_to', "ash_neo4j_datalayer.livemd"],
+        Topics: ~r'documentation/topics',
+        DSLs: ~r'documentation/dsls',
+        "About AshNeo4j": [
+          "CHANGELOG.md"
         ]
+      ],
+      logo: "logos/diffo.jpg",
+      groups_for_modules: [
+        AshNeo4j: [
+          AshNeo4j,
+          AshNeo4j.DataLayer,
+          AshNeo4j.Sandbox
+        ],
+        Introspection: [
+          AshNeo4j.DataLayer.Info,
+          AshNeo4j.Resource.Info,
+          AshNeo4j.EdgeDescriptor,
+          AshNeo4j.ResourceMapping
+        ],
+        Cypher: ~r/AshNeo4j\.Cypher/,
+        Utilities: [
+          AshNeo4j.BoltyHelper,
+          AshNeo4j.Neo4jHelper,
+          AshNeo4j.QueryHelper,
+          AshNeo4j.Util
+        ],
+        Internals: ~r/.*/
       ]
     ]
   end
 
   defp package do
     [
-      name: :ash_neo4j,
+      maintainers: [
+        "Matt Beanland <matt@diffo.dev>"
+      ],
       licenses: ["MIT"],
-      files: ~w(lib .formatter.exs mix.exs README* LICENSE* documentation usage-rules.md usage-rules),
+      files: ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG* documentation usage-rules.md usage-rules ash_neo4j_datalayer.livemd),
       links: %{
-        GitHub: "https://github.com/diffo-dev/ash_neo4j"
+        "GitHub" => "https://github.com/diffo-dev/ash_neo4j",
+        "Changelog" => "https://github.com/diffo-dev/ash_neo4j/blob/main/CHANGELOG.md",
+        "Website" => "https://diffo.dev",
+        "REUSE Compliance" => "https://api.reuse.software/info/github.com/diffo-dev/ash_neo4j"
       }
     ]
   end

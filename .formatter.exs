@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 spark_locals_without_parens = [
+  guard: 1,
   label: 1,
   relate: 1,
-  guard: 1,
   skip: 1
 ]
 
