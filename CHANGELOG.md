@@ -28,7 +28,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ## [v0.4.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.4.0...v0.4.1) (2026-05-06)
 
-## What's Changed
+### What's Changed
 * fix in_transaction? by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/226
 * fixed sandbox and non-sandbox paths by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/227
 * fix unhandled throws by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/228
