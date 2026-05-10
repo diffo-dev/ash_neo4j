@@ -43,9 +43,13 @@ defmodule AshNeo4j.Persisters.PersistMapping do
     }
 
     {:ok,
-     Transformer.eval(dsl, [], quote do
-       @doc false
-       def __ash_neo4j_mapping__, do: unquote(Macro.escape(mapping))
-     end)}
+     Transformer.eval(
+       dsl,
+       [],
+       quote do
+         @doc false
+         def __ash_neo4j_mapping__, do: unquote(Macro.escape(mapping))
+       end
+     )}
   end
 end

@@ -692,7 +692,14 @@ defmodule AshNeo4j.BlogTest do
         uuid: post_uuid = Ash.UUID.generate()
       })
 
-      Neo4jHelper.relate_nodes([:SRM, :Author], %{uuid: author_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :WROTE, :outgoing)
+      Neo4jHelper.relate_nodes(
+        [:SRM, :Author],
+        %{uuid: author_uuid},
+        [:SRM, :Post],
+        %{uuid: post_uuid},
+        :WROTE,
+        :outgoing
+      )
     end
   end
 
@@ -707,7 +714,15 @@ defmodule AshNeo4j.BlogTest do
 
     for post <- 1..posts do
       Neo4jHelper.create_node([:SRM, :Post], %{title: "post#{post}", uuid: post_uuid = Ash.UUID.generate()})
-      Neo4jHelper.relate_nodes([:SRM, :Author], %{uuid: author_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :WROTE, :outgoing)
+
+      Neo4jHelper.relate_nodes(
+        [:SRM, :Author],
+        %{uuid: author_uuid},
+        [:SRM, :Post],
+        %{uuid: post_uuid},
+        :WROTE,
+        :outgoing
+      )
 
       for comment <- 1..comments do
         Neo4jHelper.create_node([:SRM, :Comment], %{
@@ -715,7 +730,14 @@ defmodule AshNeo4j.BlogTest do
           uuid: comment_uuid = Ash.UUID.generate()
         })
 
-        Neo4jHelper.relate_nodes([:SRM, :Comment], %{uuid: comment_uuid}, [:SRM, :Post], %{uuid: post_uuid}, :BELONGS_TO, :outgoing)
+        Neo4jHelper.relate_nodes(
+          [:SRM, :Comment],
+          %{uuid: comment_uuid},
+          [:SRM, :Post],
+          %{uuid: post_uuid},
+          :BELONGS_TO,
+          :outgoing
+        )
       end
     end
   end

@@ -13,8 +13,21 @@ defmodule AshNeo4j.Cypher do
   require Logger
 
   alias AshNeo4j.Cypher.{
-    Query, Match, OptionalMatch, Create, Merge, Where, With,
-    Set, Remove, Delete, DetachDelete, Return, OrderBy, Skip, Limit
+    Query,
+    Match,
+    OptionalMatch,
+    Create,
+    Merge,
+    Where,
+    With,
+    Set,
+    Remove,
+    Delete,
+    DetachDelete,
+    Return,
+    OrderBy,
+    Skip,
+    Limit
   }
 
   @spec remove_properties(atom(), maybe_improper_list()) :: binary()

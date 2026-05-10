@@ -93,7 +93,7 @@ defmodule AshNeo4j.AggregateTest do
 
       posts = Post |> Ash.read!() |> Ash.load!([:has_comments]) |> Enum.sort_by(& &1.title)
       without = Enum.find(posts, &(&1.title == "without comments"))
-      with_c  = Enum.find(posts, &(&1.title == "with comments"))
+      with_c = Enum.find(posts, &(&1.title == "with comments"))
 
       assert with_c.has_comments == true
       assert without.has_comments == false
@@ -159,7 +159,10 @@ defmodule AshNeo4j.AggregateTest do
       create_comment_with_dog(post, "b", %DogTypedStruct{name: "Spot", age: 7})
 
       {:ok, %{total_dog_age: total}} =
-        Ash.aggregate(Post, {:total_dog_age, :sum, [path: [:comments], expr: Ash.Expr.expr(get_path(dog, [:age])), expr_type: :integer]})
+        Ash.aggregate(
+          Post,
+          {:total_dog_age, :sum, [path: [:comments], expr: Ash.Expr.expr(get_path(dog, [:age])), expr_type: :integer]}
+        )
 
       assert total == 10
     end
@@ -253,7 +256,9 @@ defmodule AshNeo4j.AggregateTest do
       create_comment(post2, "beta")
       create_comment(post2, "beta")
 
-      [p1, p2] = Post |> Ash.read!() |> Ash.load!([:alpha_comment_count, :has_alpha_comment]) |> Enum.sort_by(& &1.title)
+      [p1, p2] =
+        Post |> Ash.read!() |> Ash.load!([:alpha_comment_count, :has_alpha_comment]) |> Enum.sort_by(& &1.title)
+
       assert p1.alpha_comment_count == 2
       assert p1.has_alpha_comment == true
       assert p2.alpha_comment_count == 0

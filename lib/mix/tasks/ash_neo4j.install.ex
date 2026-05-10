@@ -52,7 +52,8 @@ if Code.ensure_loaded?(Igniter) do
         "runtime.exs",
         :bolty,
         [Bolt, :auth],
-        [username: "neo4j", password: "password"]
+        username: "neo4j",
+        password: "password"
       )
       |> Igniter.Project.Config.configure(
         "runtime.exs",
@@ -66,9 +67,7 @@ if Code.ensure_loaded?(Igniter) do
         [Bolt, :name],
         Bolt
       )
-      |> Igniter.Project.Application.add_new_child(
-        {Bolty, {:code, quote(do: Application.get_env(:bolty, Bolt))}}
-      )
+      |> Igniter.Project.Application.add_new_child({Bolty, {:code, quote(do: Application.get_env(:bolty, Bolt))}})
     end
   end
 else

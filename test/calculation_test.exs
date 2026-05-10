@@ -23,7 +23,10 @@ defmodule AshNeo4j.CalculationTest do
   end
 
   defp create_author, do: Author |> Ash.Changeset.for_create(:create, %{name: "Author"}) |> Ash.create!()
-  defp create_post(author), do: Post |> Ash.Changeset.for_create(:create, %{title: "post", written_by: author.id}) |> Ash.create!()
+
+  defp create_post(author),
+    do: Post |> Ash.Changeset.for_create(:create, %{title: "post", written_by: author.id}) |> Ash.create!()
+
   defp create_comment(post, title, score) do
     Comment |> Ash.Changeset.for_create(:create, %{title: title, score: score, post_id: post.id}) |> Ash.create!()
   end

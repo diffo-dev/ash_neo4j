@@ -171,7 +171,12 @@ defmodule AshNeo4j.DataLayer do
 
           case Enum.find(all_results, &match?({:error, _}, &1)) do
             nil ->
-              records = Enum.map(all_results, fn {:ok, r} -> r; r -> r end)
+              records =
+                Enum.map(all_results, fn
+                  {:ok, r} -> r
+                  r -> r
+                end)
+
               aggregates = Map.values(Map.get(query, :aggregates) || %{})
               calculations = Map.values(Map.get(query, :calculations) || %{})
 
@@ -1012,11 +1017,13 @@ defmodule AshNeo4j.DataLayer do
     Enum.reduce_while(aggregates, {:ok, records}, fn aggregate, {:ok, acc_records} ->
       case run_aggregate_for_ids(mapping, neo4j_pk, ids, aggregate, :per_record) do
         {:ok, agg_map} ->
-          updated = Enum.map(acc_records, fn record ->
-            id = Map.get(record, pk_field)
-            value = Map.get(agg_map, id, aggregate.default_value)
-            Map.put(record, aggregate.name, value)
-          end)
+          updated =
+            Enum.map(acc_records, fn record ->
+              id = Map.get(record, pk_field)
+              value = Map.get(agg_map, id, aggregate.default_value)
+              Map.put(record, aggregate.name, value)
+            end)
+
           {:cont, {:ok, updated}}
 
         {:error, e} ->
@@ -1085,21 +1092,44 @@ defmodule AshNeo4j.DataLayer do
 
           embedded ->
             {field_type, field_constraints} = embedded
-            run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints)
+
+            run_embedded_agg(
+              mapping,
+              neo4j_pk,
+              ids,
+              aggregate,
+              mode,
+              path_segments,
+              neo4j_field,
+              field_type,
+              field_constraints
+            )
 
           true ->
             query =
               case mode do
                 :per_record ->
                   CypherQuery.aggregate_per_record(
-                    mapping.label, neo4j_pk, ids, path_segments,
-                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                    mapping.label,
+                    neo4j_pk,
+                    ids,
+                    path_segments,
+                    aggregate.kind,
+                    neo4j_field,
+                    aggregate.name,
+                    aggregate.uniq?
                   )
 
                 :total ->
                   CypherQuery.aggregate_total(
-                    mapping.label, neo4j_pk, ids, path_segments,
-                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                    mapping.label,
+                    neo4j_pk,
+                    ids,
+                    path_segments,
+                    aggregate.kind,
+                    neo4j_field,
+                    aggregate.name,
+                    aggregate.uniq?
                   )
               end
 
@@ -1107,9 +1137,10 @@ defmodule AshNeo4j.DataLayer do
               {:ok, %Bolty.Response{results: rows}} ->
                 case mode do
                   :per_record ->
-                    {:ok, Map.new(rows, fn row ->
-                      {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
-                    end)}
+                    {:ok,
+                     Map.new(rows, fn row ->
+                       {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
+                     end)}
 
                   :total ->
                     value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
@@ -1156,12 +1187,14 @@ defmodule AshNeo4j.DataLayer do
       case mode do
         :per_record ->
           grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
+
           result =
             Map.new(grouped, fn {source_id, records} ->
               {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, records, aggregate.query.filter)
               values = extract_aggregate_field_values(filtered, aggregate)
               {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
             end)
+
           {:ok, result}
 
         :total ->
@@ -1189,30 +1222,56 @@ defmodule AshNeo4j.DataLayer do
 
   defp embedded_field_type(resource_module, field_name) when is_atom(field_name) do
     case Ash.Resource.Info.attribute(resource_module, field_name) do
-      nil -> nil
+      nil ->
+        nil
+
       attr ->
         type = Ash.Type.get_type(attr.type)
+
         case TypeClassifier.classify(type) do
           {:ok, :ash_json, _} -> {type, attr.constraints}
           _ -> nil
         end
     end
   end
+
   defp embedded_field_type(_, _), do: nil
 
-  defp run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints) do
+  defp run_embedded_agg(
+         mapping,
+         neo4j_pk,
+         ids,
+         aggregate,
+         mode,
+         path_segments,
+         neo4j_field,
+         field_type,
+         field_constraints
+       ) do
     query =
       case mode do
         :per_record ->
           CypherQuery.aggregate_per_record(
-            mapping.label, neo4j_pk, ids, path_segments,
-            :list, neo4j_field, aggregate.name, aggregate.uniq?
+            mapping.label,
+            neo4j_pk,
+            ids,
+            path_segments,
+            :list,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?
           )
 
         :total ->
           CypherQuery.aggregate_total(
-            mapping.label, neo4j_pk, ids, path_segments,
-            :list, neo4j_field, aggregate.name, aggregate.uniq?
+            mapping.label,
+            neo4j_pk,
+            ids,
+            path_segments,
+            :list,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?
           )
       end
 
@@ -1222,12 +1281,13 @@ defmodule AshNeo4j.DataLayer do
 
         case mode do
           :per_record ->
-            {:ok, Map.new(rows, fn row ->
-              source_id = Map.get(row, "source_id")
-              raw_list = Map.get(row, agg_key, [])
-              cast_list = cast_raw_list(raw_list, field_type, field_constraints)
-              {source_id, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
-            end)}
+            {:ok,
+             Map.new(rows, fn row ->
+               source_id = Map.get(row, "source_id")
+               raw_list = Map.get(row, agg_key, [])
+               cast_list = cast_raw_list(raw_list, field_type, field_constraints)
+               {source_id, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
+             end)}
 
           :total ->
             raw_list = rows |> List.first(%{}) |> Map.get(agg_key, [])
@@ -1270,7 +1330,11 @@ defmodule AshNeo4j.DataLayer do
             pairs =
               apply_record_filter(record_pairs, aggregate_query_filter(aggregate), domain)
               |> Enum.flat_map(fn {source_id, record} ->
-                case Ash.Expr.eval_hydrated(hydrated, record: record, resource: dest_resource, unknown_on_unknown_refs?: true) do
+                case Ash.Expr.eval_hydrated(hydrated,
+                       record: record,
+                       resource: dest_resource,
+                       unknown_on_unknown_refs?: true
+                     ) do
                   {:ok, value} when not is_nil(value) -> [{source_id, value}]
                   _ -> []
                 end
@@ -1279,19 +1343,23 @@ defmodule AshNeo4j.DataLayer do
             case mode do
               :per_record ->
                 grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
-                {:ok, Map.new(grouped, fn {source_id, values} ->
-                  {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
-                end)}
+
+                {:ok,
+                 Map.new(grouped, fn {source_id, values} ->
+                   {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+                 end)}
 
               :total ->
                 values = Enum.map(pairs, &elem(&1, 1))
                 {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
             end
 
-          {:error, e} -> {:error, e}
+          {:error, e} ->
+            {:error, e}
         end
 
-      {:error, e} -> {:error, e}
+      {:error, e} ->
+        {:error, e}
     end
   end
 
@@ -1335,6 +1403,7 @@ defmodule AshNeo4j.DataLayer do
       {:error, _} -> []
     end
   end
+
   defp cast_raw_list(_, _, _), do: []
 
   defp apply_elixir_aggregate(:list, values, _default), do: values

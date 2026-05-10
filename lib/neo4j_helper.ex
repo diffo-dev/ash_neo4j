@@ -186,10 +186,24 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+  def relate_nodes_unrelating_source(
+        source_label,
+        source_properties,
+        dest_label,
+        dest_properties,
+        edge_label,
+        edge_direction
+      )
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    Query.relate_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    Query.relate_unrelating_source(
+      source_label,
+      source_properties,
+      dest_label,
+      dest_properties,
+      edge_label,
+      edge_direction
+    )
     |> Cypher.run()
   end
 
@@ -209,10 +223,24 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+  def relate_nodes_unrelating_destination(
+        source_label,
+        source_properties,
+        dest_label,
+        dest_properties,
+        edge_label,
+        edge_direction
+      )
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    Query.relate_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    Query.relate_unrelating_destination(
+      source_label,
+      source_properties,
+      dest_label,
+      dest_properties,
+      edge_label,
+      edge_direction
+    )
     |> Cypher.run()
   end
 
@@ -234,10 +262,24 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def relate_nodes_unrelating_source_and_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+  def relate_nodes_unrelating_source_and_destination(
+        source_label,
+        source_properties,
+        dest_label,
+        dest_properties,
+        edge_label,
+        edge_direction
+      )
       when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
-    Query.relate_unrelating_both(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+    Query.relate_unrelating_both(
+      source_label,
+      source_properties,
+      dest_label,
+      dest_properties,
+      edge_label,
+      edge_direction
+    )
     |> Cypher.run()
   end
 
@@ -250,13 +292,34 @@ defmodule AshNeo4j.Neo4jHelper do
         relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
 
       {true, false} ->
-        relate_nodes_unrelating_source(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+        relate_nodes_unrelating_source(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
 
       {false, true} ->
-        relate_nodes_unrelating_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+        relate_nodes_unrelating_destination(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
 
       {true, true} ->
-        relate_nodes_unrelating_source_and_destination(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+        relate_nodes_unrelating_source_and_destination(
+          source_label,
+          source_properties,
+          dest_label,
+          dest_properties,
+          edge_label,
+          edge_direction
+        )
     end
   end
 
@@ -281,9 +344,17 @@ defmodule AshNeo4j.Neo4jHelper do
   def relate_nodes(label, properties, relationships)
       when is_atom(label) and is_map(properties) and is_list(relationships) do
     results =
-      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive}, acc ->
+      Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive},
+                                              acc ->
         if exclusive do
-          case relate_nodes_unrelating_destination(label, properties, dest_label, dest_properties, edge_label, edge_direction) do
+          case relate_nodes_unrelating_destination(
+                 label,
+                 properties,
+                 dest_label,
+                 dest_properties,
+                 edge_label,
+                 edge_direction
+               ) do
             {:ok, result} -> {:cont, [result | acc]}
             {:error, _} -> {:halt, :error}
           end
@@ -324,7 +395,9 @@ defmodule AshNeo4j.Neo4jHelper do
     cypher = "MATCH #{src_pattern}#{Cypher.relationship(:r, edge_label, edge_direction)}#{dest_pattern} RETURN s, r, d"
 
     case Cypher.run(cypher, Map.merge(src_params, dest_params)) do
-      {:ok, %{records: records}} -> length(records) > 0
+      {:ok, %{records: records}} ->
+        length(records) > 0
+
       {:error, error} ->
         Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
         :error
@@ -355,14 +428,18 @@ defmodule AshNeo4j.Neo4jHelper do
     path =
       Enum.reduce(edges, "", fn {edge_label, edge_direction}, acc ->
         variable = String.to_atom("r#{String.length(acc)}")
-        if acc == "", do: Cypher.relationship(variable, edge_label, edge_direction),
-        else: acc <> "()" <> Cypher.relationship(variable, edge_label, edge_direction)
+
+        if acc == "",
+          do: Cypher.relationship(variable, edge_label, edge_direction),
+          else: acc <> "()" <> Cypher.relationship(variable, edge_label, edge_direction)
       end)
 
     cypher = "MATCH #{src_pattern}#{path}#{dest_pattern} RETURN s, d"
 
     case Cypher.run(cypher, Map.merge(src_params, dest_params)) do
-      {:ok, %{records: records}} -> length(records) > 0
+      {:ok, %{records: records}} ->
+        length(records) > 0
+
       {:error, error} ->
         Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
         :error
