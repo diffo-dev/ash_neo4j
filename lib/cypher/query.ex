@@ -104,16 +104,39 @@ defmodule AshNeo4j.Cypher.Query do
   """
 
   alias AshNeo4j.Cypher
+
   alias AshNeo4j.Cypher.{
-    Match, OptionalMatch, Create, Merge, Where, With,
-    Set, Remove, Delete, DetachDelete, Return, OrderBy, Skip, Limit
+    Match,
+    OptionalMatch,
+    Create,
+    Merge,
+    Where,
+    With,
+    Set,
+    Remove,
+    Delete,
+    DetachDelete,
+    Return,
+    OrderBy,
+    Skip,
+    Limit
   }
 
   @type clause ::
-          Match.t() | OptionalMatch.t() | Create.t() | Merge.t()
-          | Where.t() | With.t() | Set.t() | Remove.t()
-          | Delete.t() | DetachDelete.t() | Return.t()
-          | OrderBy.t() | Skip.t() | Limit.t()
+          Match.t()
+          | OptionalMatch.t()
+          | Create.t()
+          | Merge.t()
+          | Where.t()
+          | With.t()
+          | Set.t()
+          | Remove.t()
+          | Delete.t()
+          | DetachDelete.t()
+          | Return.t()
+          | OrderBy.t()
+          | Skip.t()
+          | Limit.t()
 
   @type t :: %__MODULE__{clauses: [clause()], params: map()}
 
@@ -273,7 +296,16 @@ defmodule AshNeo4j.Cypher.Query do
   `path_segments` is a list of `{edge_label, direction, dest_label}` tuples describing
   the traversal from source to the node being aggregated.
   """
-  @spec aggregate_per_record(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) :: t()
+  @spec aggregate_per_record(
+          atom(),
+          atom(),
+          [any()],
+          [{atom(), atom(), atom()}],
+          atom(),
+          atom() | nil,
+          atom(),
+          boolean()
+        ) :: t()
   def aggregate_per_record(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
       when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
@@ -295,7 +327,8 @@ defmodule AshNeo4j.Cypher.Query do
 
   `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN agg_fn AS name`
   """
-  @spec aggregate_total(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) :: t()
+  @spec aggregate_total(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) ::
+          t()
   def aggregate_total(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
       when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
@@ -375,7 +408,11 @@ defmodule AshNeo4j.Cypher.Query do
   def delete_nodes_guarded(label, properties, guards)
       when is_atom(label) and is_map(properties) and is_list(guards) do
     {pattern, params} = Cypher.parameterized_node(:n, [label], properties)
-    conditions = Enum.map(guards, fn {edge_label, direction, dest_label} -> guard_condition(:n, edge_label, direction, dest_label) end)
+
+    conditions =
+      Enum.map(guards, fn {edge_label, direction, dest_label} ->
+        guard_condition(:n, edge_label, direction, dest_label)
+      end)
 
     %__MODULE__{
       clauses: [%Match{pattern: pattern}, %Where{conditions: conditions}, %DetachDelete{items: ["n"]}],
@@ -421,7 +458,9 @@ defmodule AshNeo4j.Cypher.Query do
       clauses: [
         %Match{pattern: src_pattern},
         %With{items: ["s"]},
-        %OptionalMatch{pattern: "(s)" <> Cypher.relationship(:r0, edge_label, direction) <> Cypher.node(:d0, [dest_label])},
+        %OptionalMatch{
+          pattern: "(s)" <> Cypher.relationship(:r0, edge_label, direction) <> Cypher.node(:d0, [dest_label])
+        },
         %Delete{items: ["r0"]},
         %With{items: ["s"]},
         %Match{pattern: dest_pattern},
@@ -450,7 +489,9 @@ defmodule AshNeo4j.Cypher.Query do
         %Match{pattern: src_pattern},
         %OptionalMatch{pattern: dest_pattern},
         %With{items: ["s", "d"]},
-        %OptionalMatch{pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"},
+        %OptionalMatch{
+          pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
+        },
         %Where{conditions: ["s0 <> s"]},
         %Delete{items: ["r0"]},
         %With{items: ["s", "d"]},
@@ -485,7 +526,9 @@ defmodule AshNeo4j.Cypher.Query do
         %With{items: ["s"]},
         %OptionalMatch{pattern: dest_pattern},
         %With{items: ["s", "d"]},
-        %OptionalMatch{pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"},
+        %OptionalMatch{
+          pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
+        },
         %Where{conditions: ["s0 <> s"]},
         %Delete{items: ["r0"]},
         %With{items: ["s", "d"]},
@@ -566,11 +609,14 @@ defmodule AshNeo4j.Cypher.Query do
     |> Enum.with_index()
     |> Enum.reduce("", fn {{edge_label, direction, dest_label}, i}, acc ->
       node_var = if i == last_idx, do: "d", else: "h#{i}"
-      rel = case direction do
-        :outgoing -> "-[:#{edge_label}]->"
-        :incoming -> "<-[:#{edge_label}]-"
-        _ -> "-[:#{edge_label}]-"
-      end
+
+      rel =
+        case direction do
+          :outgoing -> "-[:#{edge_label}]->"
+          :incoming -> "<-[:#{edge_label}]-"
+          _ -> "-[:#{edge_label}]-"
+        end
+
       acc <> rel <> "(#{node_var}:#{dest_label})"
     end)
   end
@@ -579,17 +625,18 @@ defmodule AshNeo4j.Cypher.Query do
     distinct = if uniq?, do: "DISTINCT ", else: ""
     field_ref = if field, do: "d.#{field}", else: "d"
 
-    fn_str = case kind do
-      :count  -> "COUNT(#{distinct}d)"
-      :exists -> "COUNT(d) > 0"
-      :sum    -> "sum(#{distinct}#{field_ref})"
-      :avg    -> "avg(#{distinct}#{field_ref})"
-      :min    -> "min(#{field_ref})"
-      :max    -> "max(#{field_ref})"
-      :list   -> "collect(#{distinct}#{field_ref})"
-      :first  -> "head(collect(#{field_ref}))"
-    end
+    fn_str =
+      case kind do
+        :count -> "COUNT(#{distinct}d)"
+        :exists -> "COUNT(d) > 0"
+        :sum -> "sum(#{distinct}#{field_ref})"
+        :avg -> "avg(#{distinct}#{field_ref})"
+        :min -> "min(#{field_ref})"
+        :max -> "max(#{field_ref})"
+        :list -> "collect(#{distinct}#{field_ref})"
+        :first -> "head(collect(#{field_ref}))"
+      end
 
-    "#{fn_str} AS #{name}"
+    "#{fn_str} AS `#{name}`"
   end
 end

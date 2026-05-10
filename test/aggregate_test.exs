@@ -93,7 +93,7 @@ defmodule AshNeo4j.AggregateTest do
 
       posts = Post |> Ash.read!() |> Ash.load!([:has_comments]) |> Enum.sort_by(& &1.title)
       without = Enum.find(posts, &(&1.title == "without comments"))
-      with_c  = Enum.find(posts, &(&1.title == "with comments"))
+      with_c = Enum.find(posts, &(&1.title == "with comments"))
 
       assert with_c.has_comments == true
       assert without.has_comments == false
@@ -159,9 +159,110 @@ defmodule AshNeo4j.AggregateTest do
       create_comment_with_dog(post, "b", %DogTypedStruct{name: "Spot", age: 7})
 
       {:ok, %{total_dog_age: total}} =
-        Ash.aggregate(Post, {:total_dog_age, :sum, [path: [:comments], expr: Ash.Expr.expr(get_path(dog, [:age])), expr_type: :integer]})
+        Ash.aggregate(
+          Post,
+          {:total_dog_age, :sum, [path: [:comments], expr: Ash.Expr.expr(get_path(dog, [:age])), expr_type: :integer]}
+        )
 
       assert total == 10
+    end
+  end
+
+  describe "aggregate names with ? suffix (#251 — must not produce invalid Cypher)" do
+    test "exists aggregate named with ? suffix returns correct boolean" do
+      author = create_author()
+      post_with = create_post(author, "with comments")
+      _post_without = create_post(author, "without comments")
+      create_comment(post_with, "a comment")
+
+      [with_c, without_c] = Post |> Ash.read!() |> Ash.load!([:has_comments?]) |> Enum.sort_by(& &1.title)
+
+      assert with_c.has_comments? == true
+      assert without_c.has_comments? == false
+    end
+  end
+
+  describe "filtered aggregates (#252 — filter must not be silently dropped)" do
+    test "first aggregate with filter returns the matching record's field, not whichever comes first" do
+      author = create_author()
+      post = create_post(author, "post")
+      # Create beta first so Neo4j is likely to return it first without a filter
+      create_comment(post, "beta")
+      create_comment(post, "alpha")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:first_alpha_comment_title])
+      assert loaded.first_alpha_comment_title == "alpha"
+    end
+
+    test "count aggregate with filter counts only matching records" do
+      author = create_author()
+      post1 = create_post(author, "post1")
+      post2 = create_post(author, "post2")
+      create_comment(post1, "alpha")
+      create_comment(post1, "beta")
+      create_comment(post1, "alpha")
+      create_comment(post2, "beta")
+
+      [p1, p2] = Post |> Ash.read!() |> Ash.load!([:alpha_comment_count]) |> Enum.sort_by(& &1.title)
+      assert p1.alpha_comment_count == 2
+      assert p2.alpha_comment_count == 0
+    end
+
+    test "exists aggregate with filter is false when only non-matching records exist" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment(post, "beta")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:has_alpha_comment])
+      assert loaded.has_alpha_comment == false
+    end
+
+    test "exists aggregate with filter is true when a matching record exists" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment(post, "beta")
+      create_comment(post, "alpha")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:has_alpha_comment])
+      assert loaded.has_alpha_comment == true
+    end
+
+    test "list aggregate with filter returns only matching field values" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment(post, "alpha")
+      create_comment(post, "beta")
+      create_comment(post, "alpha")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:alpha_comment_titles])
+      assert Enum.sort(loaded.alpha_comment_titles) == ["alpha", "alpha"]
+    end
+
+    test "count with filter returns 0 for post with no comments" do
+      author = create_author()
+      create_post(author, "empty post")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:alpha_comment_count])
+      assert loaded.alpha_comment_count == 0
+    end
+
+    test "multiple posts each see only their own filtered count" do
+      author = create_author()
+      post1 = create_post(author, "aaa")
+      post2 = create_post(author, "bbb")
+      create_comment(post1, "alpha")
+      create_comment(post1, "alpha")
+      create_comment(post1, "beta")
+      create_comment(post2, "beta")
+      create_comment(post2, "beta")
+
+      [p1, p2] =
+        Post |> Ash.read!() |> Ash.load!([:alpha_comment_count, :has_alpha_comment]) |> Enum.sort_by(& &1.title)
+
+      assert p1.alpha_comment_count == 2
+      assert p1.has_alpha_comment == true
+      assert p2.alpha_comment_count == 0
+      assert p2.has_alpha_comment == false
     end
   end
 

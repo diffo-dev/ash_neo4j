@@ -11,6 +11,18 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.5.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.5.0...v0.5.1) (2026-05-10)
+
+### Improvements
+
+* **Documentation** (#249) — ex_doc configuration overhauled: extras reorganised with titled entries, module groups defined for AshNeo4j, Introspection, Cypher, Utilities and Internals, Livebook added to How To, CHANGELOG included in About AshNeo4j, maintainer contact updated.
+
+### Bug Fixes
+
+* **Aggregate filters honoured** (#252) — filters declared via `filter expr(...)` on aggregate definitions were silently dropped. Filtered aggregates now load full destination records in Elixir and apply `Ash.Filter.Runtime.filter_matches/3` per source group before reducing. The fast Cypher push-down path is preserved for unfiltered aggregates.
+
+* **Aggregate names with `?` suffix** (#251) — aggregate names following the Elixir predicate convention (e.g. `exists :cvc_defined?, :characteristics`) caused Neo4j to reject the generated Cypher with an invalid identifier error. Column aliases are now backtick-quoted, allowing any valid Elixir atom as an aggregate name.
+
 ## [v0.5.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.4.1...v0.5.0) (2026-05-08)
 
 ### Features
@@ -28,7 +40,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ## [v0.4.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.4.0...v0.4.1) (2026-05-06)
 
-## What's Changed
+### What's Changed
 * fix in_transaction? by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/226
 * fixed sandbox and non-sandbox paths by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/227
 * fix unhandled throws by @matt-beanland in https://github.com/diffo-dev/ash_neo4j/pull/228

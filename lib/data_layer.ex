@@ -171,7 +171,12 @@ defmodule AshNeo4j.DataLayer do
 
           case Enum.find(all_results, &match?({:error, _}, &1)) do
             nil ->
-              records = Enum.map(all_results, fn {:ok, r} -> r; r -> r end)
+              records =
+                Enum.map(all_results, fn
+                  {:ok, r} -> r
+                  r -> r
+                end)
+
               aggregates = Map.values(Map.get(query, :aggregates) || %{})
               calculations = Map.values(Map.get(query, :calculations) || %{})
 
@@ -1012,11 +1017,13 @@ defmodule AshNeo4j.DataLayer do
     Enum.reduce_while(aggregates, {:ok, records}, fn aggregate, {:ok, acc_records} ->
       case run_aggregate_for_ids(mapping, neo4j_pk, ids, aggregate, :per_record) do
         {:ok, agg_map} ->
-          updated = Enum.map(acc_records, fn record ->
-            id = Map.get(record, pk_field)
-            value = Map.get(agg_map, id, aggregate.default_value)
-            Map.put(record, aggregate.name, value)
-          end)
+          updated =
+            Enum.map(acc_records, fn record ->
+              id = Map.get(record, pk_field)
+              value = Map.get(agg_map, id, aggregate.default_value)
+              Map.put(record, aggregate.name, value)
+            end)
+
           {:cont, {:ok, updated}}
 
         {:error, e} ->
@@ -1072,26 +1079,57 @@ defmodule AshNeo4j.DataLayer do
         embedded = embedded_field_type(dest_mapping.module, aggregate.field)
 
         cond do
+          # Expression-based aggregates always load full records in Elixir;
+          # run_expr_agg handles aggregate.filter internally via apply_record_filter.
           is_struct(aggregate.field, Ash.Query.Calculation) ->
             run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
 
+          # When a filter is present on a plain or embedded aggregate, load full
+          # destination records in Elixir so Ash.Filter.Runtime can evaluate it.
+          # Honouring the filter is a contract implied by can?({:aggregate, kind}).
+          aggregate_has_filter?(aggregate) ->
+            run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
+
           embedded ->
             {field_type, field_constraints} = embedded
-            run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints)
+
+            run_embedded_agg(
+              mapping,
+              neo4j_pk,
+              ids,
+              aggregate,
+              mode,
+              path_segments,
+              neo4j_field,
+              field_type,
+              field_constraints
+            )
 
           true ->
             query =
               case mode do
                 :per_record ->
                   CypherQuery.aggregate_per_record(
-                    mapping.label, neo4j_pk, ids, path_segments,
-                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                    mapping.label,
+                    neo4j_pk,
+                    ids,
+                    path_segments,
+                    aggregate.kind,
+                    neo4j_field,
+                    aggregate.name,
+                    aggregate.uniq?
                   )
 
                 :total ->
                   CypherQuery.aggregate_total(
-                    mapping.label, neo4j_pk, ids, path_segments,
-                    aggregate.kind, neo4j_field, aggregate.name, aggregate.uniq?
+                    mapping.label,
+                    neo4j_pk,
+                    ids,
+                    path_segments,
+                    aggregate.kind,
+                    neo4j_field,
+                    aggregate.name,
+                    aggregate.uniq?
                   )
               end
 
@@ -1099,9 +1137,10 @@ defmodule AshNeo4j.DataLayer do
               {:ok, %Bolty.Response{results: rows}} ->
                 case mode do
                   :per_record ->
-                    {:ok, Map.new(rows, fn row ->
-                      {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
-                    end)}
+                    {:ok,
+                     Map.new(rows, fn row ->
+                       {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
+                     end)}
 
                   :total ->
                     value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
@@ -1118,32 +1157,121 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
+  # Handles any aggregate that carries a filter expression. Loads all destination
+  # records for the given source IDs via Elixir, applies the Ash runtime filter,
+  # then computes the aggregate in Elixir.
+  #
+  # This path is also used for expression-based aggregates (Ash.Query.Calculation
+  # field) when a filter is present, because we already load full records there.
+  defp run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
+    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    dest_resource = dest_mapping.module
+    domain = Ash.Resource.Info.domain(dest_resource)
+
+    with {:ok, %Bolty.Response{results: rows}} <- Cypher.run(query) do
+      pairs =
+        Enum.flat_map(rows, fn row ->
+          source_id = Map.get(row, "source_id")
+          dest_node = Map.get(row, "dest_node")
+
+          if dest_node do
+            case convert_node_to_resource(dest_resource, dest_node) do
+              {:ok, record} -> [{source_id, record}]
+              _ -> []
+            end
+          else
+            []
+          end
+        end)
+
+      case mode do
+        :per_record ->
+          grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
+
+          result =
+            Map.new(grouped, fn {source_id, records} ->
+              {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, records, aggregate.query.filter)
+              values = extract_aggregate_field_values(filtered, aggregate)
+              {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+            end)
+
+          {:ok, result}
+
+        :total ->
+          all_records = Enum.map(pairs, &elem(&1, 1))
+          {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, all_records, aggregate.query.filter)
+          values = extract_aggregate_field_values(filtered, aggregate)
+          {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+      end
+    end
+  end
+
+  # Extracts the aggregate's target field value from each record, respecting uniq?.
+  defp extract_aggregate_field_values(records, aggregate) do
+    values =
+      Enum.map(records, fn record ->
+        case aggregate.field do
+          nil -> record
+          field when is_atom(field) -> Map.get(record, field)
+          _ -> record
+        end
+      end)
+
+    if aggregate.uniq?, do: Enum.uniq(values), else: values
+  end
+
   defp embedded_field_type(resource_module, field_name) when is_atom(field_name) do
     case Ash.Resource.Info.attribute(resource_module, field_name) do
-      nil -> nil
+      nil ->
+        nil
+
       attr ->
         type = Ash.Type.get_type(attr.type)
+
         case TypeClassifier.classify(type) do
           {:ok, :ash_json, _} -> {type, attr.constraints}
           _ -> nil
         end
     end
   end
+
   defp embedded_field_type(_, _), do: nil
 
-  defp run_embedded_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, field_type, field_constraints) do
+  defp run_embedded_agg(
+         mapping,
+         neo4j_pk,
+         ids,
+         aggregate,
+         mode,
+         path_segments,
+         neo4j_field,
+         field_type,
+         field_constraints
+       ) do
     query =
       case mode do
         :per_record ->
           CypherQuery.aggregate_per_record(
-            mapping.label, neo4j_pk, ids, path_segments,
-            :list, neo4j_field, aggregate.name, aggregate.uniq?
+            mapping.label,
+            neo4j_pk,
+            ids,
+            path_segments,
+            :list,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?
           )
 
         :total ->
           CypherQuery.aggregate_total(
-            mapping.label, neo4j_pk, ids, path_segments,
-            :list, neo4j_field, aggregate.name, aggregate.uniq?
+            mapping.label,
+            neo4j_pk,
+            ids,
+            path_segments,
+            :list,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?
           )
       end
 
@@ -1153,12 +1281,13 @@ defmodule AshNeo4j.DataLayer do
 
         case mode do
           :per_record ->
-            {:ok, Map.new(rows, fn row ->
-              source_id = Map.get(row, "source_id")
-              raw_list = Map.get(row, agg_key, [])
-              cast_list = cast_raw_list(raw_list, field_type, field_constraints)
-              {source_id, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
-            end)}
+            {:ok,
+             Map.new(rows, fn row ->
+               source_id = Map.get(row, "source_id")
+               raw_list = Map.get(row, agg_key, [])
+               cast_list = cast_raw_list(raw_list, field_type, field_constraints)
+               {source_id, apply_elixir_aggregate(aggregate.kind, cast_list, aggregate.default_value)}
+             end)}
 
           :total ->
             raw_list = rows |> List.first(%{}) |> Map.get(agg_key, [])
@@ -1174,6 +1303,7 @@ defmodule AshNeo4j.DataLayer do
   defp run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
     query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
     dest_resource = dest_mapping.module
+    domain = Ash.Resource.Info.domain(dest_resource)
     calc = aggregate.field
     expr = calc.opts[:expr]
 
@@ -1181,18 +1311,14 @@ defmodule AshNeo4j.DataLayer do
       {:ok, hydrated} ->
         case Cypher.run(query) do
           {:ok, %Bolty.Response{results: rows}} ->
-            pairs =
+            record_pairs =
               Enum.flat_map(rows, fn row ->
                 source_id = Map.get(row, "source_id")
                 dest_node = Map.get(row, "dest_node")
 
                 if dest_node do
                   case convert_node_to_resource(dest_resource, dest_node) do
-                    {:ok, record} ->
-                      case Ash.Expr.eval_hydrated(hydrated, record: record, resource: dest_resource, unknown_on_unknown_refs?: true) do
-                        {:ok, value} when not is_nil(value) -> [{source_id, value}]
-                        _ -> []
-                      end
+                    {:ok, record} -> [{source_id, record}]
                     _ -> []
                   end
                 else
@@ -1200,23 +1326,75 @@ defmodule AshNeo4j.DataLayer do
                 end
               end)
 
+            # Apply aggregate filter if present, then evaluate the expression.
+            pairs =
+              apply_record_filter(record_pairs, aggregate_query_filter(aggregate), domain)
+              |> Enum.flat_map(fn {source_id, record} ->
+                case Ash.Expr.eval_hydrated(hydrated,
+                       record: record,
+                       resource: dest_resource,
+                       unknown_on_unknown_refs?: true
+                     ) do
+                  {:ok, value} when not is_nil(value) -> [{source_id, value}]
+                  _ -> []
+                end
+              end)
+
             case mode do
               :per_record ->
                 grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
-                {:ok, Map.new(grouped, fn {source_id, values} ->
-                  {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
-                end)}
+
+                {:ok,
+                 Map.new(grouped, fn {source_id, values} ->
+                   {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
+                 end)}
 
               :total ->
                 values = Enum.map(pairs, &elem(&1, 1))
                 {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
             end
 
-          {:error, e} -> {:error, e}
+          {:error, e} ->
+            {:error, e}
         end
 
-      {:error, e} -> {:error, e}
+      {:error, e} ->
+        {:error, e}
     end
+  end
+
+  # Returns true when the aggregate carries a real (non-trivial) filter in its
+  # query. Ash always provides an Ash.Query on the aggregate; unfiltered aggregates
+  # have %Ash.Filter{expression: true}. We only route through the Elixir-side
+  # path when there is an actual user-defined filter to honour.
+  defp aggregate_has_filter?(aggregate) do
+    case aggregate_query_filter(aggregate) do
+      %Ash.Filter{expression: true} -> false
+      %Ash.Filter{} -> true
+      _ -> false
+    end
+  end
+
+  # Extracts the filter from aggregate.query, returning nil if absent.
+  defp aggregate_query_filter(aggregate) do
+    case Map.get(aggregate, :query) do
+      %Ash.Query{filter: filter} -> filter
+      _ -> nil
+    end
+  end
+
+  # Applies an Ash filter (if any) to a list of {source_id, record} pairs,
+  # keeping per-source grouping so filter predicates referencing destination
+  # attributes are evaluated correctly.
+  defp apply_record_filter(pairs, nil, _domain), do: pairs
+
+  defp apply_record_filter(pairs, filter, domain) do
+    grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
+
+    Enum.flat_map(grouped, fn {source_id, records} ->
+      {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
+      Enum.map(filtered, &{source_id, &1})
+    end)
   end
 
   defp cast_raw_list(raw_list, field_type, field_constraints) when is_list(raw_list) do
@@ -1225,6 +1403,7 @@ defmodule AshNeo4j.DataLayer do
       {:error, _} -> []
     end
   end
+
   defp cast_raw_list(_, _, _), do: []
 
   defp apply_elixir_aggregate(:list, values, _default), do: values

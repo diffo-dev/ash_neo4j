@@ -160,5 +160,4 @@ defmodule AshNeo4j.QueryHelper do
     ResourceInfo.attribute_type(mapping.module, predicate_left) in [Ash.Type.CiString, :ci_string] or
       match?(%Ash.CiString{}, predicate_right)
   end
-
 end
