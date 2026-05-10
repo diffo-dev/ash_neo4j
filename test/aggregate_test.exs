@@ -165,6 +165,20 @@ defmodule AshNeo4j.AggregateTest do
     end
   end
 
+  describe "aggregate names with ? suffix (#251 — must not produce invalid Cypher)" do
+    test "exists aggregate named with ? suffix returns correct boolean" do
+      author = create_author()
+      post_with = create_post(author, "with comments")
+      _post_without = create_post(author, "without comments")
+      create_comment(post_with, "a comment")
+
+      [with_c, without_c] = Post |> Ash.read!() |> Ash.load!([:has_comments?]) |> Enum.sort_by(& &1.title)
+
+      assert with_c.has_comments? == true
+      assert without_c.has_comments? == false
+    end
+  end
+
   describe "filtered aggregates (#252 — filter must not be silently dropped)" do
     test "first aggregate with filter returns the matching record's field, not whichever comes first" do
       author = create_author()

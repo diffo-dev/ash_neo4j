@@ -1080,7 +1080,7 @@ defmodule AshNeo4j.DataLayer do
           # When a filter is present on a plain or embedded aggregate, load full
           # destination records in Elixir so Ash.Filter.Runtime can evaluate it.
           # Honouring the filter is a contract implied by can?({:aggregate, kind}).
-          aggregate.filter ->
+          aggregate_has_filter?(aggregate) ->
             run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
 
           embedded ->
@@ -1158,7 +1158,7 @@ defmodule AshNeo4j.DataLayer do
           grouped = Enum.group_by(pairs, &elem(&1, 0), &elem(&1, 1))
           result =
             Map.new(grouped, fn {source_id, records} ->
-              {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, records, aggregate.filter)
+              {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, records, aggregate.query.filter)
               values = extract_aggregate_field_values(filtered, aggregate)
               {source_id, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
             end)
@@ -1166,7 +1166,7 @@ defmodule AshNeo4j.DataLayer do
 
         :total ->
           all_records = Enum.map(pairs, &elem(&1, 1))
-          {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, all_records, aggregate.filter)
+          {:ok, filtered} = Ash.Filter.Runtime.filter_matches(domain, all_records, aggregate.query.filter)
           values = extract_aggregate_field_values(filtered, aggregate)
           {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
       end
@@ -1268,7 +1268,7 @@ defmodule AshNeo4j.DataLayer do
 
             # Apply aggregate filter if present, then evaluate the expression.
             pairs =
-              apply_record_filter(record_pairs, aggregate.filter, domain)
+              apply_record_filter(record_pairs, aggregate_query_filter(aggregate), domain)
               |> Enum.flat_map(fn {source_id, record} ->
                 case Ash.Expr.eval_hydrated(hydrated, record: record, resource: dest_resource, unknown_on_unknown_refs?: true) do
                   {:ok, value} when not is_nil(value) -> [{source_id, value}]
@@ -1292,6 +1292,26 @@ defmodule AshNeo4j.DataLayer do
         end
 
       {:error, e} -> {:error, e}
+    end
+  end
+
+  # Returns true when the aggregate carries a real (non-trivial) filter in its
+  # query. Ash always provides an Ash.Query on the aggregate; unfiltered aggregates
+  # have %Ash.Filter{expression: true}. We only route through the Elixir-side
+  # path when there is an actual user-defined filter to honour.
+  defp aggregate_has_filter?(aggregate) do
+    case aggregate_query_filter(aggregate) do
+      %Ash.Filter{expression: true} -> false
+      %Ash.Filter{} -> true
+      _ -> false
+    end
+  end
+
+  # Extracts the filter from aggregate.query, returning nil if absent.
+  defp aggregate_query_filter(aggregate) do
+    case Map.get(aggregate, :query) do
+      %Ash.Query{filter: filter} -> filter
+      _ -> nil
     end
   end
 

@@ -79,13 +79,14 @@ defmodule AshNeo4j.Test.Resource.Post do
   aggregates do
     count :comment_count, :comments
     exists :has_comments, :comments
+    exists :has_comments?, :comments
     first :first_comment_title, :comments, field: :title
     list :comment_titles, :comments, field: :title
     list :comment_dogs, :comments, field: :dog
     first :first_comment_dog, :comments, field: :dog
 
     # Filtered aggregates — used to verify #252 (filters must not be silently dropped).
-    first :first_alpha_comment_title, :comments, field: :title do
+    first :first_alpha_comment_title, :comments, :title do
       filter expr(title == "alpha")
     end
 
@@ -97,7 +98,7 @@ defmodule AshNeo4j.Test.Resource.Post do
       filter expr(title == "alpha")
     end
 
-    list :alpha_comment_titles, :comments, field: :title do
+    list :alpha_comment_titles, :comments, :title do
       filter expr(title == "alpha")
     end
   end

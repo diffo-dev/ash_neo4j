@@ -590,6 +590,6 @@ defmodule AshNeo4j.Cypher.Query do
       :first  -> "head(collect(#{field_ref}))"
     end
 
-    "#{fn_str} AS #{name}"
+    "#{fn_str} AS `#{name}`"
   end
 end
