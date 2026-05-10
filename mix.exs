@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.5.1"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -59,8 +59,7 @@ defmodule AshNeo4j.MixProject do
         {"README.md", title: "Home"},
         {"LICENSES/MIT.md", title: "License"},
         {"ash_neo4j_datalayer.livemd", title: "AshNeo4j Livebook"},
-        {"documentation/dsls/DSL-AshNeo4j.DataLayer.md",
-          search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)},
+        {"documentation/dsls/DSL-AshNeo4j.DataLayer.md", search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)},
         "CHANGELOG.md"
       ],
       groups_for_extras: [
@@ -103,7 +102,8 @@ defmodule AshNeo4j.MixProject do
         "Matt Beanland <matt@diffo.dev>"
       ],
       licenses: ["MIT"],
-      files: ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG* documentation usage-rules.md usage-rules ash_neo4j_datalayer.livemd),
+      files:
+        ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG* documentation usage-rules.md usage-rules ash_neo4j_datalayer.livemd),
       links: %{
         "GitHub" => "https://github.com/diffo-dev/ash_neo4j",
         "Changelog" => "https://github.com/diffo-dev/ash_neo4j/blob/main/CHANGELOG.md",
