@@ -83,7 +83,7 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def safe_delete_nodes(label, properties, relationships) when is_atom(label) do
+  def safe_delete_nodes(label, properties, relationships) when is_atom(label) or is_list(label) do
     Query.delete_nodes_guarded(label, properties, relationships)
     |> Cypher.run_expecting_deletions()
   end
@@ -121,7 +121,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def update_node(label, match_properties, set_properties, remove_properties \\ [])
-      when is_atom(label) and is_map(set_properties) do
+      when (is_atom(label) or is_list(label)) and is_map(set_properties) do
     Query.update_node(label, match_properties, set_properties, remove_properties)
     |> Cypher.run()
   end
@@ -164,7 +164,8 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
     Query.unrelate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
     |> Cypher.run()
@@ -194,7 +195,8 @@ defmodule AshNeo4j.Neo4jHelper do
         edge_label,
         edge_direction
       )
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
     Query.relate_unrelating_source(
       source_label,
@@ -231,7 +233,8 @@ defmodule AshNeo4j.Neo4jHelper do
         edge_label,
         edge_direction
       )
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
     Query.relate_unrelating_destination(
       source_label,
@@ -270,7 +273,8 @@ defmodule AshNeo4j.Neo4jHelper do
         edge_label,
         edge_direction
       )
-      when is_atom(source_label) and is_map(source_properties) and is_atom(dest_label) and is_map(dest_properties) and
+      when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
+             is_atom(dest_label) and is_map(dest_properties) and
              is_atom(edge_label) and is_atom(edge_direction) do
     Query.relate_unrelating_both(
       source_label,
@@ -342,7 +346,7 @@ defmodule AshNeo4j.Neo4jHelper do
   ```
   """
   def relate_nodes(label, properties, relationships)
-      when is_atom(label) and is_map(properties) and is_list(relationships) do
+      when (is_atom(label) or is_list(label)) and is_map(properties) and is_list(relationships) do
     results =
       Enum.reduce_while(relationships, [], fn {dest_label, dest_properties, edge_label, edge_direction, exclusive},
                                               acc ->
@@ -503,7 +507,7 @@ defmodule AshNeo4j.Neo4jHelper do
   1
   ```
   """
-  def read_nodes_related(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
+  def read_nodes_related(label, properties \\ %{}) when (is_atom(label) or is_list(label)) and is_map(properties) do
     Query.node_read_with_properties(label, properties)
     |> Cypher.run()
   end

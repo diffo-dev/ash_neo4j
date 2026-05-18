@@ -69,7 +69,7 @@ defmodule AshNeo4j.DataLayer do
       """
       neo4j do
         label :Comment
-        relate [{:post, :BELONGS_TO, :outgoing}]
+        relate [{:post, :BELONGS_TO, :outgoing, :Post}]
       end
       """
     ],
@@ -83,17 +83,20 @@ defmodule AshNeo4j.DataLayer do
         type: {:list, {:tuple, [:atom, :atom, :atom, :atom]}},
         doc:
           "Optional list of relationships, as tuples of {relationship_name, edge_label, edge_direction, destination_label}",
-        required: false
+        required: false,
+        default: []
       ],
       guard: [
         type: {:list, {:tuple, [:atom, :atom, :atom]}},
         doc: "Optional list of node relationships, as tuples of {edge_label, edge_direction, destination_label}",
-        required: false
+        required: false,
+        default: []
       ],
       skip: [
         type: {:list, :atom},
         doc: "Optional list of attributes not to be stored directly as node properties",
-        required: false
+        required: false,
+        default: []
       ]
     ]
   }
@@ -320,7 +323,7 @@ defmodule AshNeo4j.DataLayer do
 
     mapping = ResourceInfo.mapping(resource)
     subject_id = id_properties(mapping, changeset.data)
-    subject_label = mapping.label
+    subject_label = mapping.label_pair
 
     update_properties = dump_properties(mapping, changeset.attributes)
 
@@ -532,7 +535,7 @@ defmodule AshNeo4j.DataLayer do
     """)
 
     mapping = ResourceInfo.mapping(resource)
-    label = mapping.label
+    label = mapping.label_pair
     id_properties = id_properties(mapping, changeset.data)
 
     result =
@@ -895,7 +898,7 @@ defmodule AshNeo4j.DataLayer do
             end
           )
 
-        label = mapping.label
+        label = mapping.label_pair
         id_properties = id_properties(mapping, attributes)
 
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
@@ -924,7 +927,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_node(%ResourceMapping{} = mapping, properties) when is_map(properties) do
-    case mapping.labels |> Neo4jHelper.create_node(properties) do
+    case mapping.all_labels |> Neo4jHelper.create_node(properties) do
       {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         convert_node_to_resource(mapping.module, node)
@@ -1084,11 +1087,25 @@ defmodule AshNeo4j.DataLayer do
           is_struct(aggregate.field, Ash.Query.Calculation) ->
             run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
 
-          # When a filter is present on a plain or embedded aggregate, load full
-          # destination records in Elixir so Ash.Filter.Runtime can evaluate it.
-          # Honouring the filter is a contract implied by can?({:aggregate, kind}).
+          # When a filter is present, try to push scalar == conditions into Cypher.
+          # Falls back to Elixir-side filtering for complex or embedded-field filters.
           aggregate_has_filter?(aggregate) ->
-            run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
+            case {simple_agg_filter(aggregate, dest_mapping), embedded} do
+              {{:ok, dest_conditions}, nil} ->
+                run_simple_filtered_aggregate(
+                  mapping,
+                  neo4j_pk,
+                  ids,
+                  aggregate,
+                  mode,
+                  path_segments,
+                  neo4j_field,
+                  dest_conditions
+                )
+
+              _ ->
+                run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping)
+            end
 
           embedded ->
             {field_type, field_constraints} = embedded
@@ -1110,7 +1127,7 @@ defmodule AshNeo4j.DataLayer do
               case mode do
                 :per_record ->
                   CypherQuery.aggregate_per_record(
-                    mapping.label,
+                    mapping.label_pair,
                     neo4j_pk,
                     ids,
                     path_segments,
@@ -1122,7 +1139,7 @@ defmodule AshNeo4j.DataLayer do
 
                 :total ->
                   CypherQuery.aggregate_total(
-                    mapping.label,
+                    mapping.label_pair,
                     neo4j_pk,
                     ids,
                     path_segments,
@@ -1164,7 +1181,7 @@ defmodule AshNeo4j.DataLayer do
   # This path is also used for expression-based aggregates (Ash.Query.Calculation
   # field) when a filter is present, because we already load full records there.
   defp run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
-    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, path_segments)
     dest_resource = dest_mapping.module
     domain = Ash.Resource.Info.domain(dest_resource)
 
@@ -1203,6 +1220,100 @@ defmodule AshNeo4j.DataLayer do
           values = extract_aggregate_field_values(filtered, aggregate)
           {:ok, apply_elixir_aggregate(aggregate.kind, values, aggregate.default_value)}
       end
+    end
+  end
+
+  # Handles aggregates whose filter is a set of simple scalar == conditions that can be
+  # expressed as WHERE clauses in Cypher, avoiding full record loading in Elixir.
+  defp run_simple_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, neo4j_field, dest_conditions) do
+    query =
+      case mode do
+        :per_record ->
+          CypherQuery.aggregate_per_record(
+            mapping.label_pair,
+            neo4j_pk,
+            ids,
+            path_segments,
+            aggregate.kind,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?,
+            dest_conditions
+          )
+
+        :total ->
+          CypherQuery.aggregate_total(
+            mapping.label_pair,
+            neo4j_pk,
+            ids,
+            path_segments,
+            aggregate.kind,
+            neo4j_field,
+            aggregate.name,
+            aggregate.uniq?,
+            dest_conditions
+          )
+      end
+
+    case Cypher.run(query) do
+      {:ok, %Bolty.Response{results: rows}} ->
+        case mode do
+          :per_record ->
+            {:ok,
+             Map.new(rows, fn row ->
+               {Map.get(row, "source_id"), Map.get(row, to_string(aggregate.name))}
+             end)}
+
+          :total ->
+            value = rows |> List.first(%{}) |> Map.get(to_string(aggregate.name), aggregate.default_value)
+            {:ok, value}
+        end
+
+      {:error, e} ->
+        {:error, e}
+    end
+  end
+
+  # Returns {:ok, [{prop_string, value}]} when the aggregate filter consists entirely of
+  # scalar == equality predicates on non-embedded destination attributes, enabling
+  # WHERE pushdown into Cypher. Returns :complex otherwise and falls back to Elixir-side filtering.
+  defp simple_agg_filter(aggregate, dest_mapping) do
+    filter = aggregate_query_filter(aggregate)
+
+    try do
+      simple = Ash.Filter.to_simple_filter(filter, skip_invalid?: false)
+      predicates = Map.get(simple, :predicates, [])
+
+      if Enum.empty?(predicates) do
+        :complex
+      else
+        Enum.reduce_while(predicates, {:ok, []}, fn predicate, {:ok, acc} ->
+          cond do
+            Map.get(predicate, :operator) != :== ->
+              {:halt, :complex}
+
+            not match?(%Ash.Query.Ref{}, Map.get(predicate, :left)) ->
+              {:halt, :complex}
+
+            match?(%Ash.Query.Calculation{}, Map.get(predicate.left, :attribute)) ->
+              {:halt, :complex}
+
+            true ->
+              attr_name = Ash.Query.Ref.name(predicate.left)
+
+              case embedded_field_type(dest_mapping.module, attr_name) do
+                nil ->
+                  prop = Keyword.get(dest_mapping.properties, attr_name, attr_name) |> to_string()
+                  {:cont, {:ok, acc ++ [{prop, predicate.right}]}}
+
+                _ ->
+                  {:halt, :complex}
+              end
+          end
+        end)
+      end
+    rescue
+      _ -> :complex
     end
   end
 
@@ -1252,7 +1363,7 @@ defmodule AshNeo4j.DataLayer do
       case mode do
         :per_record ->
           CypherQuery.aggregate_per_record(
-            mapping.label,
+            mapping.label_pair,
             neo4j_pk,
             ids,
             path_segments,
@@ -1264,7 +1375,7 @@ defmodule AshNeo4j.DataLayer do
 
         :total ->
           CypherQuery.aggregate_total(
-            mapping.label,
+            mapping.label_pair,
             neo4j_pk,
             ids,
             path_segments,
@@ -1301,7 +1412,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
-    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, path_segments)
     dest_resource = dest_mapping.module
     domain = Ash.Resource.Info.domain(dest_resource)
     calc = aggregate.field

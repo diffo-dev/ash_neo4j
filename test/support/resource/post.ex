@@ -101,6 +101,19 @@ defmodule AshNeo4j.Test.Resource.Post do
     list :alpha_comment_titles, :comments, :title do
       filter expr(title == "alpha")
     end
+
+    # Integer equality filters — used to verify #253 (scalar == pushed to Cypher WHERE).
+    count :high_score_count, :comments do
+      filter expr(score == 10)
+    end
+
+    exists :has_high_score, :comments do
+      filter expr(score == 10)
+    end
+
+    sum :high_score_total, :comments, :score do
+      filter expr(score == 10)
+    end
   end
 
   preparations do

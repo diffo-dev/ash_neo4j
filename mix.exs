@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.5.1"
+  @version "0.6.0"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -124,6 +124,7 @@ defmodule AshNeo4j.MixProject do
   defp deps do
     [
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
+      {:spark, ">= 2.7.0"},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
       {:bolty, bolty_version(">= 0.0.12")},
       {:jason, "~> 1.4"},
@@ -167,8 +168,8 @@ defmodule AshNeo4j.MixProject do
         "docs",
         "spark.replace_doc_links"
       ],
-      "spark.formatter": "spark.formatter --extensions AshNeo4j.DataLayer",
-      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshNeo4j.DataLayer"
+      "spark.formatter": "spark.formatter --extensions AshNeo4j.DataLayer,AshNeo4j.DataLayer.Domain",
+      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshNeo4j.DataLayer,AshNeo4j.DataLayer.Domain"
     ]
   end
 end

@@ -153,13 +153,13 @@ defmodule AshNeo4j.Cypher.Query do
   # ---------------------------------------------------------------------------
 
   @doc """
-  `MATCH (s:Label) OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`
+  `MATCH (s:L1:L2) OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`
   """
-  @spec node_read(atom()) :: t()
-  def node_read(label) when is_atom(label) do
+  @spec node_read(atom() | [atom()]) :: t()
+  def node_read(label) do
     %__MODULE__{
       clauses: [
-        %Match{pattern: Cypher.node(:s, [label])},
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
         %OptionalMatch{pattern: "(s)-[r]-(d)"},
         %Return{items: ["s", "r", "d"]}
       ]
@@ -167,19 +167,19 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  `MATCH (s:Label) WHERE <conditions> OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`
+  `MATCH (s:L1:L2) WHERE <conditions> OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`
 
   Returns `node_read/1` when `conditions` is empty.
   """
-  @spec node_read_filtered(atom(), [condition()]) :: t()
-  def node_read_filtered(label, []) when is_atom(label), do: node_read(label)
+  @spec node_read_filtered(atom() | [atom()], [condition()]) :: t()
+  def node_read_filtered(label, []), do: node_read(label)
 
-  def node_read_filtered(label, conditions) when is_atom(label) and is_list(conditions) do
+  def node_read_filtered(label, conditions) when is_list(conditions) do
     {where_string, params} = build_conditions(:s, conditions)
 
     %__MODULE__{
       clauses: [
-        %Match{pattern: Cypher.node(:s, [label])},
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
         %Where{conditions: [where_string]},
         %OptionalMatch{pattern: "(s)-[r]-(d)"},
         %Return{items: ["s", "r", "d"]}
@@ -189,15 +189,15 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  `MATCH (s:SrcLabel)-[r:EdgeLabel]-(d:DestLabel) WHERE d.prop <op> $param WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
+  `MATCH (s:SrcLabels)-[r:EdgeLabel]-(d:DestLabel) WHERE d.prop <op> $param WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
   """
-  @spec relationship_read(atom(), atom(), atom(), atom(), String.t(), atom(), any()) :: t()
+  @spec relationship_read(atom() | [atom()], atom(), atom(), atom(), String.t(), atom(), any()) :: t()
   def relationship_read(src_label, edge_label, direction, dest_label, dest_property, operator, value)
-      when is_atom(src_label) and is_atom(edge_label) and is_atom(direction) and is_atom(dest_label) do
+      when is_atom(edge_label) and is_atom(direction) and is_atom(dest_label) do
     param_key = "d_#{dest_property}"
 
     match_pattern =
-      Cypher.node(:s, [src_label]) <>
+      Cypher.node(:s, List.wrap(src_label)) <>
         Cypher.relationship(:r, edge_label, direction) <>
         Cypher.node(:d, [dest_label])
 
@@ -216,13 +216,13 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  `MATCH (n:Label {props}) OPTIONAL MATCH (n)-[r]-(d) RETURN n, r, d`
+  `MATCH (n:L1:L2 {props}) OPTIONAL MATCH (n)-[r]-(d) RETURN n, r, d`
 
   Like `node_read/1` but matches by properties in the MATCH pattern (not a WHERE clause).
   """
-  @spec node_read_with_properties(atom(), map()) :: t()
-  def node_read_with_properties(label, properties) when is_atom(label) and is_map(properties) do
-    {pattern, params} = Cypher.parameterized_node(:s, [label], properties)
+  @spec node_read_with_properties(atom() | [atom()], map()) :: t()
+  def node_read_with_properties(label, properties) when is_map(properties) do
+    {pattern, params} = Cypher.parameterized_node(:s, List.wrap(label), properties)
 
     %__MODULE__{
       clauses: [
@@ -270,16 +270,17 @@ defmodule AshNeo4j.Cypher.Query do
   Related-nodes query — returns one row per (source, destination) pair for expression-based
   aggregates that need full destination records for Elixir-side evaluation.
 
-  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, d AS dest_node`
+  `MATCH (s:L1:L2) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, d AS dest_node`
   """
-  @spec related_nodes(atom(), atom(), [any()], [{atom(), atom(), atom()}]) :: t()
+  @spec related_nodes(atom() | [atom()], atom(), [any()], [{atom(), atom(), atom()}]) :: t()
   def related_nodes(source_label, pk_field, ids, path_segments)
-      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) do
+      when is_atom(pk_field) and is_list(ids) and is_list(path_segments) do
     path = build_agg_path(path_segments)
+    src = labels_string(source_label)
 
     %__MODULE__{
       clauses: [
-        %Match{pattern: "(s:#{source_label})"},
+        %Match{pattern: "(s:#{src})"},
         %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
         %OptionalMatch{pattern: "(s)#{path}"},
         %Return{items: ["s.#{pk_field} AS source_id", "d AS dest_node"]}
@@ -291,57 +292,91 @@ defmodule AshNeo4j.Cypher.Query do
   @doc """
   Per-record aggregate — returns one row per source node with the aggregate value.
 
-  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, agg_fn AS name`
+  `MATCH (s:L1:L2) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN s.pk AS source_id, agg_fn AS name`
 
   `path_segments` is a list of `{edge_label, direction, dest_label}` tuples describing
   the traversal from source to the node being aggregated.
   """
   @spec aggregate_per_record(
-          atom(),
+          atom() | [atom()],
           atom(),
           [any()],
           [{atom(), atom(), atom()}],
           atom(),
           atom() | nil,
           atom(),
-          boolean()
+          boolean(),
+          [{String.t(), any()}]
         ) :: t()
-  def aggregate_per_record(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
-      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
+  def aggregate_per_record(
+        source_label,
+        pk_field,
+        ids,
+        path_segments,
+        kind,
+        field,
+        name,
+        uniq? \\ false,
+        dest_conditions \\ []
+      )
+      when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
     expr = aggregate_expr(kind, field, name, uniq?)
+    src = labels_string(source_label)
+    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
     %__MODULE__{
-      clauses: [
-        %Match{pattern: "(s:#{source_label})"},
-        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-        %OptionalMatch{pattern: "(s)#{path}"},
-        %Return{items: ["s.#{pk_field} AS source_id", expr]}
-      ],
-      params: %{"agg_ids" => ids}
+      clauses:
+        [
+          %Match{pattern: "(s:#{src})"},
+          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+          %OptionalMatch{pattern: "(s)#{path}"}
+        ] ++ dest_where ++ [%Return{items: ["s.#{pk_field} AS source_id", expr]}],
+      params: Map.merge(%{"agg_ids" => ids}, dest_params)
     }
   end
 
   @doc """
   Total aggregate — returns a single row with the aggregate value across all source nodes.
 
-  `MATCH (s:Label) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN agg_fn AS name`
+  `MATCH (s:L1:L2) WHERE s.pk IN $agg_ids OPTIONAL MATCH (s)<path>(d) RETURN agg_fn AS name`
   """
-  @spec aggregate_total(atom(), atom(), [any()], [{atom(), atom(), atom()}], atom(), atom() | nil, atom(), boolean()) ::
-          t()
-  def aggregate_total(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
-      when is_atom(source_label) and is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
+  @spec aggregate_total(
+          atom() | [atom()],
+          atom(),
+          [any()],
+          [{atom(), atom(), atom()}],
+          atom(),
+          atom() | nil,
+          atom(),
+          boolean(),
+          [{String.t(), any()}]
+        ) :: t()
+  def aggregate_total(
+        source_label,
+        pk_field,
+        ids,
+        path_segments,
+        kind,
+        field,
+        name,
+        uniq? \\ false,
+        dest_conditions \\ []
+      )
+      when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
     expr = aggregate_expr(kind, field, name, uniq?)
+    src = labels_string(source_label)
+    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
     %__MODULE__{
-      clauses: [
-        %Match{pattern: "(s:#{source_label})"},
-        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-        %OptionalMatch{pattern: "(s)#{path}"},
-        %Return{items: [expr]}
-      ],
-      params: %{"agg_ids" => ids}
+      clauses:
+        [
+          %Match{pattern: "(s:#{src})"},
+          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+          %OptionalMatch{pattern: "(s)#{path}"}
+        ] ++ dest_where ++ [%Return{items: [expr]}],
+      params: Map.merge(%{"agg_ids" => ids}, dest_params)
     }
   end
 
@@ -368,14 +403,14 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  `MATCH (n:Label {match_props}) SET n += {set_props} REMOVE n.p1, n.p2 RETURN n`
+  `MATCH (n:L1:L2 {match_props}) SET n += {set_props} REMOVE n.p1, n.p2 RETURN n`
 
   Handles all combinations of empty/non-empty set_props and remove_props.
   """
-  @spec update_node(atom(), map(), map(), [atom()]) :: t()
+  @spec update_node(atom() | [atom()], map(), map(), [atom()]) :: t()
   def update_node(label, match_props, set_props, remove_props \\ [])
-      when is_atom(label) and is_map(match_props) and is_map(set_props) and is_list(remove_props) do
-    {match_pattern, match_params} = Cypher.parameterized_node(:n, [label], match_props)
+      when is_map(match_props) and is_map(set_props) and is_list(remove_props) do
+    {match_pattern, match_params} = Cypher.parameterized_node(:n, List.wrap(label), match_props)
     {props_cypher, set_params} = Cypher.parameterized_properties(:n, set_props)
 
     set_clauses = if map_size(set_props) > 0, do: [%Set{expression: "n += #{props_cypher}"}], else: []
@@ -388,26 +423,26 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  `MATCH (n:Label {props}) DETACH DELETE n`
+  `MATCH (n:L1:L2 {props}) DETACH DELETE n`
   """
-  @spec delete_nodes(atom(), map()) :: t()
-  def delete_nodes(label, properties \\ %{}) when is_atom(label) and is_map(properties) do
-    {pattern, params} = Cypher.parameterized_node(:n, [label], properties)
+  @spec delete_nodes(atom() | [atom()], map()) :: t()
+  def delete_nodes(label, properties \\ %{}) when is_map(properties) do
+    {pattern, params} = Cypher.parameterized_node(:n, List.wrap(label), properties)
     %__MODULE__{clauses: [%Match{pattern: pattern}, %DetachDelete{items: ["n"]}], params: params}
   end
 
   @doc """
-  `MATCH (n:Label {props}) WHERE NOT guard1 AND NOT guard2 DETACH DELETE n`
+  `MATCH (n:L1:L2 {props}) WHERE NOT guard1 AND NOT guard2 DETACH DELETE n`
 
   `guards` is a list of `{edge_label, direction, dest_label}` tuples.
   Falls back to `delete_nodes/2` when guards is empty.
   """
-  @spec delete_nodes_guarded(atom(), map(), list()) :: t()
+  @spec delete_nodes_guarded(atom() | [atom()], map(), list()) :: t()
   def delete_nodes_guarded(label, properties, []), do: delete_nodes(label, properties)
 
   def delete_nodes_guarded(label, properties, guards)
-      when is_atom(label) and is_map(properties) and is_list(guards) do
-    {pattern, params} = Cypher.parameterized_node(:n, [label], properties)
+      when is_map(properties) and is_list(guards) do
+    {pattern, params} = Cypher.parameterized_node(:n, List.wrap(label), properties)
 
     conditions =
       Enum.map(guards, fn {edge_label, direction, dest_label} ->
@@ -448,10 +483,10 @@ defmodule AshNeo4j.Cypher.Query do
       DELETE r0 WITH s MATCH (d:DestLabel {d_props})
       MERGE (s)-[r:EDGE]->(d) RETURN s, r, d
   """
-  @spec relate_unrelating_source(atom(), map(), atom(), map(), atom(), atom()) :: t()
+  @spec relate_unrelating_source(atom() | [atom()], map(), atom(), map(), atom(), atom()) :: t()
   def relate_unrelating_source(src_label, src_props, dest_label, dest_props, edge_label, direction)
-      when is_atom(src_label) and is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
-    {src_pattern, src_params} = Cypher.parameterized_node(:s, [src_label], src_props)
+      when is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, List.wrap(src_label), src_props)
     {dest_pattern, dest_params} = Cypher.parameterized_node(:d, [dest_label], dest_props)
 
     %__MODULE__{
@@ -478,10 +513,11 @@ defmodule AshNeo4j.Cypher.Query do
       WITH s, d OPTIONAL MATCH (s0:SrcLabel)-[r0:EDGE]->(d) WHERE s0 <> s
       DELETE r0 WITH s, d MERGE (s)-[r:EDGE]->(d) RETURN s, r, d
   """
-  @spec relate_unrelating_destination(atom(), map(), atom(), map(), atom(), atom()) :: t()
+  @spec relate_unrelating_destination(atom() | [atom()], map(), atom(), map(), atom(), atom()) :: t()
   def relate_unrelating_destination(src_label, src_props, dest_label, dest_props, edge_label, direction)
-      when is_atom(src_label) and is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
-    {src_pattern, src_params} = Cypher.parameterized_node(:s, [src_label], src_props)
+      when is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
+    src_labels = List.wrap(src_label)
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, src_labels, src_props)
     {dest_pattern, dest_params} = Cypher.parameterized_node(:d, [dest_label], dest_props)
 
     %__MODULE__{
@@ -490,7 +526,7 @@ defmodule AshNeo4j.Cypher.Query do
         %OptionalMatch{pattern: dest_pattern},
         %With{items: ["s", "d"]},
         %OptionalMatch{
-          pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
+          pattern: Cypher.node(:s0, src_labels) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
         },
         %Where{conditions: ["s0 <> s"]},
         %Delete{items: ["r0"]},
@@ -511,10 +547,11 @@ defmodule AshNeo4j.Cypher.Query do
       OPTIONAL MATCH (s0:SrcLabel)-[r0:EDGE]->(d) WHERE s0 <> s DELETE r0
       WITH s, d MERGE (s)-[r:EDGE]->(d) RETURN s, r, d
   """
-  @spec relate_unrelating_both(atom(), map(), atom(), map(), atom(), atom()) :: t()
+  @spec relate_unrelating_both(atom() | [atom()], map(), atom(), map(), atom(), atom()) :: t()
   def relate_unrelating_both(src_label, src_props, dest_label, dest_props, edge_label, direction)
-      when is_atom(src_label) and is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
-    {src_pattern, src_params} = Cypher.parameterized_node(:s, [src_label], src_props)
+      when is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
+    src_labels = List.wrap(src_label)
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, src_labels, src_props)
     {dest_pattern, dest_params} = Cypher.parameterized_node(:d, [dest_label], dest_props)
 
     %__MODULE__{
@@ -527,7 +564,7 @@ defmodule AshNeo4j.Cypher.Query do
         %OptionalMatch{pattern: dest_pattern},
         %With{items: ["s", "d"]},
         %OptionalMatch{
-          pattern: Cypher.node(:s0, [src_label]) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
+          pattern: Cypher.node(:s0, src_labels) <> Cypher.relationship(:r0, edge_label, direction) <> "(d)"
         },
         %Where{conditions: ["s0 <> s"]},
         %Delete{items: ["r0"]},
@@ -542,10 +579,10 @@ defmodule AshNeo4j.Cypher.Query do
   @doc """
   `MATCH (s:SrcLabel {s_props})-[r:EDGE]->(d:DestLabel {d_props}) DELETE r RETURN s, d`
   """
-  @spec unrelate(atom(), map(), atom(), map(), atom(), atom()) :: t()
+  @spec unrelate(atom() | [atom()], map(), atom(), map(), atom(), atom()) :: t()
   def unrelate(src_label, src_props, dest_label, dest_props, edge_label, direction)
-      when is_atom(src_label) and is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
-    {src_pattern, src_params} = Cypher.parameterized_node(:s, [src_label], src_props)
+      when is_atom(dest_label) and is_atom(edge_label) and is_atom(direction) do
+    {src_pattern, src_params} = Cypher.parameterized_node(:s, List.wrap(src_label), src_props)
     {dest_pattern, dest_params} = Cypher.parameterized_node(:d, [dest_label], dest_props)
 
     path_pattern = src_pattern <> Cypher.relationship(:r, edge_label, direction) <> dest_pattern
@@ -564,6 +601,8 @@ defmodule AshNeo4j.Cypher.Query do
   # Private helpers
   # ---------------------------------------------------------------------------
 
+  defp labels_string(label) when is_list(label), do: Enum.join(label, ":")
+
   defp guard_condition(variable, edge_label, direction, dest_label) do
     rel =
       case direction do
@@ -573,6 +612,20 @@ defmodule AshNeo4j.Cypher.Query do
       end
 
     "NOT (#{variable})#{rel}(:#{dest_label})"
+  end
+
+  defp build_dest_conditions([]), do: {[], %{}}
+
+  defp build_dest_conditions(dest_conditions) do
+    {cond_strings, params} =
+      dest_conditions
+      |> Enum.with_index()
+      |> Enum.reduce({[], %{}}, fn {{prop, val}, idx}, {parts, params} ->
+        key = "agg_filter_#{idx}"
+        {["d.#{prop} = $#{key}" | parts], Map.put(params, key, val)}
+      end)
+
+    {[%Where{conditions: Enum.reverse(cond_strings)}], params}
   end
 
   defp build_conditions(variable, conditions) do
