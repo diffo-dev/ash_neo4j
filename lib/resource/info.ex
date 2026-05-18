@@ -47,7 +47,12 @@ defmodule AshNeo4j.Resource.Info do
     case Extension.get_persisted(resource, :domain_fragment_label, nil) do
       nil ->
         domain = Extension.get_persisted(resource, :domain, nil)
-        if domain, do: AshNeo4j.DataLayer.Domain.Info.label(domain), else: nil
+        if domain do
+          case AshNeo4j.DataLayer.Domain.Info.neo4j_label(domain) do
+            {:ok, label} -> label
+            :error -> nil
+          end
+        end
 
       val ->
         val
@@ -97,8 +102,8 @@ defmodule AshNeo4j.Resource.Info do
           properties: translations(resource),
           edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
           relationship_attributes: relationship_attributes(resource),
-          guards: AshNeo4j.DataLayer.Info.guard(resource),
-          skip: AshNeo4j.DataLayer.Info.skip(resource)
+          guards: AshNeo4j.DataLayer.Info.neo4j_guard!(resource),
+          skip: AshNeo4j.DataLayer.Info.neo4j_skip!(resource)
         }
       end
 
@@ -296,7 +301,7 @@ defmodule AshNeo4j.Resource.Info do
   @doc """
   Converts an attribute name to a node property name string, translating if necessary
   """
-  @spec convert_to_property_name(Ash.Resource.t(), Ash.Query.Ref.t()) :: String.t() | nil
+  @spec convert_to_property_name(Ash.Resource.t(), struct()) :: String.t() | nil
   def convert_to_property_name(resource, ash_query_ref)
       when is_atom(resource) and is_struct(ash_query_ref, Ash.Query.Ref) do
     attribute_name = Ash.Query.Ref.name(ash_query_ref)
@@ -347,7 +352,7 @@ defmodule AshNeo4j.Resource.Info do
   """
   @spec preserve_node_relationships(Ash.Resource.t()) :: list(tuple())
   def preserve_node_relationships(resource) when is_atom(resource) do
-    Enum.reduce(relate(resource), AshNeo4j.DataLayer.Info.guard(resource), fn {name, edge_label, edge_direction,
+    Enum.reduce(relate(resource), AshNeo4j.DataLayer.Info.neo4j_guard!(resource), fn {name, edge_label, edge_direction,
                                                                                destination_label},
                                                                               acc ->
       relationship = Ash.Resource.Info.relationship(resource, name)

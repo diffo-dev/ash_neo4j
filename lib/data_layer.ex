@@ -69,7 +69,7 @@ defmodule AshNeo4j.DataLayer do
       """
       neo4j do
         label :Comment
-        relate [{:post, :BELONGS_TO, :outgoing}]
+        relate [{:post, :BELONGS_TO, :outgoing, :Post}]
       end
       """
     ],
@@ -83,17 +83,20 @@ defmodule AshNeo4j.DataLayer do
         type: {:list, {:tuple, [:atom, :atom, :atom, :atom]}},
         doc:
           "Optional list of relationships, as tuples of {relationship_name, edge_label, edge_direction, destination_label}",
-        required: false
+        required: false,
+        default: []
       ],
       guard: [
         type: {:list, {:tuple, [:atom, :atom, :atom]}},
         doc: "Optional list of node relationships, as tuples of {edge_label, edge_direction, destination_label}",
-        required: false
+        required: false,
+        default: []
       ],
       skip: [
         type: {:list, :atom},
         doc: "Optional list of attributes not to be stored directly as node properties",
-        required: false
+        required: false,
+        default: []
       ]
     ]
   }

@@ -18,7 +18,7 @@ is the Diffo project; upstream bugs found while working in Diffo belong here.
 
 1. Read `usage-rules.md` — the canonical rules for using AshNeo4j, including naming conventions,
    relationship semantics, aggregate kinds, and the test sandbox.
-2. Understand the label system (see **Label system** below) — the three-level label concept is
+2. Understand the label system (see **Label system** below) — the label concept is
    a frequent source of bugs and the most important thing to get right.
 3. Run `mix test` before and after your change to confirm nothing regressed.
 
@@ -40,10 +40,12 @@ lib/
                                  functions for every query shape used by the data layer
   query_helper.ex              — Translates Ash.Query (filter, sort, offset, limit) into
                                  a Cypher.Query; entry point is query_nodes/1
-  resource/info.ex             — All DSL introspection: label/1, module_label/1, labels/1,
+  resource/info.ex             — All DSL introspection: label/1, module_label/1, domain_label/1,
+                                 domain_fragment_label/1, all_labels/1, label_pair/1,
                                  mapping/1, relate/1, translations/1, and relationship helpers
   resource_mapping.ex          — %ResourceMapping{} struct (module, label, module_label,
-                                 labels, properties, edges, guards, skip)
+                                 domain_fragment_label, all_labels, label_pair,
+                                 properties, edges, guards, skip)
   edge_descriptor.ex           — %EdgeDescriptor{} struct (relationship, label, direction,
                                  destination_label)
   neo4j_helper.ex              — Low-level node/edge operations via Bolty
@@ -53,7 +55,8 @@ lib/
   sandbox.ex                   — AshNeo4j.Sandbox: per-test transaction isolation
   util.ex                      — short_name/1, to_camel_case/1, reverse/1
   persisters/
-    persist_labels.ex          — Computes and persists domain_label, module_label, label, labels
+    persist_labels.ex          — Computes and persists domain_label, module_label, label,
+                                 domain_fragment_label, all_labels, label_pair
     persist_translations.ex    — Builds attribute → property name keyword list; excludes
                                  belongs_to source attributes and skip attributes
     persist_relate.ex          — Merges explicit relate DSL with default auto-generated edges
@@ -78,26 +81,27 @@ test/
 
 ## Label system
 
-Every node has three distinct label concepts. Getting them confused is the most common
+Every node has several distinct label concepts. Getting them confused is the most common
 source of bugs:
 
 | Name | Persisted as | Example | When used |
 |---|---|---|---|
-| `domain_label` | `:domain_label` | `:Servo` | Written on CREATE only — never used to match |
-| `module_label` | `:module_label` | `:ShelfInstance` | Written on CREATE; should be part of MATCH |
-| `label` | `:label` | `:Instance` | May differ from module_label when a fragment declares a base type label; used as the MATCH label |
-| `labels` | `:labels` | `[:Servo, :ShelfInstance, :Instance]` | Full CREATE label list — `[domain_label | [module_label, label] |> Enum.uniq()]` |
+| `domain_label` | `:domain_label` | `:Servo` | Written on CREATE; also part of MATCH via `label_pair` |
+| `module_label` | `:module_label` | `:ShelfInstance` | Written on CREATE; also part of MATCH via `label_pair` |
+| `label` | `:label` | `:Instance` | May differ from `module_label` when a resource fragment declares a base type; written on CREATE only |
+| `domain_fragment_label` | `:domain_fragment_label` | `:Telco` | Written on CREATE only — from a domain fragment using `AshNeo4j.DataLayer.Domain`; `nil` when none declared |
+| `all_labels` | `:all_labels` | `[:Servo, :ShelfInstance, :Instance, :Telco]` | Full CREATE label list — `[domain_label, module_label, label, domain_fragment_label]` deduped |
+| `label_pair` | `:label_pair` | `[:Servo, :ShelfInstance]` | MATCH label list — always `[domain_label, module_label]`; uniquely identifies this resource type |
 
-**Key invariant:** `labels` (all three) are written on `CREATE`. For `MATCH` / `UPDATE` /
-`DELETE`, the domain label is never used. When the resource uses a fragment that contributes a
-different `label` (e.g. `:Instance` from `BaseInstance`), reading with only that label matches
-nodes from all resources that extend the same fragment — a correctness bug. Use
-`[module_label, label]` (deduped) for MATCH so reads are scoped to the exact resource.
+**Key invariant:** `all_labels` are written on `CREATE`. For `MATCH` / `UPDATE` / `DELETE`,
+use `mapping.label_pair` — always `[domain_label, module_label]`. This two-label combination
+uniquely identifies the exact resource type and prevents cross-fragment contamination.
 
-`Cypher.node(:s, [module_label, label])` produces `"(s:ShelfInstance:Instance)"` — correct.
-`Cypher.node(:s, [label])` produces `"(s:Instance)"` — scans the whole fragment family.
+`Cypher.node(:s, [:Servo, :ShelfInstance])` produces `"(s:Servo:ShelfInstance)"` — correct.
+`Cypher.node(:s, [:Instance])` produces `"(s:Instance)"` — scans every resource extending the same fragment.
+`Cypher.node(:s, [:ShelfInstance])` produces `"(s:ShelfInstance)"` — scopes to module but not domain (avoid).
 
-`ResourceInfo.module_label/1` and `mapping.module_label` always hold the resource-specific label.
+`mapping.label_pair` always holds `[domain_label, module_label]`. Use it for all MATCH patterns.
 
 ## Translations (attribute ↔ property name mapping)
 
@@ -174,13 +178,14 @@ a `{cypher_string, params}` tuple for `Cypher.run/1`.
 `Cypher.node(variable, labels)` takes a list of label atoms and produces `"(var:L1:L2)"`.
 `Cypher.parameterized_node/3` does the same with a property map for parameterized MATCH patterns.
 
-When adding a new builder or modifying an existing one, keep `label` parameters as `atom()`
-for single-label callers. If a builder needs to support multi-label MATCH (e.g. after the
-#257 fix), update the typespec to `atom() | [atom()]` and handle both.
+All MATCH/UPDATE/DELETE builders accept `atom() | [atom()]` for source label parameters — pass
+`mapping.label_pair` (a list) for all resource operations. Single-atom callers still work for
+destination labels (which remain a single label in most patterns).
 
-The aggregate builders (`aggregate_per_record`, `aggregate_total`, `related_nodes`) use direct
-string interpolation for the source node pattern — `"(s:#{source_label})"`. To support
-multi-label source MATCH these must be updated alongside the read builders.
+The aggregate builders (`aggregate_per_record`, `aggregate_total`, `related_nodes`) use a
+`labels_string/1` private helper to render `[domain, module]` as `"Domain:Module"` inside
+string-interpolated Cypher patterns — `"(s:#{labels_string(label_pair)})"`. When modifying
+aggregate builders, use `labels_string/1` for the source pattern, not direct atom interpolation.
 
 ## Running tests
 
@@ -214,10 +219,10 @@ as a follow-up comment, then leave it with the upstream maintainers.
 
 ## Common agent mistakes
 
-- **Matching on `mapping.label` alone** when the resource uses a fragment with a different base
-  type label (e.g. `:Instance`). MATCH must use `[mapping.module_label, mapping.label]` so
-  reads are scoped to the exact resource module. `mapping.label` alone matches every resource
-  that extends the same fragment.
+- **Not using `mapping.label_pair` for MATCH.** All read, update, delete, and aggregate queries
+  must use `mapping.label_pair` (`[domain_label, module_label]`) as the source node pattern.
+  Using `mapping.label` alone matches every resource that extends the same fragment. Using
+  `mapping.module_label` alone (without domain) risks collisions across domains.
 
 - **Re-adding `belongs_to` source attributes to translations.** They are intentionally excluded
   by `PersistTranslations`. Their values come from enrichments (the OPTIONAL MATCH result).
@@ -230,9 +235,9 @@ as a follow-up comment, then leave it with the upstream maintainers.
   visible, `PersistRelate` generates default edges with wrong labels (e.g. `:BELONGS_TO`
   instead of `:SPECIFIED_BY`), causing enrichments to silently fail.
 
-- **Using `mapping.label` in aggregate Cypher builders** (`aggregate_per_record`,
-  `aggregate_total`, `related_nodes`). These use `"(s:#{source_label})"` directly and have the
-  same fragment-scoping bug as the read builders. Fix them alongside the read path.
+- **Using a single label in aggregate Cypher builders** (`aggregate_per_record`,
+  `aggregate_total`, `related_nodes`). These use `"(s:#{labels_string(source_label)})"` with a
+  `labels_string/1` helper. Always pass `mapping.label_pair` as the source label here too.
 
 - **Registering a transformer under `persisters:`** and expecting `before?`/`after?` ordering
   relative to other transformers to be honoured. Persisters always run after ALL transformers.
@@ -243,9 +248,9 @@ as a follow-up comment, then leave it with the upstream maintainers.
   label, only one instance is removed. Prefer `List.delete_at` or label filtering by explicit
   set membership when precision matters.
 
-- **Treating `domain_label` as a MATCH label.** The domain label is written on CREATE so that
-  domain-scoped traversals work, but it is never used for reading. Matching on it would return
-  every node in the domain, not just the target resource.
+- **Treating `domain_label` alone as a MATCH label.** The domain label is part of `label_pair`
+  and is used in MATCH, but always paired with `module_label`. Matching on domain label alone
+  would return every node in the domain, not just the target resource.
 
 - **Forgetting to update `relation_read` in `Cypher.Query`** when changing MATCH label logic.
   The `relationship_read/7` builder emits a separate `MATCH (s:SrcLabel)-[r:EdgeLabel]-(d:DestLabel)`
