@@ -266,6 +266,60 @@ defmodule AshNeo4j.AggregateTest do
     end
   end
 
+  describe "scalar filter pushdown (#253 — == filters pushed to Cypher WHERE)" do
+    test "count with integer == filter counts only matching records" do
+      author = create_author()
+      post1 = create_post(author, "post1")
+      post2 = create_post(author, "post2")
+      create_comment_with_score(post1, "a", 10)
+      create_comment_with_score(post1, "b", 5)
+      create_comment_with_score(post1, "c", 10)
+      create_comment_with_score(post2, "d", 5)
+
+      [p1, p2] = Post |> Ash.read!() |> Ash.load!([:high_score_count]) |> Enum.sort_by(& &1.title)
+      assert p1.high_score_count == 2
+      assert p2.high_score_count == 0
+    end
+
+    test "exists with integer == filter is false when no matching records" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_score(post, "a", 5)
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:has_high_score])
+      assert loaded.has_high_score == false
+    end
+
+    test "exists with integer == filter is true when a matching record exists" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_score(post, "a", 5)
+      create_comment_with_score(post, "b", 10)
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:has_high_score])
+      assert loaded.has_high_score == true
+    end
+
+    test "sum with integer == filter totals only matching records" do
+      author = create_author()
+      post = create_post(author, "post")
+      create_comment_with_score(post, "a", 10)
+      create_comment_with_score(post, "b", 5)
+      create_comment_with_score(post, "c", 10)
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:high_score_total])
+      assert loaded.high_score_total == 20
+    end
+
+    test "count with integer == filter returns 0 for post with no comments" do
+      author = create_author()
+      create_post(author, "empty post")
+
+      [loaded] = Post |> Ash.read!() |> Ash.load!([:high_score_count])
+      assert loaded.high_score_count == 0
+    end
+  end
+
   describe "aggregates on embedded struct fields" do
     test "list aggregate returns deserialized typed structs" do
       author = create_author()

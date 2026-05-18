@@ -305,22 +305,34 @@ defmodule AshNeo4j.Cypher.Query do
           atom(),
           atom() | nil,
           atom(),
-          boolean()
+          boolean(),
+          [{String.t(), any()}]
         ) :: t()
-  def aggregate_per_record(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
+  def aggregate_per_record(
+        source_label,
+        pk_field,
+        ids,
+        path_segments,
+        kind,
+        field,
+        name,
+        uniq? \\ false,
+        dest_conditions \\ []
+      )
       when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
     expr = aggregate_expr(kind, field, name, uniq?)
     src = labels_string(source_label)
+    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
     %__MODULE__{
-      clauses: [
-        %Match{pattern: "(s:#{src})"},
-        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-        %OptionalMatch{pattern: "(s)#{path}"},
-        %Return{items: ["s.#{pk_field} AS source_id", expr]}
-      ],
-      params: %{"agg_ids" => ids}
+      clauses:
+        [
+          %Match{pattern: "(s:#{src})"},
+          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+          %OptionalMatch{pattern: "(s)#{path}"}
+        ] ++ dest_where ++ [%Return{items: ["s.#{pk_field} AS source_id", expr]}],
+      params: Map.merge(%{"agg_ids" => ids}, dest_params)
     }
   end
 
@@ -337,22 +349,34 @@ defmodule AshNeo4j.Cypher.Query do
           atom(),
           atom() | nil,
           atom(),
-          boolean()
+          boolean(),
+          [{String.t(), any()}]
         ) :: t()
-  def aggregate_total(source_label, pk_field, ids, path_segments, kind, field, name, uniq? \\ false)
+  def aggregate_total(
+        source_label,
+        pk_field,
+        ids,
+        path_segments,
+        kind,
+        field,
+        name,
+        uniq? \\ false,
+        dest_conditions \\ []
+      )
       when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
     path = build_agg_path(path_segments)
     expr = aggregate_expr(kind, field, name, uniq?)
     src = labels_string(source_label)
+    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
     %__MODULE__{
-      clauses: [
-        %Match{pattern: "(s:#{src})"},
-        %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-        %OptionalMatch{pattern: "(s)#{path}"},
-        %Return{items: [expr]}
-      ],
-      params: %{"agg_ids" => ids}
+      clauses:
+        [
+          %Match{pattern: "(s:#{src})"},
+          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+          %OptionalMatch{pattern: "(s)#{path}"}
+        ] ++ dest_where ++ [%Return{items: [expr]}],
+      params: Map.merge(%{"agg_ids" => ids}, dest_params)
     }
   end
 
@@ -588,6 +612,20 @@ defmodule AshNeo4j.Cypher.Query do
       end
 
     "NOT (#{variable})#{rel}(:#{dest_label})"
+  end
+
+  defp build_dest_conditions([]), do: {[], %{}}
+
+  defp build_dest_conditions(dest_conditions) do
+    {cond_strings, params} =
+      dest_conditions
+      |> Enum.with_index()
+      |> Enum.reduce({[], %{}}, fn {{prop, val}, idx}, {parts, params} ->
+        key = "agg_filter_#{idx}"
+        {["d.#{prop} = $#{key}" | parts], Map.put(params, key, val)}
+      end)
+
+    {[%Where{conditions: Enum.reverse(cond_strings)}], params}
   end
 
   defp build_conditions(variable, conditions) do
