@@ -22,12 +22,18 @@ is the Diffo project; upstream bugs found while working in Diffo belong here.
    a frequent source of bugs and the most important thing to get right.
 3. Run `mix test` before and after your change to confirm nothing regressed.
 
+## Fixing bugs
+
+Before writing any fix, review existing test coverage for the affected behaviour. If the bug
+has no test, write the failing test first — this confirms the reproduction and guards the fix
+against regression. Only then implement the fix and verify the test passes.
+
 ## Project structure
 
 ```
 lib/
   data_layer.ex                — Ash.DataLayer behaviour: CRUD, aggregates, calculations,
-                                 transaction, enrichments (OPTIONAL MATCH → FK attributes)
+                                 transaction, enrichments (OPTIONAL MATCH → source attributes)
   cypher.ex                    — Cypher string helpers: node/2, relationship/3, expression/5,
                                  parameterized_node/3, render/1, run/1
   cypher/query.ex              — Typed clause structs (Match, Where, Return, …) and builder
@@ -111,7 +117,7 @@ The `convert_node_to_resource_impl/4` loop iterates translations and reads node 
 Because `belongs_to` source attributes are excluded, the loop does not touch them — their
 values must survive intact from the enrichments map that seeds the accumulator.
 
-## Enrichments (OPTIONAL MATCH → FK attributes)
+## Enrichments (OPTIONAL MATCH → source attributes)
 
 After a read query `MATCH (s:Label) OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`, `enrichments/3`
 in `DataLayer` processes each `{edge, dest_node}` pair and populates:
@@ -123,7 +129,7 @@ in `DataLayer` processes each `{edge, dest_node}` pair and populates:
 
 The lookup uses `mapping.edges` (from `mapping.module`). If an edge returned by the OPTIONAL
 MATCH has no matching entry in `mapping.edges` (wrong label, wrong direction, or missing relate
-entry), `enrichments/3` silently returns `acc` unchanged and the FK attribute remains nil.
+entry), `enrichments/3` silently returns `acc` unchanged and the source attribute remains nil.
 
 `edge_direction/2` determines direction by comparing `dest_node.id` with `edge.start` /
 `edge.end`:
