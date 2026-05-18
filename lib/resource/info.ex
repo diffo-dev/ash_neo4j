@@ -77,10 +77,9 @@ defmodule AshNeo4j.Resource.Info do
   """
   @spec all_labels(Ash.Resource.t()) :: list(atom()) | nil
   def all_labels(resource) do
-    Extension.get_persisted(resource, :all_labels, nil) ||
-      [domain_label(resource), module_label(resource), label(resource), domain_fragment_label(resource)]
-      |> Enum.uniq()
-      |> Enum.filter(& &1)
+    [domain_label(resource), module_label(resource), label(resource), domain_fragment_label(resource)]
+    |> Enum.uniq()
+    |> Enum.filter(& &1)
   end
 
   @doc """
