@@ -4,7 +4,7 @@
 
 defmodule AshNeo4j.Test.Provider do
   @moduledoc false
-  use Ash.Domain
+  use Ash.Domain, fragments: [AshNeo4j.Test.Fragment.TestDomain]
 
   resources do
     allow_unregistered? true

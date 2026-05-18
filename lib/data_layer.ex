@@ -320,7 +320,7 @@ defmodule AshNeo4j.DataLayer do
 
     mapping = ResourceInfo.mapping(resource)
     subject_id = id_properties(mapping, changeset.data)
-    subject_label = mapping.label
+    subject_label = mapping.label_pair
 
     update_properties = dump_properties(mapping, changeset.attributes)
 
@@ -532,7 +532,7 @@ defmodule AshNeo4j.DataLayer do
     """)
 
     mapping = ResourceInfo.mapping(resource)
-    label = mapping.label
+    label = mapping.label_pair
     id_properties = id_properties(mapping, changeset.data)
 
     result =
@@ -895,7 +895,7 @@ defmodule AshNeo4j.DataLayer do
             end
           )
 
-        label = mapping.label
+        label = mapping.label_pair
         id_properties = id_properties(mapping, attributes)
 
         case Neo4jHelper.relate_nodes(label, id_properties, relationships) do
@@ -924,7 +924,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp create_node(%ResourceMapping{} = mapping, properties) when is_map(properties) do
-    case mapping.labels |> Neo4jHelper.create_node(properties) do
+    case mapping.all_labels |> Neo4jHelper.create_node(properties) do
       {:ok, %Bolty.Response{results: [node_map | _]}} ->
         node = Map.get(node_map, "n")
         convert_node_to_resource(mapping.module, node)
@@ -1110,7 +1110,7 @@ defmodule AshNeo4j.DataLayer do
               case mode do
                 :per_record ->
                   CypherQuery.aggregate_per_record(
-                    mapping.label,
+                    mapping.label_pair,
                     neo4j_pk,
                     ids,
                     path_segments,
@@ -1122,7 +1122,7 @@ defmodule AshNeo4j.DataLayer do
 
                 :total ->
                   CypherQuery.aggregate_total(
-                    mapping.label,
+                    mapping.label_pair,
                     neo4j_pk,
                     ids,
                     path_segments,
@@ -1164,7 +1164,7 @@ defmodule AshNeo4j.DataLayer do
   # This path is also used for expression-based aggregates (Ash.Query.Calculation
   # field) when a filter is present, because we already load full records there.
   defp run_filtered_aggregate(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
-    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, path_segments)
     dest_resource = dest_mapping.module
     domain = Ash.Resource.Info.domain(dest_resource)
 
@@ -1252,7 +1252,7 @@ defmodule AshNeo4j.DataLayer do
       case mode do
         :per_record ->
           CypherQuery.aggregate_per_record(
-            mapping.label,
+            mapping.label_pair,
             neo4j_pk,
             ids,
             path_segments,
@@ -1264,7 +1264,7 @@ defmodule AshNeo4j.DataLayer do
 
         :total ->
           CypherQuery.aggregate_total(
-            mapping.label,
+            mapping.label_pair,
             neo4j_pk,
             ids,
             path_segments,
@@ -1301,7 +1301,7 @@ defmodule AshNeo4j.DataLayer do
   end
 
   defp run_expr_agg(mapping, neo4j_pk, ids, aggregate, mode, path_segments, dest_mapping) do
-    query = CypherQuery.related_nodes(mapping.label, neo4j_pk, ids, path_segments)
+    query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, path_segments)
     dest_resource = dest_mapping.module
     domain = Ash.Resource.Info.domain(dest_resource)
     calc = aggregate.field

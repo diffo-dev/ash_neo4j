@@ -22,7 +22,9 @@ defmodule AshNeo4j.Persisters.PersistMapping do
     domain_label = Verifier.get_persisted(dsl, :domain_label)
     module_label = Verifier.get_persisted(dsl, :module_label)
     label = Verifier.get_persisted(dsl, :label)
-    labels = Verifier.get_persisted(dsl, :labels, [])
+    domain_fragment_label = Verifier.get_persisted(dsl, :domain_fragment_label)
+    all_labels = Verifier.get_persisted(dsl, :all_labels, [])
+    label_pair = Verifier.get_persisted(dsl, :label_pair, [])
     properties = Verifier.get_persisted(dsl, :translations, [])
     relate = Verifier.get_persisted(dsl, :relate, [])
     relationship_attributes = Verifier.get_persisted(dsl, :relationship_attributes, [])
@@ -34,7 +36,9 @@ defmodule AshNeo4j.Persisters.PersistMapping do
       domain_label: domain_label,
       module_label: module_label,
       label: label,
-      labels: labels,
+      domain_fragment_label: domain_fragment_label,
+      all_labels: all_labels,
+      label_pair: label_pair,
       properties: properties,
       edges: Enum.map(relate, &EdgeDescriptor.from_relate/1),
       relationship_attributes: relationship_attributes,

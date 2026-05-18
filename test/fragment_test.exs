@@ -72,6 +72,21 @@ defmodule AshNeo4j.FragmentTest do
     end
   end
 
+  describe "domain fragment label" do
+    test "domain fragment label appears in resource mapping all_labels" do
+      all_labels = Blueprint.__ash_neo4j_mapping__().all_labels
+      assert :MyTestDomain in all_labels
+    end
+
+    test "domain fragment label is written on CREATE" do
+      blueprint = Blueprint |> Ash.create!(%{name: "labelTest"})
+      reloaded = Blueprint |> Ash.get!(blueprint.id)
+      assert reloaded != nil
+      all_labels = Blueprint.__ash_neo4j_mapping__().all_labels
+      assert all_labels == [:Provider, :Blueprint, :MyTestDomain]
+    end
+  end
+
   describe "label scoping with fragment noise" do
     test "Ash.read! returns only the target resource when a sibling fragment resource exists" do
       # Create a NoiseInstance — shares :CrossDomainType label with CrossDomainInstance.

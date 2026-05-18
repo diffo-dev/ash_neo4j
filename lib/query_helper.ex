@@ -40,7 +40,7 @@ defmodule AshNeo4j.QueryHelper do
 
   defp build_query(ash_query, %ResourceMapping{} = mapping) do
     if ash_query.filter == nil do
-      Query.node_read(mapping.label)
+      Query.node_read(mapping.label_pair)
     else
       simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
 
@@ -53,7 +53,7 @@ defmodule AshNeo4j.QueryHelper do
 
       if predicates == [] do
         Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
-        Query.node_read(mapping.label)
+        Query.node_read(mapping.label_pair)
       else
         build_filtered_query(mapping, predicates)
       end
@@ -76,7 +76,7 @@ defmodule AshNeo4j.QueryHelper do
     cond do
       Enum.empty?(relationship_predicates) ->
         conditions = to_conditions(mapping, property_predicates)
-        Query.node_read_filtered(mapping.label, conditions)
+        Query.node_read_filtered(mapping.label_pair, conditions)
 
       length(relationship_predicates) == 1 ->
         predicate = hd(relationship_predicates)
@@ -90,7 +90,7 @@ defmodule AshNeo4j.QueryHelper do
           ResourceInfo.convert_to_property_name(relationship.destination, relationship.destination_attribute)
 
         Query.relationship_read(
-          mapping.label,
+          mapping.label_pair,
           edge.label,
           edge.direction,
           dest_label,
@@ -101,7 +101,7 @@ defmodule AshNeo4j.QueryHelper do
 
       true ->
         Logger.debug("AshNeo4j.QueryHelper: combination of predicates #{inspect(predicates)} not supported")
-        Query.node_read(mapping.label)
+        Query.node_read(mapping.label_pair)
     end
   end
 

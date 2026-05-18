@@ -21,8 +21,13 @@ defmodule AshNeo4j.ResourceMapping do
   - `:label` — the label used in MATCH for reads, updates, and deletes; comes from the DSL
     `label` option and may be a fragment base-type label (e.g. `:Instance` when `Shelf` extends
     `BaseInstance`).
-  - `:labels` — full ordered list of labels written on CREATE: `[domain_label, module_label, ...]`
-    including any additional base-type labels from fragments (e.g. `[:Access, :Shelf, :Instance]`).
+  - `:domain_fragment_label` — optional label contributed by a domain fragment using
+    `AshNeo4j.DataLayer.Domain` (e.g. `:Telco`). `nil` when the domain declares none.
+  - `:all_labels` — full ordered list of labels written on CREATE: `[domain_label, module_label, ...]`
+    including any base-type label from a resource fragment and the domain fragment label if present
+    (e.g. `[:Access, :Shelf, :Instance, :Telco]`).
+  - `:label_pair` — the two-label pair `[domain_label, module_label]` used in MATCH for all
+    read, update, delete, and aggregate operations. Always uniquely identifies this resource.
   - `:properties` — keyword list of `{ash_attribute_name, neo4j_property_name}` translations;
     insertion order is preserved.
   - `:edges` — list of `AshNeo4j.EdgeDescriptor.t()` structs, one per `relate` entry.
@@ -39,7 +44,9 @@ defmodule AshNeo4j.ResourceMapping do
           domain_label: atom(),
           module_label: atom(),
           label: atom(),
-          labels: [atom()],
+          domain_fragment_label: atom() | nil,
+          all_labels: [atom()],
+          label_pair: [atom()],
           properties: keyword(String.t()),
           edges: [EdgeDescriptor.t()],
           relationship_attributes: keyword(atom()),
@@ -52,7 +59,9 @@ defmodule AshNeo4j.ResourceMapping do
     :domain_label,
     :module_label,
     :label,
-    :labels,
+    :domain_fragment_label,
+    :all_labels,
+    :label_pair,
     :properties,
     :edges,
     :relationship_attributes,

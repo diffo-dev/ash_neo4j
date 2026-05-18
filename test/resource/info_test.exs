@@ -32,11 +32,11 @@ defmodule AshNeo4j.Resource.InfoTest do
     end
   end
 
-  describe "labels" do
+  describe "all_labels" do
     test "returns domain label then resource label" do
-      assert ResourceInfo.labels(Specification) == [:SRM, :Specification]
-      assert ResourceInfo.labels(Service) == [:SRM, :Service]
-      assert ResourceInfo.labels(Event) == [:SRM, :Event]
+      assert ResourceInfo.all_labels(Specification) == [:SRM, :Specification]
+      assert ResourceInfo.all_labels(Service) == [:SRM, :Service]
+      assert ResourceInfo.all_labels(Event) == [:SRM, :Event]
     end
   end
 
