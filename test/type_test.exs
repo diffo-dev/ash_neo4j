@@ -215,7 +215,7 @@ defmodule AshNeo4j.TypeTest do
   describe "Ash Read Type tests" do
     test "type node can be read using ash" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node([:Type], properties)
+      Neo4jHelper.create_node([:SRM, :Type], properties)
       type = Ash.read_one!(Type)
       assert type.uuid == properties.uuid
 
@@ -226,14 +226,14 @@ defmodule AshNeo4j.TypeTest do
 
     test "type node has metadata on read" do
       properties = Map.put(@type_node_properties, :uuid, Ash.UUID.generate())
-      Neo4jHelper.create_node([:Domain, :Type], properties)
+      Neo4jHelper.create_node([:SRM, :Type], properties)
       type = Ash.read_one!(Type)
       assert is_struct(type.__meta__, Ecto.Schema.Metadata)
       assert type.__meta__.state == :loaded
       assert type.__metadata__
       assert type.__metadata__.data_layer == AshNeo4j.DataLayer
       assert "Type" in type.__metadata__.labels
-      assert "Domain" in type.__metadata__.labels
+      assert "SRM" in type.__metadata__.labels
       assert is_integer(type.__metadata__.node_id)
     end
   end
@@ -318,7 +318,7 @@ defmodule AshNeo4j.TypeTest do
 
   describe "defensive tests" do
     test "cast function - module not loaded returns error" do
-      Neo4jHelper.create_node([:Type], %{
+      Neo4jHelper.create_node([:SRM, :Type], %{
         "uuid" => Ash.UUID.generate(),
         "function" => "&NonExistent.Module.my_fun/2"
       })
@@ -327,7 +327,7 @@ defmodule AshNeo4j.TypeTest do
     end
 
     test "cast module - module not loaded returns error" do
-      Neo4jHelper.create_node([:Type], %{
+      Neo4jHelper.create_node([:SRM, :Type], %{
         "uuid" => Ash.UUID.generate(),
         "module" => "Elixir.NonExistent.Module"
       })

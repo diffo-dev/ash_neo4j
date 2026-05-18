@@ -13,7 +13,7 @@ defmodule AshNeo4j.Verifiers.VerifyLabelsPascalCase do
   @impl true
   def verify(dsl) do
     resource = Verifier.get_persisted(dsl, :module)
-    labels = Verifier.get_persisted(dsl, :labels)
+    labels = Verifier.get_persisted(dsl, :all_labels)
 
     cond do
       labels == [] ->

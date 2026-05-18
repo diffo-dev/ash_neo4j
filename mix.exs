@@ -167,8 +167,8 @@ defmodule AshNeo4j.MixProject do
         "docs",
         "spark.replace_doc_links"
       ],
-      "spark.formatter": "spark.formatter --extensions AshNeo4j.DataLayer",
-      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshNeo4j.DataLayer"
+      "spark.formatter": "spark.formatter --extensions AshNeo4j.DataLayer,AshNeo4j.DataLayer.Domain",
+      "spark.cheat_sheets": "spark.cheat_sheets --extensions AshNeo4j.DataLayer,AshNeo4j.DataLayer.Domain"
     ]
   end
 end

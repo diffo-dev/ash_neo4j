@@ -38,14 +38,44 @@ defmodule AshNeo4j.Resource.Info do
   end
 
   @doc """
-  Returns the full list of labels written to the node on CREATE. Always starts with the domain
-  label, followed by the module label, then any additional base type labels from fragments.
-  For example, `DiffoExample.Access.Shelf` (using `BaseInstance`) returns `[:Access, :Shelf, :Instance]`.
+  The label contributed by a domain fragment using `AshNeo4j.DataLayer.Domain`.
+  Written on CREATE as an additional label for graph traversal. `nil` when the domain
+  declares no fragment label.
   """
-  @spec labels(Ash.Resource.t()) :: list(atom()) | nil
-  def labels(resource) do
-    Extension.get_persisted(resource, :labels, nil) ||
-      [domain_label(resource), label(resource)] |> Enum.uniq() |> Enum.filter(& &1)
+  @spec domain_fragment_label(Ash.Resource.t()) :: atom() | nil
+  def domain_fragment_label(resource) do
+    case Extension.get_persisted(resource, :domain_fragment_label, nil) do
+      nil ->
+        domain = Extension.get_persisted(resource, :domain, nil)
+        if domain, do: AshNeo4j.DataLayer.Domain.Info.label(domain), else: nil
+
+      val ->
+        val
+    end
+  end
+
+  @doc """
+  The two-label pair `[domain_label, module_label]` used in MATCH for all read, update,
+  delete, and aggregate operations. Always uniquely identifies this specific resource type.
+  """
+  @spec label_pair(Ash.Resource.t()) :: [atom()]
+  def label_pair(resource) do
+    Extension.get_persisted(resource, :label_pair, [domain_label(resource), module_label(resource)])
+  end
+
+  @doc """
+  Returns the full list of labels written to the node on CREATE. Always starts with the domain
+  label, followed by the module label, then any additional base type label from a resource
+  fragment, then the domain fragment label if the domain uses `AshNeo4j.DataLayer.Domain`.
+  For example, `DiffoExample.Access.Shelf` (using `BaseInstance` and a `Telco` domain fragment)
+  returns `[:Access, :Shelf, :Instance, :Telco]`.
+  """
+  @spec all_labels(Ash.Resource.t()) :: list(atom()) | nil
+  def all_labels(resource) do
+    Extension.get_persisted(resource, :all_labels, nil) ||
+      [domain_label(resource), module_label(resource), label(resource), domain_fragment_label(resource)]
+      |> Enum.uniq()
+      |> Enum.filter(& &1)
   end
 
   @doc """
@@ -54,22 +84,33 @@ defmodule AshNeo4j.Resource.Info do
   """
   @spec mapping(Ash.Resource.t()) :: ResourceMapping.t()
   def mapping(resource) do
-    if function_exported?(resource, :__ash_neo4j_mapping__, 0) do
-      resource.__ash_neo4j_mapping__()
-    else
-      %ResourceMapping{
-        module: resource,
-        domain_label: domain_label(resource),
-        module_label: module_label(resource),
-        label: label(resource),
-        labels: labels(resource),
-        properties: translations(resource),
-        edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
-        relationship_attributes: relationship_attributes(resource),
-        guards: AshNeo4j.DataLayer.Info.guard(resource),
-        skip: AshNeo4j.DataLayer.Info.skip(resource)
-      }
-    end
+    base =
+      if function_exported?(resource, :__ash_neo4j_mapping__, 0) do
+        resource.__ash_neo4j_mapping__()
+      else
+        %ResourceMapping{
+          module: resource,
+          domain_label: domain_label(resource),
+          module_label: module_label(resource),
+          label: label(resource),
+          label_pair: label_pair(resource),
+          properties: translations(resource),
+          edges: Enum.map(relate(resource), &EdgeDescriptor.from_relate/1),
+          relationship_attributes: relationship_attributes(resource),
+          guards: AshNeo4j.DataLayer.Info.guard(resource),
+          skip: AshNeo4j.DataLayer.Info.skip(resource)
+        }
+      end
+
+    frag_label = domain_fragment_label(resource)
+
+    %{base | domain_fragment_label: frag_label, all_labels: all_labels_for(base, frag_label)}
+  end
+
+  defp all_labels_for(%ResourceMapping{} = base, frag_label) do
+    [base.domain_label, base.module_label, base.label, frag_label]
+    |> Enum.uniq()
+    |> Enum.filter(& &1)
   end
 
   @doc """
