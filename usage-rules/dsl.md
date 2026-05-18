@@ -42,6 +42,8 @@ So a `MyApp.Access.ShelfInstance` resource, in an `Access` domain that includes 
 
 **Reads, updates, and deletes match on `[domain_label, module_label]` only.** This pair uniquely identifies the resource type and prevents one resource from inadvertently reading nodes belonging to another resource that shares the same fragment base label.
 
+Cross-domain relationships between AshNeo4j resources just work — each domain's resources see only their own nodes. `AshNeo4j.DataLayer.Domain` is an opt-in feature for intentional polymorphic graph traversals (e.g. a single query that matches nodes from multiple domains via a shared base label). You do not need it simply because your application spans multiple domains.
+
 The `AshNeo4j.Resource.Info` module exposes label accessors:
 
 - `label/1` — the `label` DSL value; equals `module_label/1` unless a fragment overrides it
