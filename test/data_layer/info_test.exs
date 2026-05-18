@@ -15,41 +15,41 @@ defmodule AshNeo4j.DataLayer.InfoTest do
 
   describe "datalayer info" do
     test "label" do
-      refute DataLayerInfo.label(Specification)
-      assert DataLayerInfo.label(Event) == :Event
+      assert DataLayerInfo.neo4j_label(Specification) == :error
+      assert DataLayerInfo.neo4j_label(Event) == {:ok, :Event}
     end
 
     test "relate" do
-      assert DataLayerInfo.relate(Specification) == []
+      assert DataLayerInfo.neo4j_relate!(Specification) == []
 
-      assert DataLayerInfo.relate(Event) == [
+      assert DataLayerInfo.neo4j_relate!(Event) == [
                {:service, :RAISED, :incoming, :Service},
                {:resource, :FIRED, :incoming, :Resource}
              ]
     end
 
     test "guard" do
-      assert DataLayerInfo.guard(Specification) == [
+      assert DataLayerInfo.neo4j_guard!(Specification) == [
                {:SPECIFIES, :outgoing, :Service},
                {:SPECIFIES, :outgoing, :Resource}
              ]
 
-      assert DataLayerInfo.guard(Event) == []
+      assert DataLayerInfo.neo4j_guard!(Event) == []
     end
 
     test "skip" do
-      assert DataLayerInfo.skip(Specification) == []
-      assert DataLayerInfo.skip(Event) == [:service_id, :resource_id]
+      assert DataLayerInfo.neo4j_skip!(Specification) == []
+      assert DataLayerInfo.neo4j_skip!(Event) == [:service_id, :resource_id]
     end
   end
 
   describe "domain info" do
-    test "label returns nil for domains without AshNeo4j.DataLayer.Domain" do
-      assert DomainInfo.label(AshNeo4j.Test.SRM) == nil
+    test "label returns error for domains without AshNeo4j.DataLayer.Domain" do
+      assert DomainInfo.neo4j_label(AshNeo4j.Test.SRM) == :error
     end
 
     test "label returns the declared label for a domain using a domain fragment" do
-      assert DomainInfo.label(Provider) == :MyTestDomain
+      assert DomainInfo.neo4j_label(Provider) == {:ok, :MyTestDomain}
     end
   end
 

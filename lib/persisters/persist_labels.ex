@@ -21,7 +21,10 @@ defmodule AshNeo4j.Persisters.PersistLabels do
     domain_fragment_label =
       if Code.ensure_loaded?(domain_module) and
            function_exported?(domain_module, :spark_dsl_config, 0) do
-        AshNeo4j.DataLayer.Domain.Info.label(domain_module)
+        case AshNeo4j.DataLayer.Domain.Info.neo4j_label(domain_module) do
+          {:ok, label} -> label
+          :error -> nil
+        end
       end
 
     # module_label is always the short name of the resource module itself (:Shelf).

@@ -309,7 +309,7 @@ Ash.aggregate(MyResource, {:total_bandwidth, :sum, [
 ]})
 ```
 
-For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and aggregates in Elixir. Any valid Ash expression works — `get_path` for nested struct navigation, arithmetic, etc. Note: `expr:` is a programmatic API and is not available in the resource-level `aggregates do` DSL block.
+For `expr:` aggregates, AshNeo4j fetches full destination records, evaluates the Ash expression on each in Elixir, and aggregates the results. Any valid Ash expression works — `get_path` for nested struct navigation, arithmetic, etc. Note: `expr:` is a programmatic API and is not available in the resource-level `aggregates do` DSL block.
 
 ## Calculations
 
@@ -327,7 +327,7 @@ Calculations can be:
 
 - **Loaded** — `Ash.load!(records, [:score_doubled])`
 - **Filtered on** — `Ash.Query.filter(score_doubled > 10)` — AshNeo4j loads all matching nodes then evaluates the filter in Elixir
-- **Sorted on** — `Ash.Query.sort(score_doubled: :asc)` — applied in Elixir after records are loaded via `Ash.Actions.Sort.runtime_sort/3`
+- **Sorted on** — `Ash.Query.sort(score_doubled: :asc)` — applied in Elixir after records are loaded
 
 **Embedded struct fields work without elevation.** `get_path(dog, [:age])` navigates into a `DogTypedStruct` directly — records arrive with embedded types fully deserialized, so any Ash expression that works in-memory works in a calculation.
 

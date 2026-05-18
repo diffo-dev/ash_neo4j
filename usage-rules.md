@@ -36,7 +36,7 @@ Do not carry SQL assumptions into AshNeo4j. The differences are fundamental:
 - **Never add foreign key attributes** to an AshNeo4j resource for the purpose of expressing a relationship. Relationships are graph edges managed by the `relate` DSL and the Ash `relationships` block.
 - **Many-to-many requires a joiner resource** — a dedicated node with two `belongs_to` relationships. AshNeo4j does not use edge properties. Do not attempt a direct many-to-many edge.
 - There is no `Ecto.Repo`. The Neo4j connection pool is a Bolty named process (`Bolt`), configured in `runtime.exs` and added to your supervision tree.
-- **Every node is created with at least two labels**: the domain label (PascalCase short name of the Ash domain module) and the resource label. When a resource uses a fragment that declares a `label`, that fragment label is also written on create — so a resource extending `BaseInstance` (which declares `label :Instance`) will produce nodes with three labels: `[:Domain, :ResourceName, :Instance]`. Only the resource label is used when reading, updating, or destroying. The domain label cannot be overridden.
+- **Every node is created with at least two labels**: the domain label (PascalCase short name of the Ash domain module) and the module label (PascalCase short name of the resource module). When a resource uses a fragment that declares a `label`, that fragment label is also written on CREATE — so a resource extending `BaseInstance` (which declares `label :Instance`) produces nodes with three labels: `[:Domain, :ResourceName, :Instance]`. When the domain uses `AshNeo4j.DataLayer.Domain` via a domain fragment, an additional domain fragment label is also written. Reads, updates, and deletes match on `[domain_label, module_label]` — always uniquely scoped to the resource type.
 - **Transactions are supported.** A test sandbox (`AshNeo4j.Sandbox`) provides per-test transaction isolation — see `usage-rules/testing.md`.
 - **Aggregates are supported** for kinds `:count`, `:exists`, `:sum`, `:avg`, `:min`, `:max`, `:first`, `:list`. The `:custom` kind is not supported. Fields stored as JSON (embedded resources, `Ash.TypedStruct`, `Ash.Type.NewType`, `Ash.Type.Map`, etc.) are also aggregatable — see the Aggregates section below.
 
@@ -100,7 +100,7 @@ Ash.aggregate(Post, {:total_dog_age, :sum, [
 ]})
 ```
 
-When `expr:` is used, AshNeo4j fetches full destination node records, casts them to resource structs, evaluates the Ash expression on each via `Ash.Expr.eval_hydrated/2`, and applies the aggregate kind in Elixir. This supports arbitrary Ash expressions — field access, `get_path` for nested struct navigation, arithmetic, etc.
+When `expr:` is used, AshNeo4j fetches full destination node records, casts them to resource structs, evaluates the Ash expression on each in Elixir, and applies the aggregate kind. This supports arbitrary Ash expressions — field access, `get_path` for nested struct navigation, arithmetic, etc.
 
 Note: `expr:` in aggregate declarations is a programmatic API (`Ash.aggregate/3`, `Ash.Query.aggregate/3`). It is not available in the resource-level `aggregates do` DSL block.
 
