@@ -633,12 +633,38 @@ defmodule AshNeo4j.Cypher.Query do
     |> Enum.with_index()
     |> Enum.reduce({"", %{}}, fn {{prop, op, val, ci?}, index}, {acc_str, acc_params} ->
       {expr, new_params} =
-        if op == :is_nil do
-          {Cypher.expression(variable, prop, "is_nil", val), acc_params}
-        else
-          param_key = "#{variable}_#{prop}_#{index}"
-          expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
-          {expr, Map.put(acc_params, param_key, val)}
+        cond do
+          op == :is_nil ->
+            {Cypher.expression(variable, prop, "is_nil", val), acc_params}
+
+          op == :st_contains_box ->
+            %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
+            sw_key = "#{variable}_#{prop}_#{index}_sw"
+            ne_key = "#{variable}_#{prop}_#{index}_ne"
+            expr = Cypher.expression(variable, prop, "within_bbox_box", {"$#{sw_key}", "$#{ne_key}"})
+            params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
+            {expr, params}
+
+          op == :st_distance ->
+            {comp_op_atom, test_point, threshold} = val
+            test_key = "#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{variable}_#{prop}_#{index}_t"
+            expr = Cypher.expression(variable, prop, "st_distance", {convert_operator(comp_op_atom), "$#{test_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
+          op == :st_dwithin ->
+            {test_point, threshold} = val
+            test_key = "#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{variable}_#{prop}_#{index}_d"
+            expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
+          true ->
+            param_key = "#{variable}_#{prop}_#{index}"
+            expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
+            {expr, Map.put(acc_params, param_key, val)}
         end
 
       combined = if acc_str == "", do: expr, else: "#{acc_str} AND #{expr}"
@@ -654,6 +680,9 @@ defmodule AshNeo4j.Cypher.Query do
   defp convert_operator(:>), do: ">"
   defp convert_operator(:>=), do: ">="
   defp convert_operator(:contains), do: "contains"
+  defp convert_operator(:st_contains), do: "within_bbox"
+  defp convert_operator(:st_contains_box), do: "within_bbox_box"
+  defp convert_operator(:st_dwithin), do: "dwithin"
 
   defp build_agg_path(path_segments) do
     last_idx = length(path_segments) - 1

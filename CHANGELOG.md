@@ -11,6 +11,12 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [Unreleased]
+
+### Features
+
+* **Spatial types and `st_*` expressions** (#45) — first-class WGS-84 2D spatial support. New attribute types `AshNeo4j.Type.Point` (native Neo4j Point) and `AshNeo4j.Type.Box` (axis-aligned bounding box, 4-vertex straight-sided polygon on disk). Six `Ash.Query.Function` modules matching ash_geo / PostGIS signatures: `st_contains` (box-point, box-box), `st_within`, `st_intersects`, `st_distance` (point-point, with comparison pushdown), `st_distance_in_meters` (alias), `st_dwithin` (point-point). Predicates push down to native Cypher (`point.distance`, `point.withinBBox`) wherever possible; in-memory `evaluate/1` is the correctness fallback. Box's on-disk storage uses a 4-Point vertex array plus 4 scalar bbox-corner companion properties (`<prop>.bbSW/.bbSE/.bbNE/.bbNW`) written by a generic `companions/1` callback on the Type module — the same shape future Polygon support ([#267](https://github.com/diffo-dev/ash_neo4j/issues/267)) will use, so no data migration when Polygon lands. The bbox companions are scalar Point properties specifically to be indexable via Neo4j's POINT index — storage is **indexable, not yet indexed** (operators run `CREATE POINT INDEX` themselves; lifecycle management is future work). Documentation in `usage-rules/spatial.md`. Requires `bolty >= 0.0.13` for native Point property serialisation ([bolty#32](https://github.com/diffo-dev/bolty/issues/32)).
+
 ## [v0.6.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.5.1...v0.6.0) (2026-05-19)
 
 ### Breaking Changes

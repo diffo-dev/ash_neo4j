@@ -8,6 +8,7 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
   alias AshNeo4j.DataLayer.TypeClassifier
 
   @native_types [
+    AshNeo4j.Type.Point,
     Ash.Type.Boolean,
     Ash.Type.Date,
     Ash.Type.Duration,
