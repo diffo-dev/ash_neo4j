@@ -17,5 +17,6 @@ defmodule AshNeo4j.Test.Resource.Place do
     uuid_primary_key :id
     attribute :name, :string, public?: true
     attribute :location, AshNeo4j.Type.Point, public?: true
+    attribute :bounds, AshNeo4j.Type.Box, public?: true
   end
 end

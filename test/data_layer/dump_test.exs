@@ -78,6 +78,12 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_changed(Ash.Type.Atom, :a, "a")
     end
 
+    test "box" do
+      sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
+      ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
+      value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, ne])
+    end
+
     test "ci string" do
       value_changed(Ash.Type.CiString, Ash.CiString.new("Hello"), "Hello")
     end

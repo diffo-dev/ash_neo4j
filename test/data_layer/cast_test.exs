@@ -66,6 +66,12 @@ defmodule AshNeo4j.DataLayer.CastTest do
       value_changed(Ash.Type.Atom, "a", :a)
     end
 
+    test "box" do
+      sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
+      ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
+      value_changed(AshNeo4j.Type.Box, [sw, ne], %AshNeo4j.Type.Box{sw: sw, ne: ne})
+    end
+
     test "ci string" do
       value_changed(Ash.Type.CiString, "Hello", Ash.CiString.new("Hello"))
     end

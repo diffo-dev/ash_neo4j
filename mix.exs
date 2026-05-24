@@ -33,8 +33,19 @@ defmodule AshNeo4j.MixProject do
       name: @name,
       source_url: @github_url,
       homepage_url: "https://diffo.dev/diffo/ash_neo4j",
-      description: @description
+      description: @description,
+      usage_rules: usage_rules()
     ]
+  end
+
+  defp usage_rules do
+    [
+    skills: [
+      location: ".claude/skills",
+      # Pull in pre-built skills shipped directly by packages
+      package_skills: [:bolty, ~r/^bolty/]
+    ]
+  ]
   end
 
   def cli do
