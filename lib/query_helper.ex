@@ -108,8 +108,14 @@ defmodule AshNeo4j.QueryHelper do
   defp to_conditions(%ResourceMapping{} = mapping, predicates) do
     predicates
     |> Enum.map(fn
-      # st_distance(prop, ^p) <op> ^n — nested function in comparison; pushed down as point.distance comparison
+      # st_distance(prop, ^p) <op> ^n and the st_distance_in_meters alias —
+      # nested function in comparison, pushed down as point.distance comparison
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
+      when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
+        prop = property_name(mapping, ref)
+        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+
+      %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         prop = property_name(mapping, ref)
         {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
