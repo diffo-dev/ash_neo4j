@@ -125,6 +125,26 @@ Calculations on embedded struct fields (`Ash.TypedStruct`, nested types) work th
 
 Custom calculation modules (`:calculate` callback) are not currently supported — only expression (`expr(...)`) calculations.
 
+## Spatial types and expressions
+
+AshNeo4j ships `AshNeo4j.Type.Point` and `AshNeo4j.Type.Box` as Ash attribute types, plus six `st_*` expression functions (`st_contains`, `st_within`, `st_intersects`, `st_distance`, `st_distance_in_meters`, `st_dwithin`) matching ash_geo / PostGIS signatures. Predicates push down to Neo4j's native `point.distance` and `point.withinBBox` wherever possible.
+
+```elixir
+require Ash.Query
+
+# Service qualification: which Places contain the customer point?
+Place
+|> Ash.Query.filter(st_contains(bounds, ^customer_point))
+|> Ash.read!()
+
+# POIs within 5 km
+Place
+|> Ash.Query.filter(st_dwithin(location, ^customer_point, 5_000))
+|> Ash.read!()
+```
+
+WGS-84 2D only in this release. Box's on-disk storage uses a 4-Point vertex array plus 4 scalar Point bbox-corner companion properties — the storage is **indexable, not yet indexed** (operators create POINT indexes themselves). Full details, holiness composition for SQ exclusions, and the limitation list in `usage-rules/spatial.md`.
+
 ## Naming conventions
 
 AshNeo4j enforces Neo4j conventions at compile time:
