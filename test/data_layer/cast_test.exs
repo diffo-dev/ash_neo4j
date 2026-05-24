@@ -55,6 +55,10 @@ defmodule AshNeo4j.DataLayer.CastTest do
     test "time usec" do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
+
+    test "point" do
+      value_unchanged(AshNeo4j.Type.Point, Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688))
+    end
   end
 
   describe "cast ash types" do
