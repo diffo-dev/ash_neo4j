@@ -125,7 +125,18 @@ defmodule AshNeo4j.QueryHelper do
         argument = hd(predicate.arguments)
         value = hd(tl(predicate.arguments))
         prop = property_name(mapping, argument)
-        {prop, :st_contains, to_param_value(value), false}
+
+        case to_param_value(value) do
+          %Bolty.Types.Point{} = point ->
+            {prop, :st_contains, point, false}
+
+          %AshNeo4j.Type.Box{} = box ->
+            {prop, :st_contains_box, box, false}
+
+          _other ->
+            # other forms — skip pushdown, let in-memory eval handle it
+            nil
+        end
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")

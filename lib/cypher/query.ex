@@ -633,12 +633,22 @@ defmodule AshNeo4j.Cypher.Query do
     |> Enum.with_index()
     |> Enum.reduce({"", %{}}, fn {{prop, op, val, ci?}, index}, {acc_str, acc_params} ->
       {expr, new_params} =
-        if op == :is_nil do
-          {Cypher.expression(variable, prop, "is_nil", val), acc_params}
-        else
-          param_key = "#{variable}_#{prop}_#{index}"
-          expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
-          {expr, Map.put(acc_params, param_key, val)}
+        cond do
+          op == :is_nil ->
+            {Cypher.expression(variable, prop, "is_nil", val), acc_params}
+
+          op == :st_contains_box ->
+            %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
+            sw_key = "#{variable}_#{prop}_#{index}_sw"
+            ne_key = "#{variable}_#{prop}_#{index}_ne"
+            expr = Cypher.expression(variable, prop, "within_bbox_box", {"$#{sw_key}", "$#{ne_key}"})
+            params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
+            {expr, params}
+
+          true ->
+            param_key = "#{variable}_#{prop}_#{index}"
+            expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
+            {expr, Map.put(acc_params, param_key, val)}
         end
 
       combined = if acc_str == "", do: expr, else: "#{acc_str} AND #{expr}"
@@ -655,6 +665,7 @@ defmodule AshNeo4j.Cypher.Query do
   defp convert_operator(:>=), do: ">="
   defp convert_operator(:contains), do: "contains"
   defp convert_operator(:st_contains), do: "within_bbox"
+  defp convert_operator(:st_contains_box), do: "within_bbox_box"
 
   defp build_agg_path(path_segments) do
     last_idx = length(path_segments) - 1

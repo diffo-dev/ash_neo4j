@@ -80,4 +80,66 @@ defmodule AshNeo4j.Functions.StContainsTest do
       assert results == []
     end
   end
+
+  describe "st_contains box-box (pushed down as 2 ANDed point.withinBBox)" do
+    setup do
+      sydney = Place |> Ash.create!(%{name: "Sydney bbox", bounds: sydney_box()})
+      {:ok, sydney: sydney}
+    end
+
+    test "matches when the inner box is fully inside the place's bounds", %{sydney: sydney} do
+      inner = %Box{
+        sw: Point.create(:wgs_84, 151.1, -33.9),
+        ne: Point.create(:wgs_84, 151.4, -33.6)
+      }
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_contains(bounds, ^inner))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert sydney.id in ids
+    end
+
+    test "matches when the inner box equals the place's bounds (inclusive)", %{sydney: sydney} do
+      same = sydney_box()
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_contains(bounds, ^same))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert sydney.id in ids
+    end
+
+    test "rejects when the inner box extends beyond the place's bounds" do
+      bigger = %Box{
+        sw: Point.create(:wgs_84, 150.0, -34.5),
+        ne: Point.create(:wgs_84, 152.0, -33.0)
+      }
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_contains(bounds, ^bigger))
+        |> Ash.read()
+
+      assert results == []
+    end
+
+    test "rejects when the inner box partially overlaps the place's bounds" do
+      overlap = %Box{
+        sw: Point.create(:wgs_84, 151.3, -33.8),
+        ne: Point.create(:wgs_84, 151.7, -33.4)
+      }
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_contains(bounds, ^overlap))
+        |> Ash.read()
+
+      assert results == []
+    end
+  end
 end
