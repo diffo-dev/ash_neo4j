@@ -63,7 +63,7 @@ defmodule AshNeo4j.QueryHelper do
   defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
     relationship_predicates =
       Enum.filter(predicates, fn predicate ->
-        if Map.has_key?(predicate, :operator) do
+        if Map.has_key?(predicate, :operator) and ref_or_atom?(predicate.left) do
           prop = property_name(mapping, predicate.left)
           predicate.operator in [:==, :in] and ResourceInfo.relationship(mapping.module, prop) != nil
         else
@@ -108,7 +108,13 @@ defmodule AshNeo4j.QueryHelper do
   defp to_conditions(%ResourceMapping{} = mapping, predicates) do
     predicates
     |> Enum.map(fn
-      %{operator: op} = predicate ->
+      # st_distance(prop, ^p) <op> ^n — nested function in comparison; pushed down as point.distance comparison
+      %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
+      when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
+        prop = property_name(mapping, ref)
+        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+
+      %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
         prop = property_name(mapping, predicate.left)
         val = if op == :is_nil, do: predicate.right, else: to_param_value(predicate.right)
         ci? = case_insensitive?(mapping, predicate.left, predicate.right)
@@ -158,6 +164,10 @@ defmodule AshNeo4j.QueryHelper do
         end)
     end
   end
+
+  defp ref_or_atom?(%Ash.Query.Ref{}), do: true
+  defp ref_or_atom?(value) when is_atom(value), do: true
+  defp ref_or_atom?(_), do: false
 
   defp property_name(%ResourceMapping{} = mapping, ref_or_atom) do
     attr_name =

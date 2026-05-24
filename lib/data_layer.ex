@@ -54,6 +54,9 @@ defmodule AshNeo4j.DataLayer do
   # spatial — st_contains(box, point) → point.withinBBox pushdown
   def can?(_, {:filter_expr, %AshNeo4j.Functions.StContains{}}), do: true
 
+  # spatial — st_distance(point, point) → point.distance pushdown (in comparisons)
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistance{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -68,7 +71,10 @@ defmodule AshNeo4j.DataLayer do
 
   @impl true
   def functions(_resource) do
-    [AshNeo4j.Functions.StContains]
+    [
+      AshNeo4j.Functions.StContains,
+      AshNeo4j.Functions.StDistance
+    ]
   end
 
   @neo4j %Spark.Dsl.Section{

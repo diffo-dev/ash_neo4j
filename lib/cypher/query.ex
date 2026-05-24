@@ -645,6 +645,14 @@ defmodule AshNeo4j.Cypher.Query do
             params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
             {expr, params}
 
+          op == :st_distance ->
+            {comp_op_atom, test_point, threshold} = val
+            test_key = "#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{variable}_#{prop}_#{index}_t"
+            expr = Cypher.expression(variable, prop, "st_distance", {convert_operator(comp_op_atom), "$#{test_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
           true ->
             param_key = "#{variable}_#{prop}_#{index}"
             expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
