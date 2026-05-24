@@ -240,7 +240,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       raises(Ash.Type.Atom, "invalid atom")
     end
 
-    @tag :function
     test "invalid function - not MFA" do
       a = fn a, b -> a + b end
       raises(Ash.Type.Function, a)
