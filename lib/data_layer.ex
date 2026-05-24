@@ -1010,7 +1010,20 @@ defmodule AshNeo4j.DataLayer do
         attribute_type =
           Ash.Type.get_type!(attribute.type)
 
-        Map.put(acc, translated_key, Dump.dump(attribute_type, value, attribute.constraints))
+        dumped = Dump.dump(attribute_type, value, attribute.constraints)
+        acc = Map.put(acc, translated_key, dumped)
+
+        # Types that expose `companions/1` (e.g. Box, Polygon) also write
+        # dotted scalar companion properties for indexed predicates.
+        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
+             function_exported?(attribute_type, :companions, 1) do
+          attribute_type.companions(dumped)
+          |> Enum.reduce(acc, fn {suffix, val}, inner_acc ->
+            Map.put(inner_acc, "#{translated_key}.#{suffix}", val)
+          end)
+        else
+          acc
+        end
       else
         acc
       end

@@ -8,7 +8,15 @@ defmodule AshNeo4j.Type.Box do
 
   A Box is two `%Bolty.Types.Point{}` corners — `sw` (south-west, lower-left)
   and `ne` (north-east, upper-right) — matching Neo4j's `point.withinBBox`
-  signature exactly. Stored on the node as a 2-element array of native Points.
+  signature exactly.
+
+  Stored on the node as a 4-Point vertex array `[sw, se, ne, nw]` (CCW from
+  SW per GeoJSON convention), plus 4 scalar Point companion properties
+  (`<prop>.bbSW`, `<prop>.bbSE`, `<prop>.bbNE`, `<prop>.bbNW`) written by
+  the data layer for indexed bounding-box queries. The same on-disk shape
+  will be used by `AshNeo4j.Type.Polygon` when it lands — a Box is a
+  4-vertex straight-sided polygon that happens to be axis-aligned. No
+  data migration when Polygon ships.
 
       attribute :bounds, AshNeo4j.Type.Box
 
@@ -65,8 +73,20 @@ defmodule AshNeo4j.Type.Box do
   @impl true
   def cast_stored(nil, _constraints), do: {:ok, nil}
 
-  def cast_stored([%Bolty.Types.Point{srid: @wgs_84_2d} = sw, %Bolty.Types.Point{srid: @wgs_84_2d} = ne], _constraints) do
-    {:ok, %__MODULE__{sw: sw, ne: ne}}
+  def cast_stored(
+        [
+          %Bolty.Types.Point{srid: @wgs_84_2d} = sw,
+          %Bolty.Types.Point{srid: @wgs_84_2d} = se,
+          %Bolty.Types.Point{srid: @wgs_84_2d} = ne,
+          %Bolty.Types.Point{srid: @wgs_84_2d} = nw
+        ],
+        _constraints
+      ) do
+    if sw.x == nw.x and ne.x == se.x and sw.y == se.y and ne.y == nw.y do
+      {:ok, %__MODULE__{sw: sw, ne: ne}}
+    else
+      {:error, "AshNeo4j.Type.Box cannot load non-straight-sided 4-point array as a Box: #{inspect([sw, se, ne, nw])}"}
+    end
   end
 
   def cast_stored(value, _constraints) do
@@ -77,10 +97,23 @@ defmodule AshNeo4j.Type.Box do
   def dump_to_native(nil, _constraints), do: {:ok, nil}
 
   def dump_to_native(%__MODULE__{sw: %Bolty.Types.Point{} = sw, ne: %Bolty.Types.Point{} = ne}, _constraints) do
-    {:ok, [sw, ne]}
+    se = Bolty.Types.Point.create(:wgs_84, ne.x, sw.y)
+    nw = Bolty.Types.Point.create(:wgs_84, sw.x, ne.y)
+    {:ok, [sw, se, ne, nw]}
   end
 
   def dump_to_native(value, _constraints) do
     {:error, "AshNeo4j.Type.Box cannot dump #{inspect(value)}"}
+  end
+
+  @doc """
+  Derives the 4 scalar bbox companion properties (`bbSW`, `bbSE`, `bbNE`, `bbNW`)
+  from a dumped 4-Point array. Called by the data layer's runtime property
+  assembly to write companion properties alongside the main vertex array.
+  Same shape that Polygon will use — for Box the companions are the polygon
+  vertices themselves.
+  """
+  def companions([%Bolty.Types.Point{} = sw, %Bolty.Types.Point{} = se, %Bolty.Types.Point{} = ne, %Bolty.Types.Point{} = nw]) do
+    %{"bbSW" => sw, "bbSE" => se, "bbNE" => ne, "bbNW" => nw}
   end
 end

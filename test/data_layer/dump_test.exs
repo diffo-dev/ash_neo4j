@@ -80,8 +80,10 @@ defmodule AshNeo4j.DataLayer.DumpTest do
 
     test "box" do
       sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
+      se = Bolty.Types.Point.create(:wgs_84, 151.5, -34.0)
       ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
-      value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, ne])
+      nw = Bolty.Types.Point.create(:wgs_84, 151.0, -33.5)
+      value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, se, ne, nw])
     end
 
     test "ci string" do

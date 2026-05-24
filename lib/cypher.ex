@@ -64,9 +64,9 @@ defmodule AshNeo4j.Cypher do
   iex> AshNeo4j.Cypher.expression(:s, "name", "=", "$s_name_0", case_insensitive?: true)
   "toLower(s.name) = toLower($s_name_0)"
   iex> AshNeo4j.Cypher.expression(:n, "bounds", "within_bbox", "$test_point")
-  "point.withinBBox($test_point, n.bounds[0], n.bounds[1])"
+  "point.withinBBox($test_point, n.`bounds.bbSW`, n.`bounds.bbNE`)"
   iex> AshNeo4j.Cypher.expression(:n, "bounds", "within_bbox_box", {"$inner_sw", "$inner_ne"})
-  "point.withinBBox($inner_sw, n.bounds[0], n.bounds[1]) AND point.withinBBox($inner_ne, n.bounds[0], n.bounds[1])"
+  "point.withinBBox($inner_sw, n.`bounds.bbSW`, n.`bounds.bbNE`) AND point.withinBBox($inner_ne, n.`bounds.bbSW`, n.`bounds.bbNE`)"
   ```
   """
   def expression(variable, left, operator, right, opts \\ [])
@@ -84,13 +84,13 @@ defmodule AshNeo4j.Cypher do
         "#{variable}.#{left} IS NOT NULL"
 
       operator == "within_bbox" ->
-        "point.withinBBox(#{right}, #{variable}.#{left}[0], #{variable}.#{left}[1])"
+        "point.withinBBox(#{right}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`)"
 
       operator == "within_bbox_box" ->
         {sw_ref, ne_ref} = right
 
-        "point.withinBBox(#{sw_ref}, #{variable}.#{left}[0], #{variable}.#{left}[1]) AND " <>
-          "point.withinBBox(#{ne_ref}, #{variable}.#{left}[0], #{variable}.#{left}[1])"
+        "point.withinBBox(#{sw_ref}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`) AND " <>
+          "point.withinBBox(#{ne_ref}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`)"
 
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
@@ -150,11 +150,20 @@ defmodule AshNeo4j.Cypher do
   def parameterized_properties(variable, properties \\ %{}) when is_atom(variable) and is_map(properties) do
     parameterized_properties =
       properties
-      |> Enum.map_join(", ", fn {k, _v} -> "#{k}: $#{variable}_#{k}" end)
+      |> Enum.map_join(", ", fn {k, _v} -> "#{quote_if_dotted(k)}: $#{variable}_#{sanitize_param(k)}" end)
 
     parameters = build_parameters(variable, properties)
 
     {"{#{parameterized_properties}}", parameters}
+  end
+
+  defp quote_if_dotted(name) do
+    s = to_string(name)
+    if String.contains?(s, "."), do: "`#{s}`", else: s
+  end
+
+  defp sanitize_param(name) do
+    to_string(name) |> String.replace(".", "_")
   end
 
   @doc """
@@ -179,7 +188,7 @@ defmodule AshNeo4j.Cypher do
   end
 
   defp build_parameters(variable, properties) do
-    Map.new(properties, fn {k, v} -> {"#{variable}_#{k}", v} end)
+    Map.new(properties, fn {k, v} -> {"#{variable}_#{sanitize_param(k)}", v} end)
   end
 
   defp sandboxed_query(cypher, params) do
