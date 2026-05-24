@@ -653,6 +653,14 @@ defmodule AshNeo4j.Cypher.Query do
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
+          op == :st_dwithin ->
+            {test_point, threshold} = val
+            test_key = "#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{variable}_#{prop}_#{index}_d"
+            expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
           true ->
             param_key = "#{variable}_#{prop}_#{index}"
             expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
@@ -674,6 +682,7 @@ defmodule AshNeo4j.Cypher.Query do
   defp convert_operator(:contains), do: "contains"
   defp convert_operator(:st_contains), do: "within_bbox"
   defp convert_operator(:st_contains_box), do: "within_bbox_box"
+  defp convert_operator(:st_dwithin), do: "dwithin"
 
   defp build_agg_path(path_segments) do
     last_idx = length(path_segments) - 1

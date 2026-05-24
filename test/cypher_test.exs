@@ -117,4 +117,43 @@ defmodule AshNeo4j.CypherTest do
       assert response.results != []
     end
   end
+
+  describe "dwithin" do
+    setup do
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
+      {:ok, sydney: sydney}
+    end
+
+    test "matches when distance is within the threshold", %{sydney: sydney} do
+      near = Point.create(:wgs_84, 151.2, -33.85)
+      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
+      {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => near, "threshold" => 5_000.0})
+
+      assert response.results != []
+    end
+
+    test "rejects when distance exceeds the threshold", %{sydney: sydney} do
+      melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
+      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
+      {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 5_000.0})
+
+      assert response.results == []
+    end
+
+    test "boundary is inclusive — Sydney to Melbourne at ~713 km", %{sydney: sydney} do
+      melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
+      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
+
+      # Threshold larger than actual distance — should match.
+      {:ok, hit} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 800_000.0})
+      assert hit.results != []
+
+      # Threshold smaller than actual distance — should not match.
+      {:ok, miss} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 700_000.0})
+      assert miss.results == []
+    end
+  end
 end

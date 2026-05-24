@@ -144,6 +144,10 @@ defmodule AshNeo4j.QueryHelper do
             nil
         end
 
+      %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
+        prop = property_name(mapping, ref)
+        {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil

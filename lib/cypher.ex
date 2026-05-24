@@ -69,6 +69,8 @@ defmodule AshNeo4j.Cypher do
   "point.withinBBox($inner_sw, n.`bounds.bbSW`, n.`bounds.bbNE`) AND point.withinBBox($inner_ne, n.`bounds.bbSW`, n.`bounds.bbNE`)"
   iex> AshNeo4j.Cypher.expression(:n, "location", "st_distance", {"<", "$test_point", "$threshold"})
   "point.distance(n.location, $test_point) < $threshold"
+  iex> AshNeo4j.Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+  "point.distance(n.location, $test_point) <= $threshold"
   ```
   """
   def expression(variable, left, operator, right, opts \\ [])
@@ -97,6 +99,10 @@ defmodule AshNeo4j.Cypher do
       operator == "st_distance" ->
         {comp_op, test_ref, threshold_ref} = right
         "point.distance(#{variable}.#{left}, #{test_ref}) #{comp_op} #{threshold_ref}"
+
+      operator == "dwithin" ->
+        {test_ref, threshold_ref} = right
+        "point.distance(#{variable}.#{left}, #{test_ref}) <= #{threshold_ref}"
 
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
