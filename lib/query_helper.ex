@@ -121,6 +121,12 @@ defmodule AshNeo4j.QueryHelper do
         ci? = case_insensitive?(mapping, argument, value)
         {prop, :contains, to_param_value(value), ci?}
 
+      %{name: :st_contains} = predicate ->
+        argument = hd(predicate.arguments)
+        value = hd(tl(predicate.arguments))
+        prop = property_name(mapping, argument)
+        {prop, :st_contains, to_param_value(value), false}
+
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil

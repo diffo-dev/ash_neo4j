@@ -51,6 +51,9 @@ defmodule AshNeo4j.DataLayer do
   # contains — handled in predicates/2 via the %{name: :contains} branch
   def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: true
 
+  # spatial — st_contains(box, point) → point.withinBBox pushdown
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StContains{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -62,6 +65,11 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:query_aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:aggregate_relationship, _}), do: true
   def can?(_, _), do: false
+
+  @impl true
+  def functions(_resource) do
+    [AshNeo4j.Functions.StContains]
+  end
 
   @neo4j %Spark.Dsl.Section{
     name: :neo4j,

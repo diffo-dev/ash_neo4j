@@ -654,6 +654,7 @@ defmodule AshNeo4j.Cypher.Query do
   defp convert_operator(:>), do: ">"
   defp convert_operator(:>=), do: ">="
   defp convert_operator(:contains), do: "contains"
+  defp convert_operator(:st_contains), do: "within_bbox"
 
   defp build_agg_path(path_segments) do
     last_idx = length(path_segments) - 1

@@ -63,6 +63,8 @@ defmodule AshNeo4j.Cypher do
   "toLower(s.name) CONTAINS toLower($s_name_0)"
   iex> AshNeo4j.Cypher.expression(:s, "name", "=", "$s_name_0", case_insensitive?: true)
   "toLower(s.name) = toLower($s_name_0)"
+  iex> AshNeo4j.Cypher.expression(:n, "bounds", "within_bbox", "$test_point")
+  "point.withinBBox($test_point, n.bounds[0], n.bounds[1])"
   ```
   """
   def expression(variable, left, operator, right, opts \\ [])
@@ -78,6 +80,9 @@ defmodule AshNeo4j.Cypher do
 
       operator == "is_nil" && !right ->
         "#{variable}.#{left} IS NOT NULL"
+
+      operator == "within_bbox" ->
+        "point.withinBBox(#{right}, #{variable}.#{left}[0], #{variable}.#{left}[1])"
 
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
