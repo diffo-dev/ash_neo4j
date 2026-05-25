@@ -77,6 +77,14 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:query_aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:aggregate_relationship, _}), do: true
+  # combination queries (#10)
+  def can?(_, :combine), do: true
+  def can?(_, {:combine, :base}), do: true
+  def can?(_, {:combine, :union}), do: true
+  def can?(_, {:combine, :union_all}), do: true
+  def can?(_, {:combine, :intersect}), do: true
+  def can?(_, {:combine, :except}), do: true
+
   def can?(_, _), do: false
 
   @impl true
@@ -177,7 +185,17 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, aggregates: %{}, calculations: %{}]
+    defstruct [
+      :resource,
+      :sort,
+      :filter,
+      :limit,
+      :offset,
+      :domain,
+      aggregates: %{},
+      calculations: %{},
+      combination_of: []
+    ]
   end
 
   @impl true
@@ -591,6 +609,11 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def resource_to_query(resource, domain) do
     %Query{resource: resource, domain: domain}
+  end
+
+  @impl true
+  def combination_of(combinations, resource, domain) do
+    {:ok, %Query{resource: resource, domain: domain, combination_of: combinations}}
   end
 
   @impl true
