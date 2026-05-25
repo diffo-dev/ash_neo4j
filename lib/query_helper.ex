@@ -42,23 +42,92 @@ defmodule AshNeo4j.QueryHelper do
   defp run_combination_query(ash_query, combinations) do
     mapping = ResourceInfo.mapping(ash_query.resource)
 
-    with {:ok, union_type, branch_dl_queries} <- classify_combination(combinations) do
-      branch_queries =
-        branch_dl_queries
-        |> Enum.with_index()
-        |> Enum.map(fn {branch_dl_query, idx} ->
-          build_branch_query(branch_dl_query, mapping, "b#{idx}_")
-        end)
+    case classify_combination(combinations) do
+      {:ok, :native, union_type, branch_dl_queries} ->
+        run_native_combination(ash_query, mapping, branch_dl_queries, union_type)
 
-      query =
-        branch_queries
-        |> Query.combination_block(union_type: union_type)
-        |> Query.add_order_by(sort_terms(ash_query, mapping))
-        |> Query.add_skip(ash_query.offset)
-        |> Query.add_limit(ash_query.limit)
+      {:ok, :in_memory, all_types, branch_dl_queries} ->
+        run_in_memory_combination(ash_query, mapping, branch_dl_queries, all_types)
 
-      run_cypher_query(query)
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp run_native_combination(ash_query, mapping, branch_dl_queries, union_type) do
+    branch_queries =
+      branch_dl_queries
+      |> Enum.with_index()
+      |> Enum.map(fn {branch_dl_query, idx} ->
+        build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
+      end)
+
+    query =
+      branch_queries
+      |> Query.combination_block(union_type: union_type)
+      |> Query.add_order_by(sort_terms(ash_query, mapping))
+      |> Query.add_skip(ash_query.offset)
+      |> Query.add_limit(ash_query.limit)
+
+    run_cypher_query(query)
+  end
+
+  defp run_in_memory_combination(ash_query, mapping, branch_dl_queries, all_types) do
+    branch_id_results =
+      branch_dl_queries
+      |> Enum.with_index()
+      |> Enum.map(fn {branch_dl_query, idx} ->
+        query = build_branch_query(branch_dl_query, mapping, "b#{idx}_", :ids)
+
+        case Cypher.run(query) do
+          {:ok, %Bolty.Response{results: results}} ->
+            {:ok, MapSet.new(results, &Map.get(&1, "sid"))}
+
+          {:error, _} = err ->
+            err
+        end
+      end)
+
+    case Enum.find(branch_id_results, &match?({:error, _}, &1)) do
+      nil ->
+        [base_set | rest_sets] = Enum.map(branch_id_results, fn {:ok, s} -> s end)
+        rest_types = tl(all_types)
+        keep_set = apply_set_ops(base_set, Enum.zip(rest_types, rest_sets))
+        keep_ids = MapSet.to_list(keep_set)
+
+        if keep_ids == [] do
+          {:ok, []}
+        else
+          final =
+            mapping.label_pair
+            |> Query.node_read_by_ids(keep_ids)
+            |> Query.add_order_by(sort_terms(ash_query, mapping))
+            |> Query.add_skip(ash_query.offset)
+            |> Query.add_limit(ash_query.limit)
+
+          run_cypher_query(final)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp apply_set_ops(initial_set, []), do: initial_set
+
+  defp apply_set_ops(running_set, [{op, branch_set} | rest]) do
+    new_running =
+      case op do
+        # :union and :union_all are equivalent over id sets — MapSet dedups
+        # regardless. The Cypher-level distinction only matters when the
+        # native CALL+UNION pushdown path runs.
+        :union -> MapSet.union(running_set, branch_set)
+        :union_all -> MapSet.union(running_set, branch_set)
+        :intersect -> MapSet.intersection(running_set, branch_set)
+        :except -> MapSet.difference(running_set, branch_set)
+      end
+
+    apply_set_ops(new_running, rest)
   end
 
   defp run_cypher_query(query) do
@@ -71,50 +140,54 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  # Walks the combination list and validates the shape for native pushdown.
-  # First element must be `:base`; all subsequent elements must share a single
-  # union type (`:union` or `:union_all`). `:intersect` and `:except` are
-  # advertised in can?/2 for API completeness but return an error here for now
-  # — in-memory implementation is the next slice.
+  # Walks the combination list and decides the execution path.
+  # First element must be `:base`. All-`:union` or all-`:union_all` subsequents
+  # take the native CALL+UNION pushdown path. Anything else (mixed union types,
+  # or any `:intersect` / `:except`) takes the in-memory orchestration path.
   defp classify_combination([{:base, base_query} | rest]) do
     types = Enum.map(rest, &elem(&1, 0))
     branch_queries = [base_query | Enum.map(rest, &elem(&1, 1))]
 
     cond do
       types == [] ->
-        {:ok, :union_all, branch_queries}
+        {:ok, :native, :union_all, branch_queries}
 
       Enum.all?(types, &(&1 == :union)) ->
-        {:ok, :union, branch_queries}
+        {:ok, :native, :union, branch_queries}
 
       Enum.all?(types, &(&1 == :union_all)) ->
-        {:ok, :union_all, branch_queries}
-
-      Enum.any?(types, &(&1 in [:intersect, :except])) ->
-        {:error, "AshNeo4j: :intersect / :except combination not yet implemented (tracked in #10)"}
+        {:ok, :native, :union_all, branch_queries}
 
       true ->
-        {:error, "AshNeo4j: mixed :union / :union_all combination types not yet supported"}
+        {:ok, :in_memory, [:base | types], branch_queries}
     end
   end
 
   defp classify_combination(_), do: {:error, "AshNeo4j: combination_of must start with :base"}
 
-  defp build_branch_query(branch_dl_query, %ResourceMapping{} = mapping, param_prefix) do
-    if branch_dl_query.filter == nil do
-      Query.branch_node_read(mapping.label_pair)
-    else
-      simple_filter = Ash.Filter.to_simple_filter(branch_dl_query.filter, skip_invalid?: true)
+  # builder: :nodes | :ids — which branch_node_read variant to use
+  defp build_branch_query(branch_dl_query, %ResourceMapping{} = mapping, param_prefix, builder) do
+    conditions = extract_branch_conditions(branch_dl_query, mapping)
+    build = if builder == :ids, do: &Query.branch_node_read_ids/3, else: &Query.branch_node_read/3
+    build.(mapping.label_pair, conditions, param_prefix: param_prefix)
+  end
 
-      predicates =
-        simple_filter
-        |> Map.get(:predicates, [])
-        |> Enum.reject(fn pred ->
-          match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(pred, :left))
-        end)
+  defp extract_branch_conditions(branch_dl_query, %ResourceMapping{} = mapping) do
+    case branch_dl_query.filter do
+      nil ->
+        []
 
-      conditions = to_conditions(mapping, predicates)
-      Query.branch_node_read(mapping.label_pair, conditions, param_prefix: param_prefix)
+      filter ->
+        simple_filter = Ash.Filter.to_simple_filter(filter, skip_invalid?: true)
+
+        predicates =
+          simple_filter
+          |> Map.get(:predicates, [])
+          |> Enum.reject(fn pred ->
+            match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(pred, :left))
+          end)
+
+        to_conditions(mapping, predicates)
     end
   end
 

@@ -259,6 +259,64 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
+  Same as `branch_node_read/3` but returns just the Neo4j internal id of `s`
+  (as `sid`) instead of the node itself. Used to cheaply materialise the id
+  set per branch in the in-memory orchestration path for INTERSECT / EXCEPT
+  combination queries.
+
+  ## Examples
+  ```
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read_ids(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> {cypher, _} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN id(s) AS sid"
+  ```
+  """
+  @spec branch_node_read_ids(atom() | [atom()], [condition()], keyword()) :: t()
+  def branch_node_read_ids(label, conditions \\ [], opts \\ [])
+
+  def branch_node_read_ids(label, [], _opts) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Return{items: ["id(s) AS sid"]}
+      ]
+    }
+  end
+
+  def branch_node_read_ids(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: [where_string]},
+        %Return{items: ["id(s) AS sid"]}
+      ],
+      params: params
+    }
+  end
+
+  @doc """
+  `MATCH (s:L1:L2) WHERE id(s) IN $ids OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`.
+
+  Used as the final read after in-memory combination orchestration computes
+  the keep-set of node ids.
+  """
+  @spec node_read_by_ids(atom() | [atom()], [integer()]) :: t()
+  def node_read_by_ids(label, ids) when is_list(ids) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: ["id(s) IN $ids"]},
+        %OptionalMatch{pattern: "(s)-[r]-(d)"},
+        %Return{items: ["s", "r", "d"]}
+      ],
+      params: %{"ids" => ids}
+    }
+  end
+
+  @doc """
   Wraps a list of branch queries (built via `branch_node_read/3`) in a
   `CALL { … UNION/UNION ALL … }` block followed by the outer OPTIONAL MATCH
   enrichment and `RETURN s, r, d`.

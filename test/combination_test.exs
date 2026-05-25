@@ -84,29 +84,78 @@ defmodule AshNeo4j.CombinationTest do
     end
   end
 
-  describe "deferred — INTERSECT and EXCEPT" do
-    test "intersect returns an error pending in-memory implementation" do
-      _alice = Author |> Ash.create!(%{name: "Alice"})
+  describe "in-memory orchestration — INTERSECT, EXCEPT, mixed" do
+    test ":base + :intersect returns the intersection" do
+      alice = Author |> Ash.create!(%{name: "Alice"})
+      bob = Author |> Ash.create!(%{name: "Bob"})
 
-      assert {:error, _} =
-               Author
-               |> Ash.Query.combination_of([
-                 Ash.Query.Combination.base(filter: expr(name == "Alice")),
-                 Ash.Query.Combination.intersect(filter: expr(contains(name, "Ali")))
-               ])
-               |> Ash.read()
+      {:ok, results} =
+        Author
+        |> Ash.Query.combination_of([
+          Ash.Query.Combination.base(filter: expr(name == "Alice" or name == "Bob")),
+          Ash.Query.Combination.intersect(filter: expr(name == "Alice"))
+        ])
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert alice.id in ids
+      refute bob.id in ids
+      assert length(results) == 1
     end
 
-    test "except returns an error pending in-memory implementation" do
+    test ":base + :except returns the set difference" do
+      alice = Author |> Ash.create!(%{name: "Alice"})
+      bob = Author |> Ash.create!(%{name: "Bob"})
+
+      {:ok, results} =
+        Author
+        |> Ash.Query.combination_of([
+          Ash.Query.Combination.base(filter: expr(name == "Alice" or name == "Bob")),
+          Ash.Query.Combination.except(filter: expr(name == "Alice"))
+        ])
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      refute alice.id in ids
+      assert bob.id in ids
+      assert length(results) == 1
+    end
+
+    test ":except where the negative branch removes everything returns empty" do
       _alice = Author |> Ash.create!(%{name: "Alice"})
 
-      assert {:error, _} =
-               Author
-               |> Ash.Query.combination_of([
-                 Ash.Query.Combination.base(filter: expr(name == "Alice")),
-                 Ash.Query.Combination.except(filter: expr(contains(name, "Ali")))
-               ])
-               |> Ash.read()
+      {:ok, results} =
+        Author
+        |> Ash.Query.combination_of([
+          Ash.Query.Combination.base(filter: expr(name == "Alice")),
+          Ash.Query.Combination.except(filter: expr(contains(name, "A")))
+        ])
+        |> Ash.read()
+
+      assert results == []
+    end
+
+    test "mixed types are applied in order — :base + :union + :except" do
+      alice = Author |> Ash.create!(%{name: "Alice"})
+      bob = Author |> Ash.create!(%{name: "Bob"})
+      _charlie = Author |> Ash.create!(%{name: "Charlie"})
+
+      # base: Alice
+      # union: Bob → Alice + Bob
+      # except: Alice → Bob
+      {:ok, results} =
+        Author
+        |> Ash.Query.combination_of([
+          Ash.Query.Combination.base(filter: expr(name == "Alice")),
+          Ash.Query.Combination.union(filter: expr(name == "Bob")),
+          Ash.Query.Combination.except(filter: expr(name == "Alice"))
+        ])
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      refute alice.id in ids
+      assert bob.id in ids
+      assert length(results) == 1
     end
   end
 end
