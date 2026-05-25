@@ -145,6 +145,26 @@ Place
 
 WGS-84 2D only in this release. Box's on-disk storage uses a 4-Point vertex array plus 4 scalar Point bbox-corner companion properties — the storage is **indexable, not yet indexed** (operators create POINT indexes themselves). Full details, holiness composition for SQ exclusions, and the limitation list in `usage-rules/spatial.md`.
 
+## Combination queries
+
+AshNeo4j supports all five [Ash combination query types](https://hexdocs.pm/ash/combination-queries.html) — `:base`, `:union`, `:union_all`, `:intersect`, `:except`. Combinations of `:union` / `:union_all` push down to a single Cypher `CALL { … UNION/UNION ALL … }` block; combinations involving `:intersect` / `:except` (or mixed union types) are computed in Elixir over `MapSet`s of node ids, then the keep-set is fetched in one final query.
+
+```elixir
+require Ash.Query
+require Ash.Expr
+import Ash.Expr
+
+# Set difference at a common resource — e.g. "customers in some CSA but not in any NSA"
+Customer
+|> Ash.Query.combination_of([
+  Ash.Query.Combination.base(filter: expr(in_csa)),
+  Ash.Query.Combination.except(filter: expr(in_nsa))
+])
+|> Ash.read!()
+```
+
+Note: `union` and `union_all` look identical at the Ash record level (records dedup by primary key in `consolidate_groups/1`); the Cypher-level duplicate-preservation is only observable when querying Cypher directly. Full details, polymorphic-resource pattern for cross-subtype combinations, and execution-path notes in `usage-rules/combination-queries.md`.
+
 ## Naming conventions
 
 AshNeo4j enforces Neo4j conventions at compile time:

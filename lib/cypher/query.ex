@@ -83,6 +83,21 @@ defmodule AshNeo4j.Cypher.Skip do
   defstruct [:value]
 end
 
+defmodule AshNeo4j.Cypher.Call do
+  @moduledoc """
+  `CALL { … }` block joining pre-rendered branch cyphers with `UNION` or
+  `UNION ALL`. Used for native combination-query pushdown (`:union`,
+  `:union_all`).
+
+  Branches are stored as already-rendered Cypher strings — the caller is
+  responsible for merging branch params into the outer `Cypher.Query.params`
+  map before this clause is rendered.
+  """
+  @type union_type :: :union | :union_all
+  @type t :: %__MODULE__{branches: [String.t()], union_type: union_type()}
+  defstruct branches: [], union_type: :union_all
+end
+
 defmodule AshNeo4j.Cypher.Limit do
   @moduledoc "LIMIT clause."
   @type t :: %__MODULE__{value: pos_integer()}
@@ -119,7 +134,8 @@ defmodule AshNeo4j.Cypher.Query do
     Return,
     OrderBy,
     Skip,
-    Limit
+    Limit,
+    Call
   }
 
   @type clause ::
@@ -137,6 +153,7 @@ defmodule AshNeo4j.Cypher.Query do
           | OrderBy.t()
           | Skip.t()
           | Limit.t()
+          | Call.t()
 
   @type t :: %__MODULE__{clauses: [clause()], params: map()}
 
@@ -171,11 +188,12 @@ defmodule AshNeo4j.Cypher.Query do
 
   Returns `node_read/1` when `conditions` is empty.
   """
-  @spec node_read_filtered(atom() | [atom()], [condition()]) :: t()
-  def node_read_filtered(label, []), do: node_read(label)
+  @spec node_read_filtered(atom() | [atom()], [condition()], keyword()) :: t()
+  def node_read_filtered(label, conditions, opts \\ [])
+  def node_read_filtered(label, [], _opts), do: node_read(label)
 
-  def node_read_filtered(label, conditions) when is_list(conditions) do
-    {where_string, params} = build_conditions(:s, conditions)
+  def node_read_filtered(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
 
     %__MODULE__{
       clauses: [
@@ -185,6 +203,160 @@ defmodule AshNeo4j.Cypher.Query do
         %Return{items: ["s", "r", "d"]}
       ],
       params: params
+    }
+  end
+
+  @doc """
+  `MATCH (s:L1:L2) [WHERE <conditions>] RETURN s` — a single combination-query
+  branch, sized to fit inside a `CALL { … }` block.
+
+  No OPTIONAL MATCH (the outer combination query owns enrichment) and only
+  the `s` column is returned (Cypher's `UNION`/`UNION ALL` requires identical
+  column shapes across branches).
+
+  Supports `param_prefix:` per branch — pass distinct prefixes for distinct
+  branches so their param keys (`b0_s_name_0` vs `b1_s_name_0`) don't collide
+  when merged.
+
+  ## Examples
+  ```
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read(:Place)
+  iex> {cypher, _} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) RETURN s"
+
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> {cypher, params} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s"
+  iex> params
+  %{"b0_s_name_0" => "Sydney"}
+  ```
+  """
+  @spec branch_node_read(atom() | [atom()], [condition()], keyword()) :: t()
+  def branch_node_read(label, conditions \\ [], opts \\ [])
+
+  def branch_node_read(label, [], _opts) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Return{items: ["s"]}
+      ]
+    }
+  end
+
+  def branch_node_read(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: [where_string]},
+        %Return{items: ["s"]}
+      ],
+      params: params
+    }
+  end
+
+  @doc """
+  Same as `branch_node_read/3` but returns just the Neo4j internal id of `s`
+  (as `sid`) instead of the node itself. Used to cheaply materialise the id
+  set per branch in the in-memory orchestration path for INTERSECT / EXCEPT
+  combination queries.
+
+  ## Examples
+  ```
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read_ids(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> {cypher, _} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN id(s) AS sid"
+  ```
+  """
+  @spec branch_node_read_ids(atom() | [atom()], [condition()], keyword()) :: t()
+  def branch_node_read_ids(label, conditions \\ [], opts \\ [])
+
+  def branch_node_read_ids(label, [], _opts) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Return{items: ["id(s) AS sid"]}
+      ]
+    }
+  end
+
+  def branch_node_read_ids(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: [where_string]},
+        %Return{items: ["id(s) AS sid"]}
+      ],
+      params: params
+    }
+  end
+
+  @doc """
+  `MATCH (s:L1:L2) WHERE id(s) IN $ids OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d`.
+
+  Used as the final read after in-memory combination orchestration computes
+  the keep-set of node ids.
+  """
+  @spec node_read_by_ids(atom() | [atom()], [integer()]) :: t()
+  def node_read_by_ids(label, ids) when is_list(ids) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: ["id(s) IN $ids"]},
+        %OptionalMatch{pattern: "(s)-[r]-(d)"},
+        %Return{items: ["s", "r", "d"]}
+      ],
+      params: %{"ids" => ids}
+    }
+  end
+
+  @doc """
+  Wraps a list of branch queries (built via `branch_node_read/3`) in a
+  `CALL { … UNION/UNION ALL … }` block followed by the outer OPTIONAL MATCH
+  enrichment and `RETURN s, r, d`.
+
+  Branch params are merged into the outer query's params map. Branches are
+  rendered to Cypher strings before being placed in the `Call` clause.
+
+  Opts:
+    * `:union_type` — `:union` or `:union_all` (default `:union_all`)
+
+  ## Examples
+  ```
+  iex> b0 = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> b1 = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Melbourne", false}], param_prefix: "b1_")
+  iex> q = AshNeo4j.Cypher.Query.combination_block([b0, b1])
+  iex> {cypher, params} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "CALL { MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.name = $b1_s_name_0 RETURN s } WITH s OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+  iex> params
+  %{"b0_s_name_0" => "Sydney", "b1_s_name_0" => "Melbourne"}
+  ```
+  """
+  @spec combination_block([t()], keyword()) :: t()
+  def combination_block(branches, opts \\ []) when is_list(branches) do
+    union_type = Keyword.get(opts, :union_type, :union_all)
+
+    {rendered_branches, merged_params} =
+      Enum.reduce(branches, {[], %{}}, fn branch, {acc_cyphers, acc_params} ->
+        {cypher, branch_params} = Cypher.render(branch)
+        {[cypher | acc_cyphers], Map.merge(acc_params, branch_params)}
+      end)
+
+    %__MODULE__{
+      clauses: [
+        %Call{branches: Enum.reverse(rendered_branches), union_type: union_type},
+        %With{items: ["s"]},
+        %OptionalMatch{pattern: "(s)-[r]-(d)"},
+        %Return{items: ["s", "r", "d"]}
+      ],
+      params: merged_params
     }
   end
 
@@ -628,7 +800,9 @@ defmodule AshNeo4j.Cypher.Query do
     {[%Where{conditions: Enum.reverse(cond_strings)}], params}
   end
 
-  defp build_conditions(variable, conditions) do
+  defp build_conditions(variable, conditions, opts) do
+    param_prefix = Keyword.get(opts, :param_prefix, "")
+
     conditions
     |> Enum.with_index()
     |> Enum.reduce({"", %{}}, fn {{prop, op, val, ci?}, index}, {acc_str, acc_params} ->
@@ -639,30 +813,30 @@ defmodule AshNeo4j.Cypher.Query do
 
           op == :st_contains_box ->
             %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
-            sw_key = "#{variable}_#{prop}_#{index}_sw"
-            ne_key = "#{variable}_#{prop}_#{index}_ne"
+            sw_key = "#{param_prefix}#{variable}_#{prop}_#{index}_sw"
+            ne_key = "#{param_prefix}#{variable}_#{prop}_#{index}_ne"
             expr = Cypher.expression(variable, prop, "within_bbox_box", {"$#{sw_key}", "$#{ne_key}"})
             params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
             {expr, params}
 
           op == :st_distance ->
             {comp_op_atom, test_point, threshold} = val
-            test_key = "#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{variable}_#{prop}_#{index}_t"
+            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_t"
             expr = Cypher.expression(variable, prop, "st_distance", {convert_operator(comp_op_atom), "$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           op == :st_dwithin ->
             {test_point, threshold} = val
-            test_key = "#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{variable}_#{prop}_#{index}_d"
+            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_d"
             expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           true ->
-            param_key = "#{variable}_#{prop}_#{index}"
+            param_key = "#{param_prefix}#{variable}_#{prop}_#{index}"
             expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
             {expr, Map.put(acc_params, param_key, val)}
         end

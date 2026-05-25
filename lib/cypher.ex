@@ -27,7 +27,8 @@ defmodule AshNeo4j.Cypher do
     Return,
     OrderBy,
     Skip,
-    Limit
+    Limit,
+    Call
   }
 
   @spec remove_properties(atom(), maybe_improper_list()) :: binary()
@@ -274,6 +275,24 @@ defmodule AshNeo4j.Cypher do
   ...> }
   iex> AshNeo4j.Cypher.render(query)
   {"MATCH (s:Actor) RETURN s LIMIT 5", %{}}
+
+  iex> query = %AshNeo4j.Cypher.Query{
+  ...>   clauses: [
+  ...>     %AshNeo4j.Cypher.Call{
+  ...>       branches: [
+  ...>         "MATCH (s:Place) WHERE s.uuid = $b0_s_uuid_0 RETURN s",
+  ...>         "MATCH (s:Place) WHERE s.uuid = $b1_s_uuid_0 RETURN s"
+  ...>       ],
+  ...>       union_type: :union_all
+  ...>     },
+  ...>     %AshNeo4j.Cypher.OptionalMatch{pattern: "(s)-[r]-(d)"},
+  ...>     %AshNeo4j.Cypher.Return{items: ["s", "r", "d"]}
+  ...>   ],
+  ...>   params: %{"b0_s_uuid_0" => "x", "b1_s_uuid_0" => "y"}
+  ...> }
+  iex> {cypher, _params} = AshNeo4j.Cypher.render(query)
+  iex> cypher
+  "CALL { MATCH (s:Place) WHERE s.uuid = $b0_s_uuid_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.uuid = $b1_s_uuid_0 RETURN s } OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
   ```
   """
   def render(%Query{clauses: clauses, params: params}) do
@@ -293,6 +312,16 @@ defmodule AshNeo4j.Cypher do
   defp render_clause(%Return{items: items}), do: "RETURN #{Enum.join(items, ", ")}"
   defp render_clause(%Skip{value: n}), do: "SKIP #{n}"
   defp render_clause(%Limit{value: n}), do: "LIMIT #{n}"
+
+  defp render_clause(%Call{branches: branches, union_type: union_type}) do
+    joiner =
+      case union_type do
+        :union -> " UNION "
+        :union_all -> " UNION ALL "
+      end
+
+    "CALL { #{Enum.join(branches, joiner)} }"
+  end
 
   defp render_clause(%OrderBy{terms: terms}) do
     "ORDER BY " <>

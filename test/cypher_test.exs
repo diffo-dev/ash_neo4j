@@ -118,6 +118,103 @@ defmodule AshNeo4j.CypherTest do
     end
   end
 
+  describe "in-memory combination building blocks — branch_node_read_ids and node_read_by_ids" do
+    setup do
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
+      perth = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+      {:ok, sydney: sydney, melbourne: melbourne, perth: perth}
+    end
+
+    test "branch_node_read_ids returns id(s) AS sid for matching nodes", %{sydney: sydney} do
+      query = AshNeo4j.Cypher.Query.branch_node_read_ids([:SRM, :Place], [{"name", :==, "Sydney CBD", false}], param_prefix: "b0_")
+      {cypher, params} = AshNeo4j.Cypher.render(query)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      sids = Enum.map(response.results, &Map.get(&1, "sid"))
+      assert length(sids) == 1
+      assert is_integer(hd(sids))
+
+      # Verify the sid is the id of the sydney node via a follow-up read.
+      sid = hd(sids)
+      {:ok, follow} = Sandbox.run("MATCH (n) WHERE id(n) = $sid RETURN n.uuid AS uuid", %{"sid" => sid})
+      assert hd(follow.results)["uuid"] == sydney.id
+    end
+
+    test "node_read_by_ids fetches multiple nodes by id with OPTIONAL MATCH enrichment", %{sydney: sydney, melbourne: melbourne} do
+      # First collect the ids for sydney and melbourne via separate branch reads.
+      b0 = AshNeo4j.Cypher.Query.branch_node_read_ids([:SRM, :Place], [{"name", :==, "Sydney CBD", false}], param_prefix: "b0_")
+      b1 = AshNeo4j.Cypher.Query.branch_node_read_ids([:SRM, :Place], [{"name", :==, "Melbourne CBD", false}], param_prefix: "b1_")
+
+      {c0, p0} = AshNeo4j.Cypher.render(b0)
+      {c1, p1} = AshNeo4j.Cypher.render(b1)
+      {:ok, r0} = Sandbox.run(c0, p0)
+      {:ok, r1} = Sandbox.run(c1, p1)
+      ids = Enum.map(r0.results ++ r1.results, &Map.get(&1, "sid"))
+
+      # Now fetch via node_read_by_ids.
+      final = AshNeo4j.Cypher.Query.node_read_by_ids([:SRM, :Place], ids)
+      {cypher, params} = AshNeo4j.Cypher.render(final)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      uuids = Enum.map(response.results, &Map.get(&1["s"].properties, "uuid"))
+      assert sydney.id in uuids
+      assert melbourne.id in uuids
+      assert length(response.results) == 2
+    end
+
+    test "node_read_by_ids with empty id list returns no results", %{sydney: _sydney} do
+      final = AshNeo4j.Cypher.Query.node_read_by_ids([:SRM, :Place], [])
+      {cypher, params} = AshNeo4j.Cypher.render(final)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      assert response.results == []
+    end
+  end
+
+  describe "combination_block — CALL { … UNION/UNION ALL … } end-to-end" do
+    setup do
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
+      perth = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+      {:ok, sydney: sydney, melbourne: melbourne, perth: perth}
+    end
+
+    test "UNION ALL of two non-overlapping branches returns both", %{sydney: sydney, melbourne: melbourne} do
+      b0 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :==, "Sydney CBD", false}], param_prefix: "b0_")
+      b1 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :==, "Melbourne CBD", false}], param_prefix: "b1_")
+      query = AshNeo4j.Cypher.Query.combination_block([b0, b1])
+      {cypher, params} = AshNeo4j.Cypher.render(query)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      uuids = Enum.map(response.results, &Map.get(&1["s"].properties, "uuid"))
+      assert sydney.id in uuids
+      assert melbourne.id in uuids
+    end
+
+    test "UNION ALL of overlapping branches keeps duplicates", %{sydney: sydney} do
+      b0 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :==, "Sydney CBD", false}], param_prefix: "b0_")
+      b1 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :contains, "Sydney", false}], param_prefix: "b1_")
+      query = AshNeo4j.Cypher.Query.combination_block([b0, b1], union_type: :union_all)
+      {cypher, params} = AshNeo4j.Cypher.render(query)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      uuids = Enum.map(response.results, &Map.get(&1["s"].properties, "uuid"))
+      assert Enum.count(uuids, &(&1 == sydney.id)) == 2
+    end
+
+    test "UNION (default-deduplicated) of overlapping branches keeps unique rows", %{sydney: sydney} do
+      b0 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :==, "Sydney CBD", false}], param_prefix: "b0_")
+      b1 = AshNeo4j.Cypher.Query.branch_node_read([:SRM, :Place], [{"name", :contains, "Sydney", false}], param_prefix: "b1_")
+      query = AshNeo4j.Cypher.Query.combination_block([b0, b1], union_type: :union)
+      {cypher, params} = AshNeo4j.Cypher.render(query)
+      {:ok, response} = Sandbox.run(cypher, params)
+
+      uuids = Enum.map(response.results, &Map.get(&1["s"].properties, "uuid"))
+      assert Enum.count(uuids, &(&1 == sydney.id)) == 1
+    end
+  end
+
   describe "dwithin" do
     setup do
       sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
