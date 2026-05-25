@@ -207,6 +207,101 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
+  `MATCH (s:L1:L2) [WHERE <conditions>] RETURN s` — a single combination-query
+  branch, sized to fit inside a `CALL { … }` block.
+
+  No OPTIONAL MATCH (the outer combination query owns enrichment) and only
+  the `s` column is returned (Cypher's `UNION`/`UNION ALL` requires identical
+  column shapes across branches).
+
+  Supports `param_prefix:` per branch — pass distinct prefixes for distinct
+  branches so their param keys (`b0_s_name_0` vs `b1_s_name_0`) don't collide
+  when merged.
+
+  ## Examples
+  ```
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read(:Place)
+  iex> {cypher, _} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) RETURN s"
+
+  iex> q = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> {cypher, params} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s"
+  iex> params
+  %{"b0_s_name_0" => "Sydney"}
+  ```
+  """
+  @spec branch_node_read(atom() | [atom()], [condition()], keyword()) :: t()
+  def branch_node_read(label, conditions \\ [], opts \\ [])
+
+  def branch_node_read(label, [], _opts) do
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Return{items: ["s"]}
+      ]
+    }
+  end
+
+  def branch_node_read(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(label))},
+        %Where{conditions: [where_string]},
+        %Return{items: ["s"]}
+      ],
+      params: params
+    }
+  end
+
+  @doc """
+  Wraps a list of branch queries (built via `branch_node_read/3`) in a
+  `CALL { … UNION/UNION ALL … }` block followed by the outer OPTIONAL MATCH
+  enrichment and `RETURN s, r, d`.
+
+  Branch params are merged into the outer query's params map. Branches are
+  rendered to Cypher strings before being placed in the `Call` clause.
+
+  Opts:
+    * `:union_type` — `:union` or `:union_all` (default `:union_all`)
+
+  ## Examples
+  ```
+  iex> b0 = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Sydney", false}], param_prefix: "b0_")
+  iex> b1 = AshNeo4j.Cypher.Query.branch_node_read(:Place, [{"name", :==, "Melbourne", false}], param_prefix: "b1_")
+  iex> q = AshNeo4j.Cypher.Query.combination_block([b0, b1])
+  iex> {cypher, params} = AshNeo4j.Cypher.render(q)
+  iex> cypher
+  "CALL { MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.name = $b1_s_name_0 RETURN s } OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+  iex> params
+  %{"b0_s_name_0" => "Sydney", "b1_s_name_0" => "Melbourne"}
+  ```
+  """
+  @spec combination_block([t()], keyword()) :: t()
+  def combination_block(branches, opts \\ []) when is_list(branches) do
+    union_type = Keyword.get(opts, :union_type, :union_all)
+
+    {rendered_branches, merged_params} =
+      Enum.reduce(branches, {[], %{}}, fn branch, {acc_cyphers, acc_params} ->
+        {cypher, branch_params} = Cypher.render(branch)
+        {[cypher | acc_cyphers], Map.merge(acc_params, branch_params)}
+      end)
+
+    %__MODULE__{
+      clauses: [
+        %Call{branches: Enum.reverse(rendered_branches), union_type: union_type},
+        %OptionalMatch{pattern: "(s)-[r]-(d)"},
+        %Return{items: ["s", "r", "d"]}
+      ],
+      params: merged_params
+    }
+  end
+
+  @doc """
   `MATCH (s:SrcLabels)-[r:EdgeLabel]-(d:DestLabel) WHERE d.prop <op> $param WITH s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
   """
   @spec relationship_read(atom() | [atom()], atom(), atom(), atom(), String.t(), atom(), any()) :: t()
@@ -646,7 +741,7 @@ defmodule AshNeo4j.Cypher.Query do
     {[%Where{conditions: Enum.reverse(cond_strings)}], params}
   end
 
-  defp build_conditions(variable, conditions, opts \\ []) do
+  defp build_conditions(variable, conditions, opts) do
     param_prefix = Keyword.get(opts, :param_prefix, "")
 
     conditions
