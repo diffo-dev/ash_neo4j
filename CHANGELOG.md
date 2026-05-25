@@ -11,7 +11,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
-## [Unreleased]
+## [v0.7.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.6.0...v0.7.0) (2026-05-25)
 
 ### Features
 
