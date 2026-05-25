@@ -83,6 +83,21 @@ defmodule AshNeo4j.Cypher.Skip do
   defstruct [:value]
 end
 
+defmodule AshNeo4j.Cypher.Call do
+  @moduledoc """
+  `CALL { … }` block joining pre-rendered branch cyphers with `UNION` or
+  `UNION ALL`. Used for native combination-query pushdown (`:union`,
+  `:union_all`).
+
+  Branches are stored as already-rendered Cypher strings — the caller is
+  responsible for merging branch params into the outer `Cypher.Query.params`
+  map before this clause is rendered.
+  """
+  @type union_type :: :union | :union_all
+  @type t :: %__MODULE__{branches: [String.t()], union_type: union_type()}
+  defstruct branches: [], union_type: :union_all
+end
+
 defmodule AshNeo4j.Cypher.Limit do
   @moduledoc "LIMIT clause."
   @type t :: %__MODULE__{value: pos_integer()}
@@ -119,7 +134,8 @@ defmodule AshNeo4j.Cypher.Query do
     Return,
     OrderBy,
     Skip,
-    Limit
+    Limit,
+    Call
   }
 
   @type clause ::
@@ -137,6 +153,7 @@ defmodule AshNeo4j.Cypher.Query do
           | OrderBy.t()
           | Skip.t()
           | Limit.t()
+          | Call.t()
 
   @type t :: %__MODULE__{clauses: [clause()], params: map()}
 
@@ -171,11 +188,12 @@ defmodule AshNeo4j.Cypher.Query do
 
   Returns `node_read/1` when `conditions` is empty.
   """
-  @spec node_read_filtered(atom() | [atom()], [condition()]) :: t()
-  def node_read_filtered(label, []), do: node_read(label)
+  @spec node_read_filtered(atom() | [atom()], [condition()], keyword()) :: t()
+  def node_read_filtered(label, conditions, opts \\ [])
+  def node_read_filtered(label, [], _opts), do: node_read(label)
 
-  def node_read_filtered(label, conditions) when is_list(conditions) do
-    {where_string, params} = build_conditions(:s, conditions)
+  def node_read_filtered(label, conditions, opts) when is_list(conditions) do
+    {where_string, params} = build_conditions(:s, conditions, opts)
 
     %__MODULE__{
       clauses: [
@@ -628,7 +646,9 @@ defmodule AshNeo4j.Cypher.Query do
     {[%Where{conditions: Enum.reverse(cond_strings)}], params}
   end
 
-  defp build_conditions(variable, conditions) do
+  defp build_conditions(variable, conditions, opts \\ []) do
+    param_prefix = Keyword.get(opts, :param_prefix, "")
+
     conditions
     |> Enum.with_index()
     |> Enum.reduce({"", %{}}, fn {{prop, op, val, ci?}, index}, {acc_str, acc_params} ->
@@ -639,30 +659,30 @@ defmodule AshNeo4j.Cypher.Query do
 
           op == :st_contains_box ->
             %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
-            sw_key = "#{variable}_#{prop}_#{index}_sw"
-            ne_key = "#{variable}_#{prop}_#{index}_ne"
+            sw_key = "#{param_prefix}#{variable}_#{prop}_#{index}_sw"
+            ne_key = "#{param_prefix}#{variable}_#{prop}_#{index}_ne"
             expr = Cypher.expression(variable, prop, "within_bbox_box", {"$#{sw_key}", "$#{ne_key}"})
             params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
             {expr, params}
 
           op == :st_distance ->
             {comp_op_atom, test_point, threshold} = val
-            test_key = "#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{variable}_#{prop}_#{index}_t"
+            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_t"
             expr = Cypher.expression(variable, prop, "st_distance", {convert_operator(comp_op_atom), "$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           op == :st_dwithin ->
             {test_point, threshold} = val
-            test_key = "#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{variable}_#{prop}_#{index}_d"
+            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_d"
             expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           true ->
-            param_key = "#{variable}_#{prop}_#{index}"
+            param_key = "#{param_prefix}#{variable}_#{prop}_#{index}"
             expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
             {expr, Map.put(acc_params, param_key, val)}
         end
