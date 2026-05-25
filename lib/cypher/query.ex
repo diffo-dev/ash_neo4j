@@ -276,7 +276,7 @@ defmodule AshNeo4j.Cypher.Query do
   iex> q = AshNeo4j.Cypher.Query.combination_block([b0, b1])
   iex> {cypher, params} = AshNeo4j.Cypher.render(q)
   iex> cypher
-  "CALL { MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.name = $b1_s_name_0 RETURN s } OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+  "CALL { MATCH (s:Place) WHERE s.name = $b0_s_name_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.name = $b1_s_name_0 RETURN s } WITH s OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
   iex> params
   %{"b0_s_name_0" => "Sydney", "b1_s_name_0" => "Melbourne"}
   ```
@@ -294,6 +294,7 @@ defmodule AshNeo4j.Cypher.Query do
     %__MODULE__{
       clauses: [
         %Call{branches: Enum.reverse(rendered_branches), union_type: union_type},
+        %With{items: ["s"]},
         %OptionalMatch{pattern: "(s)-[r]-(d)"},
         %Return{items: ["s", "r", "d"]}
       ],
