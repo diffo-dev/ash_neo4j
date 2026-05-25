@@ -24,6 +24,7 @@ defmodule AshNeo4j.DocTest do
     doctest BoltyHelper
     doctest Neo4jHelper
     doctest Cypher
+    doctest Cypher.Query
     doctest Util
   end
 end

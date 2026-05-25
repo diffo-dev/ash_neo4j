@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.6.0"
+  @version "0.7.0"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -33,8 +33,19 @@ defmodule AshNeo4j.MixProject do
       name: @name,
       source_url: @github_url,
       homepage_url: "https://diffo.dev/diffo/ash_neo4j",
-      description: @description
+      description: @description,
+      usage_rules: usage_rules()
     ]
+  end
+
+  defp usage_rules do
+    [
+    skills: [
+      location: ".claude/skills",
+      # Pull in pre-built skills shipped directly by packages
+      package_skills: [:bolty, ~r/^bolty/]
+    ]
+  ]
   end
 
   def cli do
@@ -126,7 +137,7 @@ defmodule AshNeo4j.MixProject do
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:spark, ">= 2.7.0"},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, bolty_version(">= 0.0.12")},
+      {:bolty, bolty_version(">= 0.0.13")},
       {:jason, "~> 1.4"},
       {:igniter, ">= 0.6.29 and < 1.0.0-0", [env: :prod, hex: "igniter", repo: "hexpm", optional: true]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},

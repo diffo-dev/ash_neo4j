@@ -28,6 +28,31 @@ Before writing any fix, review existing test coverage for the affected behaviour
 has no test, write the failing test first — this confirms the reproduction and guards the fix
 against regression. Only then implement the fix and verify the test passes.
 
+## Designing intricate changes — the spelunking pattern
+
+For any change that touches more than one layer (driver / Cypher / data layer / Ash), don't
+work top-down or bottom-up alone — work from both ends and meet in the middle (stalagmite +
+stalactite). Both ends carry unknowns that compound when you discover them late.
+
+**Bottom (stalagmite) — start with a focused test against the lowest layer that doesn't
+involve Ash.** A raw `Bolty.query!` or `AshNeo4j.Sandbox.run` against the driver. This isolates
+driver-level surprises (bolty has a history of type / negotiation issues — see [bolty#32](https://github.com/diffo-dev/bolty/issues/32))
+before they ripple up through Cast/Dump and the data layer. Cypher-rendering helpers are also
+worth bottom testing — assemble the cypher fragment by hand and `Sandbox.run` it.
+
+**Top (stalactite) — write an exploratory Ash-level test with `IO.inspect` in your data
+layer callback.** Surfaces Ash-shape assumptions you have wrong (e.g. the `combination_of`
+callback being checked against `{:combine, :base}` was a top-down surprise; the actual
+`Ash.Query.Combination.t()` types are five, not the three the @type spec suggested). Throw the
+test away once it has taught you the shape.
+
+**Meet in the middle.** Once both ends are settled, the connecting commit is small and
+focused — write the bridge code, run the existing end tests plus a new end-to-end one through
+Ash.
+
+This pattern saved real time on #45 (spatial) and #10 (combination queries). Use it whenever
+the change spans more than one layer.
+
 ## Project structure
 
 ```

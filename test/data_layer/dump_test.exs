@@ -60,6 +60,10 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
 
+    test "point" do
+      value_unchanged(AshNeo4j.Type.Point, Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688))
+    end
+
     test "utc date time" do
       value_unchanged(Ash.Type.UtcDatetime, ~U[2025-05-11 07:45:41Z], precision: :second)
     end
@@ -72,6 +76,14 @@ defmodule AshNeo4j.DataLayer.DumpTest do
   describe "dump ash types" do
     test "atom" do
       value_changed(Ash.Type.Atom, :a, "a")
+    end
+
+    test "box" do
+      sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
+      se = Bolty.Types.Point.create(:wgs_84, 151.5, -34.0)
+      ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
+      nw = Bolty.Types.Point.create(:wgs_84, 151.0, -33.5)
+      value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, se, ne, nw])
     end
 
     test "ci string" do
@@ -228,7 +240,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       raises(Ash.Type.Atom, "invalid atom")
     end
 
-    @tag :function
     test "invalid function - not MFA" do
       a = fn a, b -> a + b end
       raises(Ash.Type.Function, a)

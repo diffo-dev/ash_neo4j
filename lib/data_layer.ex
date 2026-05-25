@@ -51,6 +51,22 @@ defmodule AshNeo4j.DataLayer do
   # contains — handled in predicates/2 via the %{name: :contains} branch
   def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: true
 
+  # spatial — st_contains(box, point) → point.withinBBox pushdown
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StContains{}}), do: true
+
+  # spatial — st_distance(point, point) → point.distance pushdown (in comparisons)
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistance{}}), do: true
+
+  # spatial — st_dwithin(point, point, ^km) → point.distance <= ^km pushdown
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StDwithin{}}), do: true
+
+  # spatial parity (in-memory eval) — st_within, st_intersects
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StWithin{}}), do: true
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StIntersects{}}), do: true
+
+  # spatial — st_distance_in_meters: alias for st_distance, same pushdown
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistanceInMeters{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -61,7 +77,27 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:query_aggregate, kind}) when kind in [:count, :exists, :sum, :avg, :min, :max, :list, :first], do: true
   def can?(_, {:aggregate_relationship, _}), do: true
+  # combination queries (#10)
+  def can?(_, :combine), do: true
+  def can?(_, {:combine, :base}), do: true
+  def can?(_, {:combine, :union}), do: true
+  def can?(_, {:combine, :union_all}), do: true
+  def can?(_, {:combine, :intersect}), do: true
+  def can?(_, {:combine, :except}), do: true
+
   def can?(_, _), do: false
+
+  @impl true
+  def functions(_resource) do
+    [
+      AshNeo4j.Functions.StContains,
+      AshNeo4j.Functions.StDistance,
+      AshNeo4j.Functions.StDistanceInMeters,
+      AshNeo4j.Functions.StDwithin,
+      AshNeo4j.Functions.StIntersects,
+      AshNeo4j.Functions.StWithin
+    ]
+  end
 
   @neo4j %Spark.Dsl.Section{
     name: :neo4j,
@@ -149,7 +185,17 @@ defmodule AshNeo4j.DataLayer do
 
   defmodule Query do
     @moduledoc false
-    defstruct [:resource, :sort, :filter, :limit, :offset, :domain, aggregates: %{}, calculations: %{}]
+    defstruct [
+      :resource,
+      :sort,
+      :filter,
+      :limit,
+      :offset,
+      :domain,
+      aggregates: %{},
+      calculations: %{},
+      combination_of: []
+    ]
   end
 
   @impl true
@@ -563,6 +609,11 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def resource_to_query(resource, domain) do
     %Query{resource: resource, domain: domain}
+  end
+
+  @impl true
+  def combination_of(combinations, resource, domain) do
+    {:ok, %Query{resource: resource, domain: domain, combination_of: combinations}}
   end
 
   @impl true
@@ -1002,7 +1053,20 @@ defmodule AshNeo4j.DataLayer do
         attribute_type =
           Ash.Type.get_type!(attribute.type)
 
-        Map.put(acc, translated_key, Dump.dump(attribute_type, value, attribute.constraints))
+        dumped = Dump.dump(attribute_type, value, attribute.constraints)
+        acc = Map.put(acc, translated_key, dumped)
+
+        # Types that expose `companions/1` (e.g. Box, Polygon) also write
+        # dotted scalar companion properties for indexed predicates.
+        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
+             function_exported?(attribute_type, :companions, 1) do
+          attribute_type.companions(dumped)
+          |> Enum.reduce(acc, fn {suffix, val}, inner_acc ->
+            Map.put(inner_acc, "#{translated_key}.#{suffix}", val)
+          end)
+        else
+          acc
+        end
       else
         acc
       end
