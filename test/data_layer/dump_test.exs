@@ -82,12 +82,14 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, se, ne, nw])
     end
 
-    test "point — Geo.Point is dumped to native Bolty Point at the type boundary" do
-      value_changed(
-        AshNeo4j.Type.Point,
-        %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326},
-        Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688)
-      )
+    test "geo Point — AshGeo.GeoJson dump_to_native is identity on %Geo.Point{}" do
+      # The data layer's dump_properties detects %Geo.*{} on the dumped
+      # value and routes through promote_geo/3 (which encodes JSON +
+      # adds the native Point companion); the type-level Dump.dump call
+      # is identity per AshGeo, leaving the struct unchanged for the
+      # data layer to act on.
+      pt = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
+      value_unchanged(AshGeo.GeoJson, pt, geo_types: :point)
     end
 
     test "ci string" do

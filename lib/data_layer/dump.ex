@@ -46,6 +46,13 @@ defmodule AshNeo4j.DataLayer.Dump do
         # other ash types are just dumped for Neo4j to handle
         dump_ash_type(ash_type, value, constraints)
 
+      {:ok, :geo, ash_type} ->
+        # AshGeo geometry types: dump_to_native is identity on %Geo.*{}.
+        # The data layer's dump_properties detects the Geo struct returned
+        # here and routes through promote_geo/3 — encoding RFC 7946 JSON
+        # canonical at <attr>.json + indexable companions alongside.
+        dump_ash_type(ash_type, value, constraints)
+
       {:error, reason, _} ->
         raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)}, #{reason}"
 

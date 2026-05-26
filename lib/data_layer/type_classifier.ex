@@ -27,6 +27,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
         unsupported?(type) ->
           {:error, :unsupported, type}
 
+        ash_geo_type?(type) ->
+          {:ok, :geo, type}
+
         ash_type_base64?(type) ->
           {:ok, :ash_base64, type}
 
@@ -127,6 +130,29 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
       Ash.Type.Tuple,
       Ash.Type.Union
     ] or ash_type_other_map?(type)
+  end
+
+  @doc """
+  Returns true when the given type is one of the AshGeo geometry-input
+  types (or any user-shipped subtype via `use AshGeo.GeoJson` etc).
+
+  AshGeo types are recognised explicitly so the data layer can route
+  spatial attributes through the geo dispatch path — promoting
+  `<attr>.json` (RFC 7946 GeoJSON STRING canonical) plus indexable
+  companions like `<attr>.point` or `<attr>.bbSW`/`<attr>.bbNE`
+  alongside the canonical form.
+
+  Cast and Dump are unchanged for these — the data layer hands Cast a
+  `%Geo.*{}` struct (decoding the stored JSON beforehand), and AshGeo's
+  identity `cast_stored` does the rest.
+  """
+  def ash_geo_type?(type) do
+    type in [
+      AshGeo.GeoJson,
+      AshGeo.GeoAny,
+      AshGeo.GeoWkt,
+      AshGeo.GeoWkb
+    ]
   end
 
   def neo4j_native?(type) do

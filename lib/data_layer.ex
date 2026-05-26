@@ -8,6 +8,7 @@ defmodule AshNeo4j.DataLayer do
   @behaviour Ash.DataLayer
 
   require Logger
+  require AshGeo
   alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.ResourceMapping
   alias AshNeo4j.EdgeDescriptor
@@ -676,26 +677,31 @@ defmodule AshNeo4j.DataLayer do
     records
   end
 
-  # Resolves the on-disk property key for an attribute. When the attribute's
-  # type declares a `primary_suffix/0` (e.g. Point splits across `.point` +
-  # `.json`), reads the primary value from the suffixed key. Otherwise the
-  # primary lives at the bare translated key.
-  defp primary_property_key(resource, resource_field, node_field) do
+  # Reads the on-disk property value for an attribute, handling the geo
+  # path specially: for `:geo` classified attributes the canonical lives
+  # at `<attr>.json` as an RFC 7946 GeoJSON STRING, which we decode here
+  # so Cast just sees the resulting %Geo.*{} struct and dispatches it
+  # through standard `:ash` (AshGeo's identity cast_stored).
+  defp read_attribute_property(resource, resource_field, node_field, properties) do
     base = to_string(node_field)
 
     case Ash.Resource.Info.attribute(resource, resource_field) do
       %{type: type} ->
         attribute_type = Ash.Type.get_type!(type)
 
-        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
-             function_exported?(attribute_type, :primary_suffix, 0) do
-          "#{base}.#{attribute_type.primary_suffix()}"
-        else
-          base
+        case TypeClassifier.classify(attribute_type) do
+          {:ok, :geo, _} ->
+            case Map.get(properties, "#{base}.json") do
+              nil -> nil
+              json when is_binary(json) -> AshNeo4j.GeoJson.decode!(json)
+            end
+
+          _ ->
+            Map.get(properties, base)
         end
 
       _ ->
-        base
+        Map.get(properties, base)
     end
   end
 
@@ -887,8 +893,7 @@ defmodule AshNeo4j.DataLayer do
 
     fields_result =
       Enum.reduce_while(translations, {:ok, enriched}, fn {resource_field, node_field}, {:ok, acc} ->
-        property_key = primary_property_key(resource, resource_field, node_field)
-        property_value = Map.get(node.properties, property_key)
+        property_value = read_attribute_property(resource, resource_field, node_field, node.properties)
 
         case cast_attribute(resource, resource_field, property_value) do
           {:ok, value} -> {:cont, {:ok, Map.put(acc, resource_field, value)}}
@@ -1080,35 +1085,61 @@ defmodule AshNeo4j.DataLayer do
 
         dumped = Dump.dump(attribute_type, value, attribute.constraints)
 
-        # When the type declares a primary_suffix/0 (e.g. Point splits its
-        # storage across "<attr>.point" + "<attr>.json"), write the primary
-        # value at the suffixed key instead of "<attr>" itself. Otherwise
-        # the primary lands at "<attr>" as before.
-        primary_key =
-          if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
-               function_exported?(attribute_type, :primary_suffix, 0) do
-            "#{translated_key}.#{attribute_type.primary_suffix()}"
-          else
-            translated_key
-          end
+        case TypeClassifier.classify(attribute_type) do
+          {:ok, :geo, _} ->
+            # Geo attribute: AshGeo's identity dump_to_native returned the
+            # %Geo.*{} struct unchanged. Promote it into RFC 7946 JSON
+            # canonical at <attr>.json + indexable companions (a native
+            # Neo4j Point at <attr>.point for Geo.Point, or scalar
+            # bbSW/bbNE for other geometries).
+            promote_geo(acc, translated_key, dumped)
 
-        acc = Map.put(acc, primary_key, dumped)
+          _ ->
+            # Non-geo: dumped goes at the bare translated key. Existing
+            # types that expose companions/1 also write dotted companion
+            # properties (e.g. the legacy Box's 4-corner bbox companions
+            # while Box still lives outside the geo path).
+            acc = Map.put(acc, translated_key, dumped)
 
-        # Types that expose `companions/1` (e.g. Box, Polygon) also write
-        # dotted scalar companion properties for indexed predicates.
-        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
-             function_exported?(attribute_type, :companions, 1) do
-          attribute_type.companions(dumped)
-          |> Enum.reduce(acc, fn {suffix, val}, inner_acc ->
-            Map.put(inner_acc, "#{translated_key}.#{suffix}", val)
-          end)
-        else
-          acc
+            if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
+                 function_exported?(attribute_type, :companions, 1) do
+              attribute_type.companions(dumped)
+              |> Enum.reduce(acc, fn {suffix, val}, inner_acc ->
+                Map.put(inner_acc, "#{translated_key}.#{suffix}", val)
+              end)
+            else
+              acc
+            end
         end
       else
         acc
       end
     end)
+  end
+
+  # Promotes a %Geo.*{} struct into the symmetric on-disk shape: RFC 7946
+  # GeoJSON STRING canonical at <attr>.json + an indexable companion sized
+  # to the geometry kind. Point gets a native Neo4j Point at <attr>.point
+  # (preserves point.distance / point.withinBBox server-side pushdown);
+  # any other geometry gets scalar bbSW/bbNE Points derived from the
+  # bounding box (useful for bbox-prefilter pushdown).
+  defp promote_geo(acc, translated_key, %Geo.Point{coordinates: {x, y}} = geo) do
+    acc
+    |> Map.put("#{translated_key}.json", AshNeo4j.GeoJson.encode!(geo))
+    |> Map.put("#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y))
+  end
+
+  defp promote_geo(acc, translated_key, %_{} = geo) do
+    if AshGeo.is_geo(geo.__struct__) do
+      [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+
+      acc
+      |> Map.put("#{translated_key}.json", AshNeo4j.GeoJson.encode!(geo))
+      |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
+      |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
+    else
+      Map.put(acc, translated_key, geo)
+    end
   end
 
   defp apply_aggregates_to_records(records, [], _resource), do: {:ok, records}

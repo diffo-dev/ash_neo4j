@@ -16,7 +16,9 @@ defmodule AshNeo4j.Test.Resource.Place do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
-    attribute :location, AshNeo4j.Type.Point, public?: true
+    attribute :location, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:point], force_srid: 4326]
     attribute :bounds, AshNeo4j.Type.Box, public?: true
     attribute :path, AshNeo4j.Type.LineString, public?: true
     attribute :pes, AshNeo4j.Type.MultiPoint, public?: true

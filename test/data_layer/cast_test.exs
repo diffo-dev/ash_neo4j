@@ -71,12 +71,13 @@ defmodule AshNeo4j.DataLayer.CastTest do
       value_changed(AshNeo4j.Type.Box, [sw, se, ne, nw], %AshNeo4j.Type.Box{sw: sw, ne: ne})
     end
 
-    test "point — Bolty native Point cast_stored back to Geo.Point at the type boundary" do
-      value_changed(
-        AshNeo4j.Type.Point,
-        Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688),
-        %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
-      )
+    test "geo Point — AshGeo.GeoJson cast_stored is identity on %Geo.Point{}" do
+      # The data layer decodes the JSON STRING from <attr>.json into a
+      # %Geo.Point{} before handing to Cast (see read_attribute_property/4
+      # in data_layer.ex); Cast just sees the struct and dispatches through
+      # standard `:ash` cast_ash_type, which is identity for AshGeo.
+      pt = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
+      value_unchanged(AshGeo.GeoJson, pt, geo_types: :point)
     end
 
     test "ci string" do

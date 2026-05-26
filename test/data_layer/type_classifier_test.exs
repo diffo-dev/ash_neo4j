@@ -42,7 +42,6 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
   ]
 
   @ash_types [
-    AshNeo4j.Type.Point,
     Ash.Type.Atom,
     Ash.Type.CiString,
     Ash.Type.DateTime,
@@ -52,6 +51,13 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
     Ash.Type.Module,
     Ash.Type.UtcDatetime,
     Ash.Type.UtcDatetimeUsec
+  ]
+
+  @geo_types [
+    AshGeo.GeoJson,
+    AshGeo.GeoAny,
+    AshGeo.GeoWkt,
+    AshGeo.GeoWkb
   ]
 
   @unsupported_types [
@@ -105,6 +111,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
       end)
     end
 
+    test "geo types" do
+      Enum.each(@geo_types, fn type ->
+        assert TypeClassifier.classify(type) == {:ok, :geo, type}
+      end)
+    end
+
     test "unsupported types" do
       Enum.each(@unsupported_types, fn type ->
         assert TypeClassifier.classify(type) == {:error, :unsupported, type}
@@ -142,6 +154,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifierTest do
     test "array of ash uuid types" do
       Enum.each(@ash_uuid_types, fn type ->
         assert TypeClassifier.classify({:array, type}) == {:ok, :array, {:ok, :ash_uuid, type}}
+      end)
+    end
+
+    test "array of geo types" do
+      Enum.each(@geo_types, fn type ->
+        assert TypeClassifier.classify({:array, type}) == {:ok, :array, {:ok, :geo, type}}
       end)
     end
 

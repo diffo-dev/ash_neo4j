@@ -269,14 +269,14 @@ defmodule AshNeo4j.QueryHelper do
       # references that suffixed property, not the bare attribute name.
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+        if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
           {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
         end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+        if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
           {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
         end
@@ -312,7 +312,7 @@ defmodule AshNeo4j.QueryHelper do
         end
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
-        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+        if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
           {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
         end
@@ -324,16 +324,36 @@ defmodule AshNeo4j.QueryHelper do
     |> Enum.reject(&is_nil/1)
   end
 
-  # Looks up the Ash attribute type for a Ref or atom; returns the type module
-  # (or `nil` if it can't be resolved). Used to gate spatial predicate pushdown
-  # on the attribute being the expected geometric type (Point, Box, etc.).
-  defp attribute_type(%ResourceMapping{module: module}, ref_or_atom) do
-    name =
-      case ref_or_atom do
-        %Ash.Query.Ref{} -> Ash.Query.Ref.name(ref_or_atom)
-        atom when is_atom(atom) -> atom
-        _ -> nil
+  # True when the referenced attribute is a Point-shaped Geo attribute,
+  # i.e. declared with an AshGeo type and constrained to `geo_types: :point`
+  # (or a list containing it). Spatial predicates push down to Neo4j's
+  # native `point.distance` / `point.withinBBox` only for Point attributes;
+  # other geometries get bbox-prefilter pushdown via their own companions.
+  defp point_attribute?(%ResourceMapping{module: module}, ref_or_atom) do
+    name = attribute_name(ref_or_atom)
+
+    if name do
+      case Ash.Resource.Info.attribute(module, name) do
+        %{constraints: constraints} ->
+          case Keyword.get(constraints || [], :geo_types) do
+            types when is_list(types) -> :point in types
+            :point -> true
+            _ -> false
+          end
+
+        _ ->
+          false
       end
+    else
+      false
+    end
+  end
+
+  # Looks up the Ash attribute type for a Ref or atom; returns the type
+  # module (or `nil` if it can't be resolved). Used by legacy spatial-type
+  # pushdown gating (Box) that hasn't yet migrated to the AshGeo path.
+  defp attribute_type(%ResourceMapping{module: module}, ref_or_atom) do
+    name = attribute_name(ref_or_atom)
 
     if name do
       case Ash.Resource.Info.attribute(module, name) do
@@ -342,6 +362,10 @@ defmodule AshNeo4j.QueryHelper do
       end
     end
   end
+
+  defp attribute_name(%Ash.Query.Ref{} = ref), do: Ash.Query.Ref.name(ref)
+  defp attribute_name(atom) when is_atom(atom), do: atom
+  defp attribute_name(_), do: nil
 
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do
     case ash_query.sort do

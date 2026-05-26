@@ -4,10 +4,14 @@
 
 defmodule AshNeo4j.Type.PointTest do
   @moduledoc """
-  End-to-end round-trip of AshNeo4j.Type.Point through the data layer:
+  End-to-end round-trip of a Point-typed attribute through the data layer:
   Ash.create! → Neo4j → Ash.get! preserves the %Geo.Point{} struct.
-  Verifies the symmetric split — primary stored at `<attr>.point` (native
-  Neo4j POINT) + companion at `<attr>.json` (RFC 7946 GeoJSON STRING).
+  Verifies the symmetric split — primary stored as RFC 7946 GeoJSON STRING
+  at `<attr>.json` + native Neo4j POINT companion at `<attr>.point`.
+
+  Place.location is declared as `AshGeo.GeoJson, constraints: [geo_types:
+  :point, force_srid: 4326]`. The data layer auto-promotes Geo.Point
+  values via promote_geo/3 — no AshNeo4j-side type module needed.
   """
   use ExUnit.Case, async: true
 
@@ -66,20 +70,13 @@ defmodule AshNeo4j.Type.PointTest do
     end
   end
 
-  describe "cast_input validation" do
-    test "rejects non-WGS-84 srid with a clear error" do
-      cartesian = %Geo.Point{coordinates: {10.0, 20.0}, srid: 0}
+  describe "constraint validation via AshGeo" do
+    test "rejects non-Point Geo geometry when geo_types: :point is set" do
+      line = %Geo.LineString{coordinates: [{0.0, 0.0}, {1.0, 1.0}], srid: 4326}
 
       assert {:error, _} =
                Place
-               |> Ash.Changeset.for_create(:create, %{name: "Bad CRS", location: cartesian})
-               |> Ash.create()
-    end
-
-    test "rejects non-Point input with a clear error" do
-      assert {:error, _} =
-               Place
-               |> Ash.Changeset.for_create(:create, %{name: "Bad type", location: %{lng: 1, lat: 2}})
+               |> Ash.Changeset.for_create(:create, %{name: "Wrong geometry", location: line})
                |> Ash.create()
     end
 
