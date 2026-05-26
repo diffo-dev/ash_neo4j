@@ -813,30 +813,34 @@ defmodule AshNeo4j.Cypher.Query do
 
           op == :st_contains_box ->
             %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
-            sw_key = "#{param_prefix}#{variable}_#{prop}_#{index}_sw"
-            ne_key = "#{param_prefix}#{variable}_#{prop}_#{index}_ne"
+            prop_seg = Cypher.sanitize_param(prop)
+            sw_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_sw"
+            ne_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_ne"
             expr = Cypher.expression(variable, prop, "within_bbox_box", {"$#{sw_key}", "$#{ne_key}"})
             params = acc_params |> Map.put(sw_key, sw) |> Map.put(ne_key, ne)
             {expr, params}
 
           op == :st_distance ->
             {comp_op_atom, test_point, threshold} = val
-            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_t"
+            prop_seg = Cypher.sanitize_param(prop)
+            test_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_t"
             expr = Cypher.expression(variable, prop, "st_distance", {convert_operator(comp_op_atom), "$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           op == :st_dwithin ->
             {test_point, threshold} = val
-            test_key = "#{param_prefix}#{variable}_#{prop}_#{index}_test"
-            thresh_key = "#{param_prefix}#{variable}_#{prop}_#{index}_d"
+            prop_seg = Cypher.sanitize_param(prop)
+            test_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_test"
+            thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_d"
             expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           true ->
-            param_key = "#{param_prefix}#{variable}_#{prop}_#{index}"
+            prop_seg = Cypher.sanitize_param(prop)
+            param_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}"
             expr = Cypher.expression(variable, prop, convert_operator(op), "$#{param_key}", case_insensitive?: ci?)
             {expr, Map.put(acc_params, param_key, val)}
         end

@@ -29,7 +29,7 @@ defmodule AshNeo4j.Functions.StDistance do
   def evaluate(%{arguments: [nil, _]}), do: {:known, nil}
   def evaluate(%{arguments: [_, nil]}), do: {:known, nil}
 
-  def evaluate(%{arguments: [%Bolty.Types.Point{srid: 4326} = p1, %Bolty.Types.Point{srid: 4326} = p2]}) do
+  def evaluate(%{arguments: [%Geo.Point{} = p1, %Geo.Point{} = p2]}) do
     {:known, haversine_meters(p1, p2)}
   end
 
@@ -37,19 +37,19 @@ defmodule AshNeo4j.Functions.StDistance do
   # For LineString this is a v1 approximation; true closest-point-on-segment
   # is a future refinement. For MultiPoint the closest vertex *is* the
   # closest point by definition.
-  def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %Bolty.Types.Point{} = p]}) when vertices != [] do
+  def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %Geo.Point{} = p]}) when vertices != [] do
     {:known, min_vertex_distance(vertices, p)}
   end
 
-  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.LineString{vertices: vertices}]}) when vertices != [] do
+  def evaluate(%{arguments: [%Geo.Point{} = p, %AshNeo4j.Type.LineString{vertices: vertices}]}) when vertices != [] do
     {:known, min_vertex_distance(vertices, p)}
   end
 
-  def evaluate(%{arguments: [%AshNeo4j.Type.MultiPoint{points: points}, %Bolty.Types.Point{} = p]}) when points != [] do
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiPoint{points: points}, %Geo.Point{} = p]}) when points != [] do
     {:known, min_vertex_distance(points, p)}
   end
 
-  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.MultiPoint{points: points}]}) when points != [] do
+  def evaluate(%{arguments: [%Geo.Point{} = p, %AshNeo4j.Type.MultiPoint{points: points}]}) when points != [] do
     {:known, min_vertex_distance(points, p)}
   end
 
@@ -62,7 +62,13 @@ defmodule AshNeo4j.Functions.StDistance do
   end
 
   # Haversine on a spherical Earth — matches Neo4j's `point.distance` for WGS-84 2D.
-  defp haversine_meters(%Bolty.Types.Point{x: lng1, y: lat1}, %Bolty.Types.Point{x: lng2, y: lat2}) do
+  # Accepts either %Geo.Point{} (user-facing API since v2) or %Bolty.Types.Point{}
+  # (still held internally by LineString/MultiPoint vertices until those types
+  # migrate in later commits).
+  defp haversine_meters(a, b) do
+    {lng1, lat1} = to_xy(a)
+    {lng2, lat2} = to_xy(b)
+
     earth_radius_m = 6_371_000.0
     rad_lat1 = :math.pi() / 180 * lat1
     rad_lat2 = :math.pi() / 180 * lat2
@@ -77,4 +83,7 @@ defmodule AshNeo4j.Functions.StDistance do
 
     earth_radius_m * c
   end
+
+  defp to_xy(%Geo.Point{coordinates: {x, y}}), do: {x, y}
+  defp to_xy(%Bolty.Types.Point{x: x, y: y}), do: {x, y}
 end

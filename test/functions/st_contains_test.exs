@@ -18,7 +18,11 @@ defmodule AshNeo4j.Functions.StContainsTest do
   alias AshNeo4j.Type.Box
   alias AshNeo4j.Type.MultiBox
   alias AshNeo4j.Type.MultiPoint
+  # Bolty.Types.Point retained because Box.sw/ne and MultiPoint.points are
+  # still held internally as Bolty Points until those types migrate.
   alias Bolty.Types.Point
+
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
   setup_all do
     BoltyHelper.start()
@@ -48,7 +52,7 @@ defmodule AshNeo4j.Functions.StContainsTest do
     end
 
     test "returns places whose bounds contain the test point", %{sydney: sydney} do
-      inside_sydney = Point.create(:wgs_84, 151.2, -33.8)
+      inside_sydney = geo(151.2, -33.8)
 
       {:ok, results} =
         Place
@@ -60,7 +64,7 @@ defmodule AshNeo4j.Functions.StContainsTest do
     end
 
     test "excludes places whose bounds do not contain the test point", %{sydney: sydney, perth: perth} do
-      inside_sydney = Point.create(:wgs_84, 151.2, -33.8)
+      inside_sydney = geo(151.2, -33.8)
 
       {:ok, results} =
         Place
@@ -73,7 +77,7 @@ defmodule AshNeo4j.Functions.StContainsTest do
     end
 
     test "returns no results when the test point is outside all boxes" do
-      middle_of_australia = Point.create(:wgs_84, 134.0, -25.0)
+      middle_of_australia = geo(134.0, -25.0)
 
       {:ok, results} =
         Place
@@ -177,16 +181,12 @@ defmodule AshNeo4j.Functions.StContainsTest do
     end
 
     test "true when the point falls in any constituent box", %{service_area: sa} do
-      in_first = Point.create(:wgs_84, 151.2, -33.8)
-      assert {:known, true} = StContains.evaluate(%{arguments: [sa, in_first]})
-
-      in_second = Point.create(:wgs_84, 151.8, -33.2)
-      assert {:known, true} = StContains.evaluate(%{arguments: [sa, in_second]})
+      assert {:known, true} = StContains.evaluate(%{arguments: [sa, geo(151.2, -33.8)]})
+      assert {:known, true} = StContains.evaluate(%{arguments: [sa, geo(151.8, -33.2)]})
     end
 
     test "false when the point falls in none of the boxes", %{service_area: sa} do
-      gap = Point.create(:wgs_84, 151.55, -33.45)
-      assert {:known, false} = StContains.evaluate(%{arguments: [sa, gap]})
+      assert {:known, false} = StContains.evaluate(%{arguments: [sa, geo(151.55, -33.45)]})
     end
 
     test "round-trips through Ash storage and pushes through in-memory filter", %{service_area: sa} do
@@ -197,7 +197,7 @@ defmodule AshNeo4j.Functions.StContainsTest do
       assert b0.sw.x == 151.0
       assert b1.ne.y == -33.0
 
-      in_first = Point.create(:wgs_84, 151.2, -33.8)
+      in_first = geo(151.2, -33.8)
 
       {:ok, results} =
         Place

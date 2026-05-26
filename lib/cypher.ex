@@ -99,11 +99,11 @@ defmodule AshNeo4j.Cypher do
 
       operator == "st_distance" ->
         {comp_op, test_ref, threshold_ref} = right
-        "point.distance(#{variable}.#{left}, #{test_ref}) #{comp_op} #{threshold_ref}"
+        "point.distance(#{variable}.#{quote_if_dotted(left)}, #{test_ref}) #{comp_op} #{threshold_ref}"
 
       operator == "dwithin" ->
         {test_ref, threshold_ref} = right
-        "point.distance(#{variable}.#{left}, #{test_ref}) <= #{threshold_ref}"
+        "point.distance(#{variable}.#{quote_if_dotted(left)}, #{test_ref}) <= #{threshold_ref}"
 
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
@@ -170,12 +170,22 @@ defmodule AshNeo4j.Cypher do
     {"{#{parameterized_properties}}", parameters}
   end
 
-  defp quote_if_dotted(name) do
+  @doc """
+  Backtick-quotes a property name if it contains a dot, so that Neo4j
+  parses it as a single property reference rather than a nested-property
+  access. e.g. `"location.point"` → `` "`location.point`" ``.
+  """
+  def quote_if_dotted(name) do
     s = to_string(name)
     if String.contains?(s, "."), do: "`#{s}`", else: s
   end
 
-  defp sanitize_param(name) do
+  @doc """
+  Rewrites dots in a name as underscores so it is safe to use as a
+  Cypher parameter key. Neo4j parses `$foo.bar` as the parameter `$foo`
+  followed by a `.bar` property access, so the dot has to go.
+  """
+  def sanitize_param(name) do
     to_string(name) |> String.replace(".", "_")
   end
 

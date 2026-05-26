@@ -131,7 +131,6 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
 
   def neo4j_native?(type) do
     type in [
-      AshNeo4j.Type.Point,
       Ash.Type.Boolean,
       Ash.Type.Date,
       Ash.Type.Duration,

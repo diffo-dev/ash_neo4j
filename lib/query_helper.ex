@@ -261,20 +261,23 @@ defmodule AshNeo4j.QueryHelper do
   defp to_conditions(%ResourceMapping{} = mapping, predicates) do
     predicates
     |> Enum.map(fn
-      # st_distance(prop, ^p) <op> ^n and the st_distance_in_meters alias —
+      # st_distance(attr, ^p) <op> ^n and the st_distance_in_meters alias —
       # nested function in comparison, pushed down as point.distance comparison
-      # ONLY when prop is a Point attribute (Neo4j point.distance is point-to-point).
+      # ONLY when attr is a Point attribute (Neo4j point.distance is point-to-point).
+      # Point's primary stored value is at "<attr>.point" (the symmetric split
+      # introduced in #274 — see Type.Point.primary_suffix/0); the pushdown
+      # references that suffixed property, not the bare attribute name.
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
-          prop = property_name(mapping, ref)
+          prop = point_property(mapping, ref)
           {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
         end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
-          prop = property_name(mapping, ref)
+          prop = point_property(mapping, ref)
           {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
         end
 
@@ -310,7 +313,7 @@ defmodule AshNeo4j.QueryHelper do
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
         if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
-          prop = property_name(mapping, ref)
+          prop = point_property(mapping, ref)
           {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
         end
 
@@ -370,7 +373,15 @@ defmodule AshNeo4j.QueryHelper do
 
   defp to_param_value(%Ash.CiString{} = v), do: Ash.CiString.value(v)
   defp to_param_value(%MapSet{} = ms), do: MapSet.to_list(ms)
+  defp to_param_value(%Geo.Point{coordinates: {x, y}}), do: Bolty.Types.Point.create(:wgs_84, x, y)
   defp to_param_value(value), do: value
+
+  # Builds the on-disk property name for a Point attribute under the symmetric
+  # split — `<attr>.point` is where the native Neo4j POINT lives (the indexable
+  # primary), so spatial pushdown predicates reference that suffixed name.
+  defp point_property(%ResourceMapping{} = mapping, ref) do
+    "#{property_name(mapping, ref)}.point"
+  end
 
   defp case_insensitive?(%ResourceMapping{} = mapping, predicate_left, predicate_right) do
     ResourceInfo.attribute_type(mapping.module, predicate_left) in [Ash.Type.CiString, :ci_string] or

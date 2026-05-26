@@ -70,21 +70,28 @@ defmodule AshNeo4j.Functions.StIntersects do
   # MultiBox vs Point — any-of: true iff any constituent box contains the
   # point. (Effectively delegates to st_contains semantics, but stays
   # under the st_intersects name for caller ergonomics.)
-  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %Bolty.Types.Point{} = p]}) do
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %Geo.Point{} = p]}) do
     {:known, Enum.any?(boxes, &point_in_box?(p, &1))}
   end
 
-  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.MultiBox{boxes: boxes}]}) do
+  def evaluate(%{arguments: [%Geo.Point{} = p, %AshNeo4j.Type.MultiBox{boxes: boxes}]}) do
     {:known, Enum.any?(boxes, &point_in_box?(p, &1))}
   end
 
   def evaluate(_), do: :unknown
 
-  defp point_in_box?(%Bolty.Types.Point{} = p, %AshNeo4j.Type.Box{sw: sw, ne: ne}) do
-    p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y
+  # Accepts either %Geo.Point{} (user-facing API since v2) or
+  # %Bolty.Types.Point{} (still held internally by LineString.vertices and
+  # MultiPoint.points until those types migrate in later commits).
+  defp point_in_box?(point, %AshNeo4j.Type.Box{sw: sw, ne: ne}) do
+    {x, y} = to_xy(point)
+    x >= sw.x and x <= ne.x and y >= sw.y and y <= ne.y
   end
 
   defp box_intersects_box?(%AshNeo4j.Type.Box{sw: a_sw, ne: a_ne}, %AshNeo4j.Type.Box{sw: b_sw, ne: b_ne}) do
     a_ne.x >= b_sw.x and a_sw.x <= b_ne.x and a_ne.y >= b_sw.y and a_sw.y <= b_ne.y
   end
+
+  defp to_xy(%Geo.Point{coordinates: {x, y}}), do: {x, y}
+  defp to_xy(%Bolty.Types.Point{x: x, y: y}), do: {x, y}
 end

@@ -25,6 +25,8 @@ defmodule AshNeo4j.CypherTest do
     on_exit(&Sandbox.rollback/0)
   end
 
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
+
   defp sydney_box do
     %Box{
       sw: Point.create(:wgs_84, 151.0, -34.0),
@@ -73,13 +75,13 @@ defmodule AshNeo4j.CypherTest do
 
   describe "st_distance" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
       {:ok, sydney: sydney}
     end
 
     test "matches when distance to a near point is below the threshold", %{sydney: sydney} do
       near = Point.create(:wgs_84, 151.2, -33.85)
-      predicate = Cypher.expression(:n, "location", "st_distance", {"<", "$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "st_distance", {"<", "$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => near, "threshold" => 5_000.0})
 
@@ -88,7 +90,7 @@ defmodule AshNeo4j.CypherTest do
 
     test "rejects when distance to a far point exceeds the threshold", %{sydney: sydney} do
       melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      predicate = Cypher.expression(:n, "location", "st_distance", {"<", "$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "st_distance", {"<", "$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 5_000.0})
 
@@ -97,7 +99,7 @@ defmodule AshNeo4j.CypherTest do
 
     test "evaluates geodesically — Sydney to Melbourne is ~713 km", %{sydney: sydney} do
       melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      predicate = Cypher.expression(:n, "location", "st_distance", {">", "$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "st_distance", {">", "$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       # Threshold just under expected distance — should match.
       {:ok, hit} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 700_000.0})
@@ -110,7 +112,7 @@ defmodule AshNeo4j.CypherTest do
 
     test ">= operator works", %{sydney: sydney} do
       melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      predicate = Cypher.expression(:n, "location", "st_distance", {">=", "$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "st_distance", {">=", "$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 700_000.0})
 
@@ -120,9 +122,9 @@ defmodule AshNeo4j.CypherTest do
 
   describe "in-memory combination building blocks — branch_node_read_ids and node_read_by_ids" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
-      perth = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: geo(144.9631, -37.8136)})
+      perth = Place |> Ash.create!(%{name: "Perth CBD", location: geo(115.8617, -31.9514)})
       {:ok, sydney: sydney, melbourne: melbourne, perth: perth}
     end
 
@@ -174,9 +176,9 @@ defmodule AshNeo4j.CypherTest do
 
   describe "combination_block — CALL { … UNION/UNION ALL … } end-to-end" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
-      perth = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: geo(144.9631, -37.8136)})
+      perth = Place |> Ash.create!(%{name: "Perth CBD", location: geo(115.8617, -31.9514)})
       {:ok, sydney: sydney, melbourne: melbourne, perth: perth}
     end
 
@@ -215,6 +217,24 @@ defmodule AshNeo4j.CypherTest do
     end
   end
 
+  describe "%Geo.Point{} ↔ native Neo4j POINT boundary — for #274 rearchitecture" do
+    test "Geo.Point coordinates round-trip through a native Neo4j POINT property" do
+      # Bolty packs %Bolty.Types.Point{} natively. The type-module boundary
+      # for #274's AshNeo4j.Type.Point will convert %Geo.Point{} → Bolty
+      # on dump_to_native and reverse on cast_stored. Verify both legs.
+      sydney_geo = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
+
+      sydney_bolty = Point.create(:wgs_84, elem(sydney_geo.coordinates, 0), elem(sydney_geo.coordinates, 1))
+      {:ok, _} = Sandbox.run("CREATE (n:RoundTrip {tag: $tag, p: $p}) RETURN n", %{"tag" => "geo_pt", "p" => sydney_bolty})
+
+      {:ok, response} = Sandbox.run("MATCH (n:RoundTrip {tag: $tag}) RETURN n.p AS p", %{"tag" => "geo_pt"})
+      [%{"p" => %Point{} = loaded}] = response.results
+
+      back_to_geo = %Geo.Point{coordinates: {loaded.x, loaded.y}, srid: 4326}
+      assert back_to_geo == sydney_geo
+    end
+  end
+
   describe "LIST<POINT> round-trip — N-length vertex arrays for multi-vertex types" do
     test "round-trips a 7-point list intact (LineString shape)" do
       pts = for i <- 0..6, do: Point.create(:wgs_84, 151.0 + i * 0.1, -33.5 - i * 0.1)
@@ -241,13 +261,13 @@ defmodule AshNeo4j.CypherTest do
 
   describe "dwithin" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
       {:ok, sydney: sydney}
     end
 
     test "matches when distance is within the threshold", %{sydney: sydney} do
       near = Point.create(:wgs_84, 151.2, -33.85)
-      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "dwithin", {"$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => near, "threshold" => 5_000.0})
 
@@ -256,7 +276,7 @@ defmodule AshNeo4j.CypherTest do
 
     test "rejects when distance exceeds the threshold", %{sydney: sydney} do
       melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "dwithin", {"$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
       {:ok, response} = Sandbox.run(cypher, %{"uuid" => sydney.id, "test_point" => melbourne, "threshold" => 5_000.0})
 
@@ -265,7 +285,7 @@ defmodule AshNeo4j.CypherTest do
 
     test "boundary is inclusive — Sydney to Melbourne at ~713 km", %{sydney: sydney} do
       melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      predicate = Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
+      predicate = Cypher.expression(:n, "location.point", "dwithin", {"$test_point", "$threshold"})
       cypher = "MATCH (n {uuid: $uuid}) WHERE #{predicate} RETURN n"
 
       # Threshold larger than actual distance — should match.

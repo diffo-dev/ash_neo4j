@@ -676,6 +676,29 @@ defmodule AshNeo4j.DataLayer do
     records
   end
 
+  # Resolves the on-disk property key for an attribute. When the attribute's
+  # type declares a `primary_suffix/0` (e.g. Point splits across `.point` +
+  # `.json`), reads the primary value from the suffixed key. Otherwise the
+  # primary lives at the bare translated key.
+  defp primary_property_key(resource, resource_field, node_field) do
+    base = to_string(node_field)
+
+    case Ash.Resource.Info.attribute(resource, resource_field) do
+      %{type: type} ->
+        attribute_type = Ash.Type.get_type!(type)
+
+        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
+             function_exported?(attribute_type, :primary_suffix, 0) do
+          "#{base}.#{attribute_type.primary_suffix()}"
+        else
+          base
+        end
+
+      _ ->
+        base
+    end
+  end
+
   defp consolidate_groups(groups) when is_list(groups) do
     Enum.reduce(groups, [], fn group, acc ->
       s = Map.get(group, "s")
@@ -864,7 +887,8 @@ defmodule AshNeo4j.DataLayer do
 
     fields_result =
       Enum.reduce_while(translations, {:ok, enriched}, fn {resource_field, node_field}, {:ok, acc} ->
-        property_value = Map.get(node.properties, to_string(node_field))
+        property_key = primary_property_key(resource, resource_field, node_field)
+        property_value = Map.get(node.properties, property_key)
 
         case cast_attribute(resource, resource_field, property_value) do
           {:ok, value} -> {:cont, {:ok, Map.put(acc, resource_field, value)}}
@@ -1055,7 +1079,20 @@ defmodule AshNeo4j.DataLayer do
           Ash.Type.get_type!(attribute.type)
 
         dumped = Dump.dump(attribute_type, value, attribute.constraints)
-        acc = Map.put(acc, translated_key, dumped)
+
+        # When the type declares a primary_suffix/0 (e.g. Point splits its
+        # storage across "<attr>.point" + "<attr>.json"), write the primary
+        # value at the suffixed key instead of "<attr>" itself. Otherwise
+        # the primary lands at "<attr>" as before.
+        primary_key =
+          if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
+               function_exported?(attribute_type, :primary_suffix, 0) do
+            "#{translated_key}.#{attribute_type.primary_suffix()}"
+          else
+            translated_key
+          end
+
+        acc = Map.put(acc, primary_key, dumped)
 
         # Types that expose `companions/1` (e.g. Box, Polygon) also write
         # dotted scalar companion properties for indexed predicates.

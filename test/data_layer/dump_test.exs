@@ -60,10 +60,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
 
-    test "point" do
-      value_unchanged(AshNeo4j.Type.Point, Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688))
-    end
-
     test "utc date time" do
       value_unchanged(Ash.Type.UtcDatetime, ~U[2025-05-11 07:45:41Z], precision: :second)
     end
@@ -84,6 +80,14 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
       nw = Bolty.Types.Point.create(:wgs_84, 151.0, -33.5)
       value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, se, ne, nw])
+    end
+
+    test "point — Geo.Point is dumped to native Bolty Point at the type boundary" do
+      value_changed(
+        AshNeo4j.Type.Point,
+        %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326},
+        Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688)
+      )
     end
 
     test "ci string" do

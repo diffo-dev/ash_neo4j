@@ -52,6 +52,10 @@ defmodule AshNeo4j.ShowNeo4jTest do
   alias AshNeo4j.Type.LineString
   alias AshNeo4j.Type.MultiBox
   alias AshNeo4j.Type.MultiPoint
+  # Bolty.Types.Point retained because Box.sw/ne, LineString.vertices,
+  # MultiPoint.points and MultiBox.boxes' Box internals are still held as
+  # Bolty Points until those types migrate. The user-facing Point attribute
+  # uses %Geo.Point{} (see #274).
   alias Bolty.Types.Point
 
   @moduletag :show_neo4j
@@ -62,7 +66,7 @@ defmodule AshNeo4j.ShowNeo4jTest do
   end
 
   test "one Place per spatial type — and one showcase Place with all five" do
-    sydney_cbd_point = Point.create(:wgs_84, 151.2093, -33.8688)
+    sydney_cbd_point = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
 
     sydney_bbox = %Box{
       sw: Point.create(:wgs_84, 151.0, -34.0),

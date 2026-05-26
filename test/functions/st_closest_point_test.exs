@@ -5,9 +5,9 @@
 defmodule AshNeo4j.Functions.StClosestPointTest do
   @moduledoc """
   End-to-end test of `st_closest_point(collection, point)` over LineString
-  records. Returns the closest vertex (a `%Bolty.Types.Point{}`) from the
-  collection to the target. In-memory only — used via `Ash.calculate`
-  rather than `Ash.Query.filter` (it returns a Point, not a boolean).
+  and MultiPoint records. Returns the closest vertex as a `%Geo.Point{}`.
+  In-memory only — used via `Ash.calculate` rather than `Ash.Query.filter`
+  (it returns a Point, not a boolean).
   """
   use ExUnit.Case, async: true
 
@@ -17,6 +17,8 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.LineString
   alias AshNeo4j.Type.MultiPoint
+  # Bolty.Types.Point retained because LineString.vertices and MultiPoint.points
+  # are still held internally as Bolty Points until those types migrate.
   alias Bolty.Types.Point
 
   setup_all do
@@ -27,6 +29,8 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
     Sandbox.checkout()
     on_exit(&Sandbox.rollback/0)
   end
+
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
   defp fibre_run do
     %LineString{
@@ -52,32 +56,25 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
 
   describe "st_closest_point(line, point) via evaluate" do
     test "returns the vertex nearest the target — Sydney end" do
-      near_sydney = Point.create(:wgs_84, 151.22, -33.85)
-      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), near_sydney]})
+      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), geo(151.22, -33.85)]})
 
-      assert %Point{} = closest
-      assert closest.x == 151.21
-      assert closest.y == -33.87
+      assert %Geo.Point{coordinates: {151.21, -33.87}, srid: 4326} = closest
     end
 
     test "returns the vertex nearest the target — Newcastle end" do
-      near_newcastle = Point.create(:wgs_84, 151.80, -32.95)
-      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), near_newcastle]})
+      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), geo(151.80, -32.95)]})
 
-      assert closest.x == 151.78
-      assert closest.y == -32.93
+      assert %Geo.Point{coordinates: {151.78, -32.93}, srid: 4326} = closest
     end
 
     test "returns the middle vertex when the target is closest to it" do
-      near_middle = Point.create(:wgs_84, 151.29, -33.51)
-      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), near_middle]})
+      {:known, closest} = StClosestPoint.evaluate(%{arguments: [fibre_run(), geo(151.29, -33.51)]})
 
-      assert closest.x == 151.30
-      assert closest.y == -33.50
+      assert %Geo.Point{coordinates: {151.30, -33.50}, srid: 4326} = closest
     end
 
     test "returns nil for nil arguments" do
-      target = Point.create(:wgs_84, 151.0, -33.0)
+      target = geo(151.0, -33.0)
       assert {:known, nil} = StClosestPoint.evaluate(%{arguments: [nil, target]})
       assert {:known, nil} = StClosestPoint.evaluate(%{arguments: [fibre_run(), nil]})
     end
@@ -93,11 +90,9 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
         ]
       }
 
-      customer = Point.create(:wgs_84, 151.22, -33.85)
-      {:known, closest} = StClosestPoint.evaluate(%{arguments: [pes, customer]})
+      {:known, closest} = StClosestPoint.evaluate(%{arguments: [pes, geo(151.22, -33.85)]})
 
-      assert closest.x == 151.21
-      assert closest.y == -33.87
+      assert %Geo.Point{coordinates: {151.21, -33.87}, srid: 4326} = closest
     end
   end
 end

@@ -16,6 +16,8 @@ defmodule AshNeo4j.Functions.StWithinTest do
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
+  # Bolty.Types.Point retained because Box.sw/ne are still held internally as
+  # Bolty Points until Box migrates to %Geo.Polygon{} in a later commit.
   alias Bolty.Types.Point
 
   setup_all do
@@ -27,6 +29,8 @@ defmodule AshNeo4j.Functions.StWithinTest do
     on_exit(&Sandbox.rollback/0)
   end
 
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
+
   defp sydney_box do
     %Box{
       sw: Point.create(:wgs_84, 151.0, -34.0),
@@ -36,13 +40,11 @@ defmodule AshNeo4j.Functions.StWithinTest do
 
   describe "evaluate/1 — delegates to st_contains with args flipped" do
     test "point within box" do
-      inside = Point.create(:wgs_84, 151.2, -33.8)
-      assert {:known, true} = StWithin.evaluate(%{arguments: [inside, sydney_box()]})
+      assert {:known, true} = StWithin.evaluate(%{arguments: [geo(151.2, -33.8), sydney_box()]})
     end
 
     test "point outside box" do
-      outside = Point.create(:wgs_84, 100.0, 0.0)
-      assert {:known, false} = StWithin.evaluate(%{arguments: [outside, sydney_box()]})
+      assert {:known, false} = StWithin.evaluate(%{arguments: [geo(100.0, 0.0), sydney_box()]})
     end
 
     test "box within box" do
@@ -56,8 +58,8 @@ defmodule AshNeo4j.Functions.StWithinTest do
 
   describe "st_within in Ash.Query.filter (in-memory)" do
     test "finds places whose location is inside the given box" do
-      sydney_place = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      _outside = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+      sydney_place = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      _outside = Place |> Ash.create!(%{name: "Perth CBD", location: geo(115.8617, -31.9514)})
 
       {:ok, results} =
         Place
