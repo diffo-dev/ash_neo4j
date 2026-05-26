@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: MIT
 
-ExUnit.start()
+ExUnit.start(exclude: [:show_neo4j])
