@@ -13,8 +13,10 @@ defmodule AshNeo4j.Functions.StContainsTest do
 
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Sandbox
+  alias AshNeo4j.Functions.StContains
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
+  alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
   setup_all do
@@ -140,6 +142,26 @@ defmodule AshNeo4j.Functions.StContainsTest do
         |> Ash.read()
 
       assert results == []
+    end
+  end
+
+  describe "st_contains(box, multipoint) — all-of semantics" do
+    test "true when every point of the MultiPoint is inside the Box" do
+      inside_sydney = %MultiPoint{points: [
+        Point.create(:wgs_84, 151.10, -33.80),
+        Point.create(:wgs_84, 151.40, -33.60)
+      ]}
+
+      assert {:known, true} = StContains.evaluate(%{arguments: [sydney_box(), inside_sydney]})
+    end
+
+    test "false when any point of the MultiPoint is outside the Box" do
+      mixed = %MultiPoint{points: [
+        Point.create(:wgs_84, 151.10, -33.80),
+        Point.create(:wgs_84, 115.86, -31.95)
+      ]}
+
+      assert {:known, false} = StContains.evaluate(%{arguments: [sydney_box(), mixed]})
     end
   end
 end

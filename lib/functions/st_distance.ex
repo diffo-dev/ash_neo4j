@@ -33,14 +33,24 @@ defmodule AshNeo4j.Functions.StDistance do
     {:known, haversine_meters(p1, p2)}
   end
 
-  # LineString to point — closest-vertex distance. Symmetric. A v1
-  # approximation; true closest-point-on-segment is a future refinement.
+  # LineString / MultiPoint to point — closest-vertex distance. Symmetric.
+  # For LineString this is a v1 approximation; true closest-point-on-segment
+  # is a future refinement. For MultiPoint the closest vertex *is* the
+  # closest point by definition.
   def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %Bolty.Types.Point{} = p]}) when vertices != [] do
     {:known, min_vertex_distance(vertices, p)}
   end
 
   def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.LineString{vertices: vertices}]}) when vertices != [] do
     {:known, min_vertex_distance(vertices, p)}
+  end
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiPoint{points: points}, %Bolty.Types.Point{} = p]}) when points != [] do
+    {:known, min_vertex_distance(points, p)}
+  end
+
+  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.MultiPoint{points: points}]}) when points != [] do
+    {:known, min_vertex_distance(points, p)}
   end
 
   def evaluate(_), do: :unknown

@@ -16,6 +16,7 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.LineString
+  alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
   setup_all do
@@ -79,6 +80,24 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
       target = Point.create(:wgs_84, 151.0, -33.0)
       assert {:known, nil} = StClosestPoint.evaluate(%{arguments: [nil, target]})
       assert {:known, nil} = StClosestPoint.evaluate(%{arguments: [fibre_run(), nil]})
+    end
+  end
+
+  describe "st_closest_point(multipoint, point) via evaluate" do
+    test "returns the nearest PE from a candidate set" do
+      pes = %MultiPoint{
+        points: [
+          Point.create(:wgs_84, 151.21, -33.87),
+          Point.create(:wgs_84, 151.50, -33.50),
+          Point.create(:wgs_84, 115.86, -31.95)
+        ]
+      }
+
+      customer = Point.create(:wgs_84, 151.22, -33.85)
+      {:known, closest} = StClosestPoint.evaluate(%{arguments: [pes, customer]})
+
+      assert closest.x == 151.21
+      assert closest.y == -33.87
     end
   end
 end

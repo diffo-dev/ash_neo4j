@@ -16,6 +16,7 @@ defmodule AshNeo4j.Functions.StDistanceTest do
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.LineString
+  alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
   setup_all do
@@ -156,6 +157,47 @@ defmodule AshNeo4j.Functions.StDistanceTest do
       ids = Enum.map(results, & &1.id)
       assert near.id in ids
       refute far.id in ids
+    end
+  end
+
+  describe "evaluate/1 — MultiPoint to point (closest of the set, exact)" do
+    test "returns the distance to the nearest point in the set" do
+      pes = %MultiPoint{points: [
+        Point.create(:wgs_84, 151.21, -33.87),
+        Point.create(:wgs_84, 115.86, -31.95)
+      ]}
+
+      customer = Point.create(:wgs_84, 151.22, -33.85)
+      {:known, meters} = StDistance.evaluate(%{arguments: [pes, customer]})
+
+      # Sydney candidate is within a few km of the target.
+      assert meters < 5_000
+    end
+  end
+
+  describe "st_dwithin MultiPoint filter via Ash.Query" do
+    test "finds places whose candidate PE set has a point within the threshold" do
+      sydney = Place |> Ash.create!(%{name: "Sydney candidates", pes: %MultiPoint{points: [
+        Point.create(:wgs_84, 151.21, -33.87),
+        Point.create(:wgs_84, 151.30, -33.85)
+      ]}})
+
+      perth = Place |> Ash.create!(%{name: "Perth candidates", pes: %MultiPoint{points: [
+        Point.create(:wgs_84, 115.86, -31.95),
+        Point.create(:wgs_84, 115.90, -32.00)
+      ]}})
+
+      customer = Point.create(:wgs_84, 151.22, -33.85)
+      threshold = 50_000.0
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_dwithin(pes, ^customer, ^threshold))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert sydney.id in ids
+      refute perth.id in ids
     end
   end
 end

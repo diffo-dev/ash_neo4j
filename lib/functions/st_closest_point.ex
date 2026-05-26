@@ -6,9 +6,12 @@ defmodule AshNeo4j.Functions.StClosestPoint do
   @moduledoc """
   `st_closest_point(collection, point)` — returns the closest vertex from
   a multi-vertex geometry to a target point. Mirrors ash_geo / PostGIS
-  `ST_ClosestPoint`. v1 supports `st_closest_point(%LineString{}, %Point{})`
-  as closest **vertex** (an approximation; true closest-point-on-segment is
-  a future refinement). MultiPoint support is added when that type lands.
+  `ST_ClosestPoint`. v1 supports:
+
+  - `st_closest_point(%MultiPoint{}, %Point{})` — exact (the collection
+    IS a set of points; the closest "point" is genuinely one of them).
+  - `st_closest_point(%LineString{}, %Point{})` — closest **vertex** (an
+    approximation; true closest-point-on-segment is a future refinement).
 
   In-memory only — no Cypher pushdown in this slice. Returns `nil` if the
   collection is empty or either argument is nil.
@@ -21,6 +24,10 @@ defmodule AshNeo4j.Functions.StClosestPoint do
 
   def evaluate(%{arguments: [nil, _]}), do: {:known, nil}
   def evaluate(%{arguments: [_, nil]}), do: {:known, nil}
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiPoint{points: points}, %Bolty.Types.Point{} = target]}) when points != [] do
+    {:known, closest(points, target)}
+  end
 
   def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %Bolty.Types.Point{} = target]}) when vertices != [] do
     {:known, closest(vertices, target)}

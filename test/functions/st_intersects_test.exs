@@ -17,6 +17,7 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
   alias AshNeo4j.Type.LineString
+  alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
   setup_all do
@@ -108,6 +109,29 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
       # Sit the box completely above where the line runs.
       far_box = box(151.0, -33.0, 151.5, -32.5)
       assert {:known, false} = StIntersects.evaluate(%{arguments: [line, far_box]})
+    end
+  end
+
+  describe "evaluate/1 — MultiPoint vs Box (any-of, exact)" do
+    test "multipoint with a point inside the box intersects" do
+      pes = %MultiPoint{points: [
+        Point.create(:wgs_84, 151.21, -33.87),
+        Point.create(:wgs_84, 115.86, -31.95)
+      ]}
+
+      sydney_bbox = box(151.0, -34.0, 151.5, -33.5)
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [pes, sydney_bbox]})
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [sydney_bbox, pes]})
+    end
+
+    test "multipoint with no point inside the box does not intersect" do
+      pes = %MultiPoint{points: [
+        Point.create(:wgs_84, 115.86, -31.95),
+        Point.create(:wgs_84, 144.96, -37.81)
+      ]}
+
+      sydney_bbox = box(151.0, -34.0, 151.5, -33.5)
+      assert {:known, false} = StIntersects.evaluate(%{arguments: [pes, sydney_bbox]})
     end
   end
 

@@ -19,5 +19,6 @@ defmodule AshNeo4j.Test.Resource.Place do
     attribute :location, AshNeo4j.Type.Point, public?: true
     attribute :bounds, AshNeo4j.Type.Box, public?: true
     attribute :path, AshNeo4j.Type.LineString, public?: true
+    attribute :pes, AshNeo4j.Type.MultiPoint, public?: true
   end
 end

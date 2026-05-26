@@ -45,5 +45,15 @@ defmodule AshNeo4j.Functions.StContains do
        o_ne.x >= i_ne.x and o_ne.y >= i_ne.y}
   end
 
+  # box-contains-multipoint — true iff every point of the MultiPoint lies
+  # inside the Box. Useful for "are all of this device's sensors inside the
+  # NSA?" — different semantics from st_intersects which is any-of.
+  def evaluate(%{arguments: [%AshNeo4j.Type.Box{sw: sw, ne: ne}, %AshNeo4j.Type.MultiPoint{points: points}]}) do
+    {:known,
+     Enum.all?(points, fn p ->
+       p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y
+     end)}
+  end
+
   def evaluate(_), do: :unknown
 end

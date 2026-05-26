@@ -37,14 +37,24 @@ defmodule AshNeo4j.Functions.StIntersects do
        a_ne.y >= b_sw.y and a_sw.y <= b_ne.y}
   end
 
-  # LineString intersection with Box — v1 approximation: true if any vertex
-  # of the line lies inside the Box. Symmetric.
+  # LineString / MultiPoint intersection with Box — true if any vertex /
+  # point of the collection lies inside the Box. For LineString this is a
+  # v1 under-approximation (segment-crossings without a vertex inside are
+  # missed); for MultiPoint it's exact. Symmetric.
   def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %AshNeo4j.Type.Box{} = box]}) do
     {:known, Enum.any?(vertices, &point_in_box?(&1, box))}
   end
 
   def evaluate(%{arguments: [%AshNeo4j.Type.Box{} = box, %AshNeo4j.Type.LineString{vertices: vertices}]}) do
     {:known, Enum.any?(vertices, &point_in_box?(&1, box))}
+  end
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiPoint{points: points}, %AshNeo4j.Type.Box{} = box]}) do
+    {:known, Enum.any?(points, &point_in_box?(&1, box))}
+  end
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.Box{} = box, %AshNeo4j.Type.MultiPoint{points: points}]}) do
+    {:known, Enum.any?(points, &point_in_box?(&1, box))}
   end
 
   def evaluate(_), do: :unknown
