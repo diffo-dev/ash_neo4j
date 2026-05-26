@@ -55,5 +55,32 @@ defmodule AshNeo4j.Functions.StContains do
      end)}
   end
 
+  # multibox-contains-point — any-of: true iff any constituent box contains
+  # the point. This is the natural SQ semantic: "this customer falls in
+  # one of the sub-regions making up the service area".
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %Bolty.Types.Point{} = p]}) do
+    {:known, Enum.any?(boxes, &box_contains_point?(&1, p))}
+  end
+
+  # multibox-contains-box — any-of: true iff any constituent box fully
+  # contains the inner box.
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %AshNeo4j.Type.Box{} = inner]}) do
+    {:known, Enum.any?(boxes, &box_contains_box?(&1, inner))}
+  end
+
+  # multibox-contains-multipoint — every point must fall inside *some*
+  # constituent box (the multibox covers the point set).
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %AshNeo4j.Type.MultiPoint{points: points}]}) do
+    {:known, Enum.all?(points, fn p -> Enum.any?(boxes, &box_contains_point?(&1, p)) end)}
+  end
+
   def evaluate(_), do: :unknown
+
+  defp box_contains_point?(%AshNeo4j.Type.Box{sw: sw, ne: ne}, %Bolty.Types.Point{} = p) do
+    p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y
+  end
+
+  defp box_contains_box?(%AshNeo4j.Type.Box{sw: o_sw, ne: o_ne}, %AshNeo4j.Type.Box{sw: i_sw, ne: i_ne}) do
+    o_sw.x <= i_sw.x and o_sw.y <= i_sw.y and o_ne.x >= i_ne.x and o_ne.y >= i_ne.y
+  end
 end

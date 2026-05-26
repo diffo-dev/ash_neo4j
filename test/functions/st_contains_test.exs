@@ -16,6 +16,7 @@ defmodule AshNeo4j.Functions.StContainsTest do
   alias AshNeo4j.Functions.StContains
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
+  alias AshNeo4j.Type.MultiBox
   alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
@@ -162,6 +163,48 @@ defmodule AshNeo4j.Functions.StContainsTest do
       ]}
 
       assert {:known, false} = StContains.evaluate(%{arguments: [sydney_box(), mixed]})
+    end
+  end
+
+  describe "st_contains(multibox, point) — any-of semantics" do
+    setup do
+      service_area = %MultiBox{boxes: [
+        %Box{sw: Point.create(:wgs_84, 151.0, -34.0), ne: Point.create(:wgs_84, 151.5, -33.5)},
+        %Box{sw: Point.create(:wgs_84, 151.6, -33.4), ne: Point.create(:wgs_84, 152.0, -33.0)}
+      ]}
+
+      {:ok, service_area: service_area}
+    end
+
+    test "true when the point falls in any constituent box", %{service_area: sa} do
+      in_first = Point.create(:wgs_84, 151.2, -33.8)
+      assert {:known, true} = StContains.evaluate(%{arguments: [sa, in_first]})
+
+      in_second = Point.create(:wgs_84, 151.8, -33.2)
+      assert {:known, true} = StContains.evaluate(%{arguments: [sa, in_second]})
+    end
+
+    test "false when the point falls in none of the boxes", %{service_area: sa} do
+      gap = Point.create(:wgs_84, 151.55, -33.45)
+      assert {:known, false} = StContains.evaluate(%{arguments: [sa, gap]})
+    end
+
+    test "round-trips through Ash storage and pushes through in-memory filter", %{service_area: sa} do
+      created = Place |> Ash.create!(%{name: "SA covering Sydney", regions: sa})
+      reread = Place |> Ash.get!(created.id)
+
+      assert %MultiBox{boxes: [b0, b1]} = reread.regions
+      assert b0.sw.x == 151.0
+      assert b1.ne.y == -33.0
+
+      in_first = Point.create(:wgs_84, 151.2, -33.8)
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_contains(regions, ^in_first))
+        |> Ash.read()
+
+      assert created.id in Enum.map(results, & &1.id)
     end
   end
 end

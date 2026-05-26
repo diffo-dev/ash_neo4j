@@ -17,6 +17,7 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
   alias AshNeo4j.Type.LineString
+  alias AshNeo4j.Type.MultiBox
   alias AshNeo4j.Type.MultiPoint
   alias Bolty.Types.Point
 
@@ -132,6 +133,29 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
 
       sydney_bbox = box(151.0, -34.0, 151.5, -33.5)
       assert {:known, false} = StIntersects.evaluate(%{arguments: [pes, sydney_bbox]})
+    end
+  end
+
+  describe "evaluate/1 — MultiBox vs Box (any-of)" do
+    test "multibox with any constituent intersecting the box intersects" do
+      regions = %MultiBox{boxes: [
+        box(151.0, -34.0, 151.5, -33.5),
+        box(115.5, -32.5, 116.5, -31.5)
+      ]}
+
+      sydney_search = box(151.2, -33.8, 152.0, -33.3)
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [regions, sydney_search]})
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [sydney_search, regions]})
+    end
+
+    test "multibox with no intersecting constituent does not intersect" do
+      regions = %MultiBox{boxes: [
+        box(115.5, -32.5, 116.5, -31.5),
+        box(144.9, -37.9, 145.1, -37.7)
+      ]}
+
+      sydney_search = box(151.2, -33.8, 152.0, -33.3)
+      assert {:known, false} = StIntersects.evaluate(%{arguments: [regions, sydney_search]})
     end
   end
 

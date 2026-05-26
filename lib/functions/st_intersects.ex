@@ -57,9 +57,34 @@ defmodule AshNeo4j.Functions.StIntersects do
     {:known, Enum.any?(points, &point_in_box?(&1, box))}
   end
 
+  # MultiBox vs Box — any-of: true iff any constituent box of the MultiBox
+  # intersects the target Box. Symmetric.
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %AshNeo4j.Type.Box{} = b]}) do
+    {:known, Enum.any?(boxes, &box_intersects_box?(&1, b))}
+  end
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.Box{} = b, %AshNeo4j.Type.MultiBox{boxes: boxes}]}) do
+    {:known, Enum.any?(boxes, &box_intersects_box?(&1, b))}
+  end
+
+  # MultiBox vs Point — any-of: true iff any constituent box contains the
+  # point. (Effectively delegates to st_contains semantics, but stays
+  # under the st_intersects name for caller ergonomics.)
+  def evaluate(%{arguments: [%AshNeo4j.Type.MultiBox{boxes: boxes}, %Bolty.Types.Point{} = p]}) do
+    {:known, Enum.any?(boxes, &point_in_box?(p, &1))}
+  end
+
+  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.MultiBox{boxes: boxes}]}) do
+    {:known, Enum.any?(boxes, &point_in_box?(p, &1))}
+  end
+
   def evaluate(_), do: :unknown
 
   defp point_in_box?(%Bolty.Types.Point{} = p, %AshNeo4j.Type.Box{sw: sw, ne: ne}) do
     p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y
+  end
+
+  defp box_intersects_box?(%AshNeo4j.Type.Box{sw: a_sw, ne: a_ne}, %AshNeo4j.Type.Box{sw: b_sw, ne: b_ne}) do
+    a_ne.x >= b_sw.x and a_sw.x <= b_ne.x and a_ne.y >= b_sw.y and a_sw.y <= b_ne.y
   end
 end
