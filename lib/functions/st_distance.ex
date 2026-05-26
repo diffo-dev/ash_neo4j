@@ -33,7 +33,23 @@ defmodule AshNeo4j.Functions.StDistance do
     {:known, haversine_meters(p1, p2)}
   end
 
+  # LineString to point — closest-vertex distance. Symmetric. A v1
+  # approximation; true closest-point-on-segment is a future refinement.
+  def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %Bolty.Types.Point{} = p]}) when vertices != [] do
+    {:known, min_vertex_distance(vertices, p)}
+  end
+
+  def evaluate(%{arguments: [%Bolty.Types.Point{} = p, %AshNeo4j.Type.LineString{vertices: vertices}]}) when vertices != [] do
+    {:known, min_vertex_distance(vertices, p)}
+  end
+
   def evaluate(_), do: :unknown
+
+  defp min_vertex_distance(vertices, target) do
+    vertices
+    |> Enum.map(&haversine_meters(&1, target))
+    |> Enum.min()
+  end
 
   # Haversine on a spherical Earth — matches Neo4j's `point.distance` for WGS-84 2D.
   defp haversine_meters(%Bolty.Types.Point{x: lng1, y: lat1}, %Bolty.Types.Point{x: lng2, y: lat2}) do

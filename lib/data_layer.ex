@@ -90,6 +90,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def functions(_resource) do
     [
+      AshNeo4j.Functions.StClosestPoint,
       AshNeo4j.Functions.StContains,
       AshNeo4j.Functions.StDistance,
       AshNeo4j.Functions.StDistanceInMeters,

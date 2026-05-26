@@ -14,6 +14,13 @@ defmodule AshNeo4j.Functions.StIntersects do
   No Cypher pushdown in this slice — the predicate evaluates in memory via
   `Ash.Filter.Runtime`. Pushdown is tractable (4 axis comparisons on the
   bbox companions) but deferred; in-memory is correct and fast at NBN scale.
+
+  For LineString and MultiPoint v1, intersection with a Box is approximated
+  as "any vertex of the collection lies inside the Box" — under-approximates
+  (misses cases where a segment crosses the box without a vertex inside).
+  For typical densely-sampled fibre paths against typical service-area
+  boxes, the approximation is fine; precise segment-edge crossing is future
+  work.
   """
   use Ash.Query.Function, name: :st_intersects, predicate?: true
 
@@ -30,5 +37,19 @@ defmodule AshNeo4j.Functions.StIntersects do
        a_ne.y >= b_sw.y and a_sw.y <= b_ne.y}
   end
 
+  # LineString intersection with Box — v1 approximation: true if any vertex
+  # of the line lies inside the Box. Symmetric.
+  def evaluate(%{arguments: [%AshNeo4j.Type.LineString{vertices: vertices}, %AshNeo4j.Type.Box{} = box]}) do
+    {:known, Enum.any?(vertices, &point_in_box?(&1, box))}
+  end
+
+  def evaluate(%{arguments: [%AshNeo4j.Type.Box{} = box, %AshNeo4j.Type.LineString{vertices: vertices}]}) do
+    {:known, Enum.any?(vertices, &point_in_box?(&1, box))}
+  end
+
   def evaluate(_), do: :unknown
+
+  defp point_in_box?(%Bolty.Types.Point{} = p, %AshNeo4j.Type.Box{sw: sw, ne: ne}) do
+    p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y
+  end
 end

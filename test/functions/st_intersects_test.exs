@@ -16,6 +16,7 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
   alias AshNeo4j.Type.Box
+  alias AshNeo4j.Type.LineString
   alias Bolty.Types.Point
 
   setup_all do
@@ -81,6 +82,61 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
       ids = Enum.map(results, & &1.id)
       assert sydney.id in ids
       assert length(results) == 1
+    end
+  end
+
+  describe "evaluate/1 — LineString vs Box (vertex-in-box approximation)" do
+    test "line with a vertex inside the box intersects" do
+      line = %LineString{vertices: [
+        Point.create(:wgs_84, 151.21, -33.87),
+        Point.create(:wgs_84, 151.30, -33.50),
+        Point.create(:wgs_84, 151.78, -32.93)
+      ]}
+
+      sydney_bbox = box(151.0, -34.0, 151.5, -33.5)
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [line, sydney_bbox]})
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [sydney_bbox, line]})
+    end
+
+    test "line with no vertex inside the box does not intersect (v1 limitation: segment-crossing is missed)" do
+      # Line skirts past the box without any vertex landing inside it.
+      line = %LineString{vertices: [
+        Point.create(:wgs_84, 150.0, -34.0),
+        Point.create(:wgs_84, 152.0, -34.0)
+      ]}
+
+      # Sit the box completely above where the line runs.
+      far_box = box(151.0, -33.0, 151.5, -32.5)
+      assert {:known, false} = StIntersects.evaluate(%{arguments: [line, far_box]})
+    end
+  end
+
+  describe "st_intersects(path, box) via Ash.Query" do
+    test "finds places whose fibre path has a vertex inside the search box" do
+      sydney_path = Place |> Ash.create!(%{name: "Sydney fibre", path: %LineString{
+        vertices: [
+          Point.create(:wgs_84, 151.21, -33.87),
+          Point.create(:wgs_84, 151.30, -33.50)
+        ]
+      }})
+
+      melbourne_path = Place |> Ash.create!(%{name: "Melbourne fibre", path: %LineString{
+        vertices: [
+          Point.create(:wgs_84, 144.96, -37.81),
+          Point.create(:wgs_84, 145.10, -37.50)
+        ]
+      }})
+
+      search = box(151.0, -34.0, 151.5, -33.5)
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_intersects(path, ^search))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert sydney_path.id in ids
+      refute melbourne_path.id in ids
     end
   end
 end

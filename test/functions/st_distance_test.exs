@@ -15,6 +15,7 @@ defmodule AshNeo4j.Functions.StDistanceTest do
   alias AshNeo4j.Functions.StDistance
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
+  alias AshNeo4j.Type.LineString
   alias Bolty.Types.Point
 
   setup_all do
@@ -81,6 +82,80 @@ defmodule AshNeo4j.Functions.StDistanceTest do
         |> Ash.read()
 
       assert results == []
+    end
+  end
+
+  describe "evaluate/1 — LineString to point (closest-vertex approximation)" do
+    setup do
+      line = %LineString{
+        vertices: [
+          Point.create(:wgs_84, 151.21, -33.87),
+          Point.create(:wgs_84, 151.30, -33.50),
+          Point.create(:wgs_84, 151.78, -32.93)
+        ]
+      }
+
+      {:ok, fibre: line}
+    end
+
+    test "returns the haversine distance to the nearest vertex", %{fibre: line} do
+      sydney_target = Point.create(:wgs_84, 151.22, -33.85)
+      {:known, meters} = StDistance.evaluate(%{arguments: [line, sydney_target]})
+
+      # Nearest vertex is (151.21, -33.87); within a few km of the target.
+      assert meters < 5_000
+    end
+
+    test "is symmetric in arguments", %{fibre: line} do
+      target = Point.create(:wgs_84, 151.80, -32.95)
+      {:known, ab} = StDistance.evaluate(%{arguments: [line, target]})
+      {:known, ba} = StDistance.evaluate(%{arguments: [target, line]})
+
+      assert ab == ba
+    end
+  end
+
+  describe "st_dwithin LineString filter via Ash.Query" do
+    setup do
+      near = Place |> Ash.create!(%{name: "Near fibre", path: %LineString{
+        vertices: [
+          Point.create(:wgs_84, 151.21, -33.87),
+          Point.create(:wgs_84, 151.30, -33.50)
+        ]
+      }})
+
+      far = Place |> Ash.create!(%{name: "Far fibre", path: %LineString{
+        vertices: [
+          Point.create(:wgs_84, 144.96, -37.81),
+          Point.create(:wgs_84, 145.10, -37.50)
+        ]
+      }})
+
+      {:ok, near: near, far: far}
+    end
+
+    test "matches paths whose closest vertex is within the threshold", %{near: near, far: far} do
+      customer = Point.create(:wgs_84, 151.22, -33.85)
+      threshold = 50_000.0
+
+      # Sanity: unfiltered read returns both paths
+      {:ok, all} = Place |> Ash.read()
+      assert near.id in Enum.map(all, & &1.id)
+      assert far.id in Enum.map(all, & &1.id)
+
+      # Sanity: re-read near and confirm path round-trips as a LineString struct
+      reread = Place |> Ash.get!(near.id)
+      assert %LineString{vertices: vs} = reread.path
+      assert length(vs) == 2
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_dwithin(path, ^customer, ^threshold))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert near.id in ids
+      refute far.id in ids
     end
   end
 end

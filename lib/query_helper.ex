@@ -263,15 +263,20 @@ defmodule AshNeo4j.QueryHelper do
     |> Enum.map(fn
       # st_distance(prop, ^p) <op> ^n and the st_distance_in_meters alias —
       # nested function in comparison, pushed down as point.distance comparison
+      # ONLY when prop is a Point attribute (Neo4j point.distance is point-to-point).
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+          prop = property_name(mapping, ref)
+          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+          prop = property_name(mapping, ref)
+          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        end
 
       %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
         prop = property_name(mapping, predicate.left)
@@ -286,32 +291,53 @@ defmodule AshNeo4j.QueryHelper do
         ci? = case_insensitive?(mapping, argument, value)
         {prop, :contains, to_param_value(value), ci?}
 
-      %{name: :st_contains} = predicate ->
-        argument = hd(predicate.arguments)
-        value = hd(tl(predicate.arguments))
-        prop = property_name(mapping, argument)
+      %{name: :st_contains, arguments: [ref, value]} ->
+        if attribute_type(mapping, ref) == AshNeo4j.Type.Box do
+          prop = property_name(mapping, ref)
 
-        case to_param_value(value) do
-          %Bolty.Types.Point{} = point ->
-            {prop, :st_contains, point, false}
+          case to_param_value(value) do
+            %Bolty.Types.Point{} = point ->
+              {prop, :st_contains, point, false}
 
-          %AshNeo4j.Type.Box{} = box ->
-            {prop, :st_contains_box, box, false}
+            %AshNeo4j.Type.Box{} = box ->
+              {prop, :st_contains_box, box, false}
 
-          _other ->
-            # other forms — skip pushdown, let in-memory eval handle it
-            nil
+            _other ->
+              # other forms — skip pushdown, let in-memory eval handle it
+              nil
+          end
         end
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+        if attribute_type(mapping, ref) == AshNeo4j.Type.Point do
+          prop = property_name(mapping, ref)
+          {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+        end
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil
     end)
     |> Enum.reject(&is_nil/1)
+  end
+
+  # Looks up the Ash attribute type for a Ref or atom; returns the type module
+  # (or `nil` if it can't be resolved). Used to gate spatial predicate pushdown
+  # on the attribute being the expected geometric type (Point, Box, etc.).
+  defp attribute_type(%ResourceMapping{module: module}, ref_or_atom) do
+    name =
+      case ref_or_atom do
+        %Ash.Query.Ref{} -> Ash.Query.Ref.name(ref_or_atom)
+        atom when is_atom(atom) -> atom
+        _ -> nil
+      end
+
+    if name do
+      case Ash.Resource.Info.attribute(module, name) do
+        %{type: type} -> type
+        _ -> nil
+      end
+    end
   end
 
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do

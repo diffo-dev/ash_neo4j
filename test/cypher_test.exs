@@ -215,6 +215,30 @@ defmodule AshNeo4j.CypherTest do
     end
   end
 
+  describe "LIST<POINT> round-trip — N-length vertex arrays for multi-vertex types" do
+    test "round-trips a 7-point list intact (LineString shape)" do
+      pts = for i <- 0..6, do: Point.create(:wgs_84, 151.0 + i * 0.1, -33.5 - i * 0.1)
+      {:ok, _} = Sandbox.run("CREATE (n:RoundTrip {tag: $tag, path: $path}) RETURN n", %{"tag" => "lp", "path" => pts})
+      {:ok, response} = Sandbox.run("MATCH (n:RoundTrip {tag: $tag}) RETURN n.path AS path", %{"tag" => "lp"})
+
+      [%{"path" => loaded}] = response.results
+      assert length(loaded) == 7
+      assert Enum.all?(loaded, &match?(%Point{srid: 4326}, &1))
+      assert Enum.map(loaded, & &1.x) == Enum.map(pts, & &1.x)
+      assert Enum.map(loaded, & &1.y) == Enum.map(pts, & &1.y)
+    end
+
+    test "round-trips a 12-point list intact (MultiBox shape — 3 boxes × 4 corners)" do
+      pts = for i <- 0..11, do: Point.create(:wgs_84, 150.0 + i * 0.05, -34.0 + i * 0.05)
+      {:ok, _} = Sandbox.run("CREATE (n:RoundTrip {tag: $tag, boxes: $boxes}) RETURN n", %{"tag" => "mb", "boxes" => pts})
+      {:ok, response} = Sandbox.run("MATCH (n:RoundTrip {tag: $tag}) RETURN n.boxes AS boxes", %{"tag" => "mb"})
+
+      [%{"boxes" => loaded}] = response.results
+      assert length(loaded) == 12
+      assert Enum.map(loaded, & &1.x) == Enum.map(pts, & &1.x)
+    end
+  end
+
   describe "dwithin" do
     setup do
       sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
