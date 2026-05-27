@@ -113,10 +113,10 @@ The canonical GeoJSON for the nested geometry lives inside the parent's JSON blo
 | `st_contains(a, b)` | boolean — `a` contains `b` (exact, hole-aware) | ✓ indexed bbox prefilter (Cypher) + exact `topo` refinement (in-memory) |
 | `st_within(a, b)` | boolean — `a` is within `b` (flipped `st_contains`) | exact `topo`, in-memory |
 | `st_intersects(a, b)` | boolean — `a` overlaps `b` (exact, incl. edge crossings) | exact `topo`, in-memory |
-| `st_distance(a, b)` | float meters | ✓ inside a comparison (Point attrs); in-memory in `order_by` / `calculate` and for line/multipoint |
+| `st_distance(a, b)` | float meters — any geometry ↔ Point (exact) | ✓ inside a comparison (Point attrs); in-memory in `order_by` / `calculate` and for non-Point geometries |
 | `st_distance_in_meters(a, b)` | float meters — alias for `st_distance` | ✓ same as `st_distance` |
-| `st_dwithin(a, b, distance)` | boolean — within `distance` meters | ✓ Cypher (Point attrs) |
-| `st_closest_point(collection, point)` | `%Geo.Point{}` — nearest vertex from a LineString/MultiPoint | in-memory |
+| `st_dwithin(a, b, distance)` | boolean — within `distance` meters | ✓ Cypher (Point attrs); in-memory for other geometries |
+| `st_closest_point(collection, point)` | `%Geo.Point{}` — closest point on the nearest segment (LineString) / nearest vertex (MultiPoint) | in-memory |
 
 ```elixir
 require Ash.Query
@@ -133,7 +133,7 @@ Place |> Ash.Query.filter(st_distance(location, ^customer_point) < 5_000) |> Ash
 
 `st_contains` and `st_intersects` are **exact and hole-aware** — they refine via [`topo`](https://hex.pm/packages/topo) on the actual `%Geo.*{}` rings, not the bounding box. A point in the bbox but outside the ring is correctly excluded; a point in an interior ring (hole) is not contained; a line that crosses a polygon without a vertex inside it correctly intersects. Inside an `Ash.Query.filter`, the `bbSW`/`bbNE` companions drive a cheap indexed `point.withinBBox` **prefilter** in Cypher (over-selecting candidates whose bbox contains the test geometry); the exact `topo` test then runs in-memory over those candidates. A true match always lies within the polygon's bbox, so the prefilter never drops one.
 
-`st_distance` on LineString/MultiPoint is still a closest-**vertex** approximation (not closest-point-on-segment) — a separate distance-accuracy concern, documented per function moduledoc.
+`st_distance` measures **any geometry to a Point** exactly (#279): LineString/MultiLineString use the true closest-point-on-**segment** (not closest-vertex, which overstates the distance for a point near a long edge's midpoint); Polygon/MultiPolygon return `0` when the point is inside (hole-aware) and the nearest-boundary distance otherwise. `st_dwithin` inherits all of this. Distance between two **non-Point** geometries (line↔line, line↔polygon, polygon↔polygon) needs segment-to-segment math and is deferred.
 
 ### Distance matches Neo4j's own model
 
@@ -255,7 +255,7 @@ The GeoJSON `STRING` and any vertex data are never indexable for spatial queries
 
 - **WGS-84 2D only.** Set `force_srid: 4326`; other CRSs are out of scope this release.
 - **`st_distance` in `order_by` / `calculate` is in-memory.** Fine at NBN scale; pushdown for those contexts is future work.
-- **`st_distance` on LineString / MultiPoint is closest-vertex** (not closest-point-on-segment). A point near a long edge's midpoint reads the distance to the nearest vertex, which can overstate it. `st_contains` / `st_intersects` are exact (topo); distance refinement is future work.
+- **`st_distance` between two non-Point geometries is not yet implemented** (line↔line, line↔polygon, polygon↔polygon — needs segment-to-segment math; returns `:unknown`). Any geometry **to a Point** is exact (closest-point-on-segment for lines, nearest-boundary for polygons).
 - **`st_intersects` has no Cypher prefilter** — it's exact but in-memory only; a bbox-overlap prefilter via the companions is tractable and deferred.
 - **Arrays of geometry-bearing values aren't recursively walked** for companion promotion yet.
 - **Index lifecycle is the operator's responsibility** (see above).

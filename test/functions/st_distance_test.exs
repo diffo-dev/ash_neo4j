@@ -82,7 +82,7 @@ defmodule AshNeo4j.Functions.StDistanceTest do
     end
   end
 
-  describe "evaluate/1 — LineString to point (closest-vertex approximation)" do
+  describe "evaluate/1 — LineString to point (closest point on segment, #279)" do
     setup do
       line = %Geo.LineString{
         coordinates: [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}],
@@ -92,10 +92,9 @@ defmodule AshNeo4j.Functions.StDistanceTest do
       {:ok, fibre: line}
     end
 
-    test "returns the haversine distance to the nearest vertex", %{fibre: line} do
+    test "measures to the nearest point on a segment", %{fibre: line} do
       {:known, meters} = StDistance.evaluate(%{arguments: [line, geo(151.22, -33.85)]})
 
-      # Nearest vertex is (151.21, -33.87); within a few km of the target.
       assert meters < 5_000
     end
 
@@ -106,19 +105,116 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
       assert ab == ba
     end
+
+    test "closest-point-on-segment is shorter than closest-vertex for a mid-edge target" do
+      # A single long due-east segment; the target sits perpendicular to its
+      # midpoint, far from either endpoint. The old closest-vertex answer
+      # overstated this badly; closest-point-on-segment reads the real
+      # perpendicular distance.
+      segment = %Geo.LineString{coordinates: [{151.0, -33.0}, {152.0, -33.0}], srid: 4326}
+      target = geo(151.5, -33.1)
+
+      {:known, on_segment} = StDistance.evaluate(%{arguments: [segment, target]})
+
+      nearest_vertex =
+        [{151.0, -33.0}, {152.0, -33.0}]
+        |> Enum.map(&AshNeo4j.Geo.haversine_meters(&1, {151.5, -33.1}))
+        |> Enum.min()
+
+      # ~0.1° of latitude ≈ 11 km perpendicular; the nearest vertex is ~47 km.
+      assert_in_delta on_segment, 11_100, 200
+      assert on_segment < nearest_vertex / 3
+    end
+  end
+
+  describe "evaluate/1 — point to Polygon (#279)" do
+    # Unit square with a square hole punched in the middle.
+    defp holed do
+      %Geo.Polygon{
+        coordinates: [
+          [{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}, {0.0, 0.0}],
+          [{3.0, 3.0}, {7.0, 3.0}, {7.0, 7.0}, {3.0, 7.0}, {3.0, 3.0}]
+        ],
+        srid: 4326
+      }
+    end
+
+    test "is 0 when the point is inside the polygon (solid part)" do
+      assert {:known, +0.0} = StDistance.evaluate(%{arguments: [holed(), geo(1.0, 1.0)]})
+    end
+
+    test "is the distance to the nearest exterior edge when the point is outside" do
+      # 1° west of the exterior's west edge, at the equator-ish band.
+      {:known, meters} = StDistance.evaluate(%{arguments: [holed(), geo(-1.0, 5.0)]})
+      assert_in_delta meters, AshNeo4j.Geo.haversine_meters({-1.0, 5.0}, {0.0, 5.0}), 1.0
+    end
+
+    test "is the distance to the hole's ring when the point sits in a hole" do
+      # (5,5) is the hole centre — outside the polygon; nearest boundary is
+      # the hole ring 2° away (to the edge at x=3 or x=7).
+      {:known, meters} = StDistance.evaluate(%{arguments: [holed(), geo(5.0, 5.0)]})
+      assert_in_delta meters, AshNeo4j.Geo.haversine_meters({5.0, 5.0}, {3.0, 5.0}), 1.0
+    end
+
+    test "is symmetric in arguments" do
+      {:known, ab} = StDistance.evaluate(%{arguments: [holed(), geo(-1.0, 5.0)]})
+      {:known, ba} = StDistance.evaluate(%{arguments: [geo(-1.0, 5.0), holed()]})
+      assert ab == ba
+    end
+  end
+
+  describe "evaluate/1 — point to MultiPolygon / MultiLineString (#279)" do
+    test "MultiPolygon is 0 inside any constituent, else nearest boundary" do
+      mp = %Geo.MultiPolygon{
+        coordinates: [
+          [[{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}, {0.0, 0.0}]],
+          [[{10.0, 10.0}, {11.0, 10.0}, {11.0, 11.0}, {10.0, 11.0}, {10.0, 10.0}]]
+        ],
+        srid: 4326
+      }
+
+      assert {:known, +0.0} = StDistance.evaluate(%{arguments: [mp, geo(0.5, 0.5)]})
+      assert {:known, +0.0} = StDistance.evaluate(%{arguments: [mp, geo(10.5, 10.5)]})
+
+      {:known, meters} = StDistance.evaluate(%{arguments: [mp, geo(2.0, 0.5)]})
+      assert_in_delta meters, AshNeo4j.Geo.haversine_meters({2.0, 0.5}, {1.0, 0.5}), 1.0
+    end
+
+    test "MultiLineString measures to the nearest segment of any constituent line" do
+      mls = %Geo.MultiLineString{
+        coordinates: [
+          [{151.0, -33.0}, {152.0, -33.0}],
+          [{144.0, -37.0}, {145.0, -37.0}]
+        ],
+        srid: 4326
+      }
+
+      {:known, meters} = StDistance.evaluate(%{arguments: [mls, geo(151.5, -33.1)]})
+      assert_in_delta meters, 11_100, 200
+    end
   end
 
   describe "st_dwithin LineString filter via Ash.Query" do
     setup do
-      near = Place |> Ash.create!(%{name: "Near fibre", path: %Geo.LineString{
-        coordinates: [{151.21, -33.87}, {151.30, -33.50}],
-        srid: 4326
-      }})
+      near =
+        Place
+        |> Ash.create!(%{
+          name: "Near fibre",
+          path: %Geo.LineString{
+            coordinates: [{151.21, -33.87}, {151.30, -33.50}],
+            srid: 4326
+          }
+        })
 
-      far = Place |> Ash.create!(%{name: "Far fibre", path: %Geo.LineString{
-        coordinates: [{144.96, -37.81}, {145.10, -37.50}],
-        srid: 4326
-      }})
+      far =
+        Place
+        |> Ash.create!(%{
+          name: "Far fibre",
+          path: %Geo.LineString{
+            coordinates: [{144.96, -37.81}, {145.10, -37.50}],
+            srid: 4326
+          }
+        })
 
       {:ok, near: near, far: far}
     end
@@ -151,15 +247,25 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "st_dwithin MultiPoint filter via Ash.Query" do
     test "finds places whose candidate PE set has a point within the threshold" do
-      sydney = Place |> Ash.create!(%{name: "Sydney candidates", pes: %Geo.MultiPoint{
-        coordinates: [{151.21, -33.87}, {151.30, -33.85}],
-        srid: 4326
-      }})
+      sydney =
+        Place
+        |> Ash.create!(%{
+          name: "Sydney candidates",
+          pes: %Geo.MultiPoint{
+            coordinates: [{151.21, -33.87}, {151.30, -33.85}],
+            srid: 4326
+          }
+        })
 
-      perth = Place |> Ash.create!(%{name: "Perth candidates", pes: %Geo.MultiPoint{
-        coordinates: [{115.86, -31.95}, {115.90, -32.00}],
-        srid: 4326
-      }})
+      perth =
+        Place
+        |> Ash.create!(%{
+          name: "Perth candidates",
+          pes: %Geo.MultiPoint{
+            coordinates: [{115.86, -31.95}, {115.90, -32.00}],
+            srid: 4326
+          }
+        })
 
       customer = geo(151.22, -33.85)
       threshold = 50_000.0

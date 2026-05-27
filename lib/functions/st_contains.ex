@@ -12,8 +12,9 @@ defmodule AshNeo4j.Functions.StContains do
 
   Exact, hole-aware containment via [`topo`](https://hex.pm/packages/topo)
   on the `%Geo.*{}` geometries (#267). Supports `%Geo.Polygon{}` and
-  `%Geo.MultiPolygon{}` as the container, against `%Geo.Point{}`,
-  `%Geo.Polygon{}`, or `%Geo.MultiPoint{}`. OGC `contains` semantics:
+  `%Geo.MultiPolygon{}` as the container, against any of `%Geo.Point{}`,
+  `%Geo.MultiPoint{}`, `%Geo.LineString{}`, `%Geo.MultiLineString{}`,
+  `%Geo.Polygon{}`, or `%Geo.MultiPolygon{}`. OGC `contains` semantics:
 
   - `st_contains(polygon, multipoint)` is true iff **every** point lies
     inside the polygon (all-of).
@@ -44,7 +45,14 @@ defmodule AshNeo4j.Functions.StContains do
 
   def evaluate(%{arguments: [%container{} = a, %contained{} = b]})
       when container in [Geo.Polygon, Geo.MultiPolygon] and
-             contained in [Geo.Point, Geo.Polygon, Geo.MultiPoint, Geo.MultiPolygon] do
+             contained in [
+               Geo.Point,
+               Geo.MultiPoint,
+               Geo.LineString,
+               Geo.MultiLineString,
+               Geo.Polygon,
+               Geo.MultiPolygon
+             ] do
     {:known, Topo.contains?(a, b)}
   end
 
