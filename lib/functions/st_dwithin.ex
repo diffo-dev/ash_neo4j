@@ -30,10 +30,10 @@ defmodule AshNeo4j.Functions.StDwithin do
   def evaluate(%{arguments: [_, nil, _]}), do: {:known, false}
   def evaluate(%{arguments: [_, _, nil]}), do: {:known, false}
 
-  def evaluate(%{arguments: [%Bolty.Types.Point{} = p1, %Bolty.Types.Point{} = p2, threshold]}) when is_number(threshold) do
-    case AshNeo4j.Functions.StDistance.evaluate(%{arguments: [p1, p2]}) do
+  def evaluate(%{arguments: [a, b, threshold]}) when is_number(threshold) do
+    case AshNeo4j.Functions.StDistance.evaluate(%{arguments: [a, b]}) do
       {:known, nil} -> {:known, false}
-      {:known, distance} -> {:known, distance <= threshold}
+      {:known, distance} when is_number(distance) -> {:known, distance <= threshold}
       other -> other
     end
   end

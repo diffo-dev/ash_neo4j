@@ -15,7 +15,6 @@ defmodule AshNeo4j.Functions.StDwithinTest do
   alias AshNeo4j.Functions.StDwithin
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias Bolty.Types.Point
 
   setup_all do
     BoltyHelper.start()
@@ -26,26 +25,24 @@ defmodule AshNeo4j.Functions.StDwithinTest do
     on_exit(&Sandbox.rollback/0)
   end
 
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
+
   describe "evaluate/1" do
     test "returns true when within threshold" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
-      near = Point.create(:wgs_84, 151.2, -33.85)
-      assert {:known, true} = StDwithin.evaluate(%{arguments: [sydney, near, 5_000]})
+      assert {:known, true} = StDwithin.evaluate(%{arguments: [geo(151.2093, -33.8688), geo(151.2, -33.85), 5_000]})
     end
 
     test "returns false when beyond threshold" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
-      melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-      assert {:known, false} = StDwithin.evaluate(%{arguments: [sydney, melbourne, 5_000]})
+      assert {:known, false} = StDwithin.evaluate(%{arguments: [geo(151.2093, -33.8688), geo(144.9631, -37.8136), 5_000]})
     end
 
     test "boundary is inclusive (PostGIS semantics)" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
+      sydney = geo(151.2093, -33.8688)
       assert {:known, true} = StDwithin.evaluate(%{arguments: [sydney, sydney, 0]})
     end
 
     test "nil arguments yield false" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
+      sydney = geo(151.2093, -33.8688)
       assert {:known, false} = StDwithin.evaluate(%{arguments: [nil, sydney, 5_000]})
       assert {:known, false} = StDwithin.evaluate(%{arguments: [sydney, nil, 5_000]})
       assert {:known, false} = StDwithin.evaluate(%{arguments: [sydney, sydney, nil]})
@@ -54,13 +51,13 @@ defmodule AshNeo4j.Functions.StDwithinTest do
 
   describe "st_dwithin in Ash.Query.filter" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: geo(144.9631, -37.8136)})
       {:ok, sydney: sydney, melbourne: melbourne}
     end
 
     test "finds nearby places", %{sydney: sydney, melbourne: melbourne} do
-      customer = Point.create(:wgs_84, 151.2, -33.85)
+      customer = geo(151.2, -33.85)
 
       {:ok, results} =
         Place
@@ -73,7 +70,7 @@ defmodule AshNeo4j.Functions.StDwithinTest do
     end
 
     test "broader threshold catches everything in range", %{sydney: sydney, melbourne: melbourne} do
-      customer = Point.create(:wgs_84, 151.2, -33.85)
+      customer = geo(151.2, -33.85)
 
       {:ok, results} =
         Place
@@ -86,7 +83,7 @@ defmodule AshNeo4j.Functions.StDwithinTest do
     end
 
     test "tight threshold returns nothing", %{} do
-      far_away = Point.create(:wgs_84, 100.0, 0.0)
+      far_away = geo(100.0, 0.0)
 
       {:ok, results} =
         Place

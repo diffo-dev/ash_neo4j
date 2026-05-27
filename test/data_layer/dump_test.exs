@@ -60,10 +60,6 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
 
-    test "point" do
-      value_unchanged(AshNeo4j.Type.Point, Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688))
-    end
-
     test "utc date time" do
       value_unchanged(Ash.Type.UtcDatetime, ~U[2025-05-11 07:45:41Z], precision: :second)
     end
@@ -78,12 +74,24 @@ defmodule AshNeo4j.DataLayer.DumpTest do
       value_changed(Ash.Type.Atom, :a, "a")
     end
 
-    test "box" do
-      sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
-      se = Bolty.Types.Point.create(:wgs_84, 151.5, -34.0)
-      ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
-      nw = Bolty.Types.Point.create(:wgs_84, 151.0, -33.5)
-      value_changed(AshNeo4j.Type.Box, %AshNeo4j.Type.Box{sw: sw, ne: ne}, [sw, se, ne, nw])
+    test "geo Point — AshGeo.GeoJson dump_to_native is identity on %Geo.Point{}" do
+      # The data layer's dump_properties detects classification :geo on the
+      # attribute_type and routes through promote_geo/3 (which encodes JSON
+      # canonical + adds an indexable companion); the type-level Dump.dump
+      # call is identity per AshGeo, leaving the struct unchanged for the
+      # data layer to act on.
+      pt = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
+      value_unchanged(AshGeo.GeoJson, pt, geo_types: [:point])
+    end
+
+    test "geo Polygon — AshGeo.GeoJson dump_to_native is identity on %Geo.Polygon{}" do
+      poly = %Geo.Polygon{
+        coordinates: [
+          [{151.0, -34.0}, {151.5, -34.0}, {151.5, -33.5}, {151.0, -33.5}, {151.0, -34.0}]
+        ],
+        srid: 4326
+      }
+      value_unchanged(AshGeo.GeoJson, poly, geo_types: [:polygon])
     end
 
     test "ci string" do

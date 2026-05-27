@@ -5,17 +5,34 @@
 defmodule AshNeo4j.Functions.StIntersects do
   @moduledoc """
   `st_intersects(a, b)` — true if two geometries share any space. Mirrors
-  ash_geo / PostGIS `ST_Intersects`. v1 supports box-box.
+  ash_geo / PostGIS `ST_Intersects`. Exact, via
+  [`topo`](https://hex.pm/packages/topo) on the `%Geo.*{}` geometries
+  (#267) — handles any combination of Point / LineString / Polygon /
+  Multi* directly, including segment-edge crossings.
 
       Place
-      |> Ash.Query.filter(st_intersects(bounds, ^other_box))
+      |> Ash.Query.filter(st_intersects(bounds, ^other_polygon))
       |> Ash.read!()
 
-  No Cypher pushdown in this slice — the predicate evaluates in memory via
-  `Ash.Filter.Runtime`. Pushdown is tractable (4 axis comparisons on the
-  bbox companions) but deferred; in-memory is correct and fast at NBN scale.
+  Evaluates in memory. Unlike `st_contains`, `st_intersects` is **not**
+  pushed down — a bbox-overlap prefilter via the `bbSW`/`bbNE` companions
+  is tractable (`point.withinBBox` on the corners) but deferred to a
+  follow-up. In-memory `topo` is correct and fast at NBN scale.
+
+  Notably, a LineString that crosses a Polygon **without** a vertex
+  inside it now correctly intersects (the old vertex-in-bbox
+  approximation missed that case).
   """
   use Ash.Query.Function, name: :st_intersects, predicate?: true
+
+  @geo_structs [
+    Geo.Point,
+    Geo.LineString,
+    Geo.Polygon,
+    Geo.MultiPoint,
+    Geo.MultiLineString,
+    Geo.MultiPolygon
+  ]
 
   def args, do: [[:any, :any]]
 
@@ -24,10 +41,9 @@ defmodule AshNeo4j.Functions.StIntersects do
   def evaluate(%{arguments: [nil, _]}), do: {:known, false}
   def evaluate(%{arguments: [_, nil]}), do: {:known, false}
 
-  def evaluate(%{arguments: [%AshNeo4j.Type.Box{sw: a_sw, ne: a_ne}, %AshNeo4j.Type.Box{sw: b_sw, ne: b_ne}]}) do
-    {:known,
-     a_ne.x >= b_sw.x and a_sw.x <= b_ne.x and
-       a_ne.y >= b_sw.y and a_sw.y <= b_ne.y}
+  def evaluate(%{arguments: [%a{} = ga, %b{} = gb]})
+      when a in @geo_structs and b in @geo_structs do
+    {:known, Topo.intersects?(ga, gb)}
   end
 
   def evaluate(_), do: :unknown

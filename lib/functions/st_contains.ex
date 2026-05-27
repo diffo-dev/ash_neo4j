@@ -6,25 +6,33 @@ defmodule AshNeo4j.Functions.StContains do
   @moduledoc """
   Spatial containment — true if the first geometry contains the second.
 
-  v1 supports box-contains-point and box-contains-box:
-
       Place
       |> Ash.Query.filter(st_contains(bounds, ^test_point))
       |> Ash.read!()
 
-      Place
-      |> Ash.Query.filter(st_contains(bounds, ^test_box))
-      |> Ash.read!()
+  Exact, hole-aware containment via [`topo`](https://hex.pm/packages/topo)
+  on the `%Geo.*{}` geometries (#267). Supports `%Geo.Polygon{}` and
+  `%Geo.MultiPolygon{}` as the container, against any of `%Geo.Point{}`,
+  `%Geo.MultiPoint{}`, `%Geo.LineString{}`, `%Geo.MultiLineString{}`,
+  `%Geo.Polygon{}`, or `%Geo.MultiPolygon{}`. OGC `contains` semantics:
 
-  Both forms push down to Neo4j's native `point.withinBBox`:
-  box-contains-point as a single call, box-contains-box as two ANDed calls
-  on the inner box's SW and NE corners (which is sufficient for axis-aligned
-  boxes — the other two corners are implied). `evaluate/1` covers the same
-  cases for in-memory fallback when pushdown isn't taken (e.g. expressions
-  the data layer can't recognise).
+  - `st_contains(polygon, multipoint)` is true iff **every** point lies
+    inside the polygon (all-of).
+  - `st_contains(multipolygon, point)` is true iff the point lies in
+    **any** constituent polygon (any-of).
+  - Containment respects interior rings — a point in a hole is **not**
+    contained.
 
-  Named after the OGC / PostGIS convention (`ST_Contains`) for consistency
-  with ash_geo so consumer code reads the same across data layers.
+  Inside an `Ash.Query.filter`, the `bbSW`/`bbNE` companions drive a
+  cheap indexed `point.withinBBox` **prefilter** in Cypher (over-selects
+  candidates whose bounding box contains the test geometry); the exact
+  `topo` test then runs in-memory over the prefilter's candidates. A true
+  match always lies within the polygon's bbox, so the prefilter never
+  drops one — it only narrows the set the exact test runs against.
+
+  Named after the OGC / PostGIS convention (`ST_Contains`) for
+  consistency with ash_geo / `AshGeo.Postgis` so consumer code reads
+  the same across data layers.
   """
   use Ash.Query.Function, name: :st_contains, predicate?: true
 
@@ -35,14 +43,17 @@ defmodule AshNeo4j.Functions.StContains do
   def evaluate(%{arguments: [nil, _]}), do: {:known, false}
   def evaluate(%{arguments: [_, nil]}), do: {:known, false}
 
-  def evaluate(%{arguments: [%AshNeo4j.Type.Box{sw: sw, ne: ne}, %Bolty.Types.Point{} = p]}) do
-    {:known, p.x >= sw.x and p.x <= ne.x and p.y >= sw.y and p.y <= ne.y}
-  end
-
-  def evaluate(%{arguments: [%AshNeo4j.Type.Box{sw: o_sw, ne: o_ne}, %AshNeo4j.Type.Box{sw: i_sw, ne: i_ne}]}) do
-    {:known,
-     o_sw.x <= i_sw.x and o_sw.y <= i_sw.y and
-       o_ne.x >= i_ne.x and o_ne.y >= i_ne.y}
+  def evaluate(%{arguments: [%container{} = a, %contained{} = b]})
+      when container in [Geo.Polygon, Geo.MultiPolygon] and
+             contained in [
+               Geo.Point,
+               Geo.MultiPoint,
+               Geo.LineString,
+               Geo.MultiLineString,
+               Geo.Polygon,
+               Geo.MultiPolygon
+             ] do
+    {:known, Topo.contains?(a, b)}
   end
 
   def evaluate(_), do: :unknown

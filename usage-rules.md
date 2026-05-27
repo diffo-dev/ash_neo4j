@@ -127,9 +127,14 @@ Custom calculation modules (`:calculate` callback) are not currently supported �
 
 ## Spatial types and expressions
 
-AshNeo4j ships `AshNeo4j.Type.Point` and `AshNeo4j.Type.Box` as Ash attribute types, plus six `st_*` expression functions (`st_contains`, `st_within`, `st_intersects`, `st_distance`, `st_distance_in_meters`, `st_dwithin`) matching ash_geo / PostGIS signatures. Predicates push down to Neo4j's native `point.distance` and `point.withinBBox` wherever possible.
+AshNeo4j stores geometries using [`ash_geo`](https://hex.pm/packages/ash_geo) types — declare attributes as `AshGeo.GeoJson` with a `geo_types` constraint, carrying [`%Geo.*{}`](https://hex.pm/packages/geo) structs. `st_*` expression functions (`st_contains`, `st_within`, `st_intersects`, `st_distance`, `st_distance_in_meters`, `st_dwithin`, `st_closest_point`) match ash_geo / PostGIS signatures. Predicates push down to Neo4j's native `point.distance` and `point.withinBBox` wherever possible.
 
 ```elixir
+attributes do
+  attribute :location, AshGeo.GeoJson, constraints: [geo_types: [:point], force_srid: 4326]
+  attribute :bounds,   AshGeo.GeoJson, constraints: [geo_types: [:polygon], force_srid: 4326]
+end
+
 require Ash.Query
 
 # Service qualification: which Places contain the customer point?
@@ -143,7 +148,7 @@ Place
 |> Ash.read!()
 ```
 
-WGS-84 2D only in this release. Box's on-disk storage uses a 4-Point vertex array plus 4 scalar Point bbox-corner companion properties — the storage is **indexable, not yet indexed** (operators create POINT indexes themselves). Full details, holiness composition for SQ exclusions, and the limitation list in `usage-rules/spatial.md`.
+WGS-84 2D only in this release. On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus scalar Point companions for indexed bbox prefilter (`<attr>.bbSW`/`<attr>.bbNE`); Point additionally keeps a native `<attr>.point` for `point.distance` pushdown. **Geometries nested inside TypedStructs / embedded resources get their indexable companion promoted to a node-level property too** — a location buried in a characteristic is still indexable. Storage is **indexable, not yet indexed** — `AshNeo4j.Spatial.create_index(Place, :location)` builds and runs the POINT index Cypher from the resource + attribute (operator-invoked, not automatic). `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` were removed in 0.8.0 — full migration notes, recursive-promotion details, holiness composition, and limitations in `usage-rules/spatial.md`.
 
 ## Combination queries
 
@@ -164,6 +169,17 @@ Customer
 ```
 
 Note: `union` and `union_all` look identical at the Ash record level (records dedup by primary key in `consolidate_groups/1`); the Cypher-level duplicate-preservation is only observable when querying Cypher directly. Full details, polymorphic-resource pattern for cross-subtype combinations, and execution-path notes in `usage-rules/combination-queries.md`.
+
+## N-world projection — `AshNeo4j.worlds/1` (exploratory, #273)
+
+A Neo4j node carries labels for every `(Domain, Resource)` world it participates in, but an Ash read returns only the queried world's struct. `AshNeo4j.worlds(record)` projects the read record's labels back to the loadable resource modules — `[{domain, resource}, …]` ordered **outermost-first** — so a consumer can recover the outer type of a polymorphic node (for cross-domain late binding) without dropping to Cypher. An outer world contains the inner worlds and adds detail, so it carries more labels (more labels = more nuanced = more outer):
+
+```elixir
+record = Ash.get!(SomeBaseInstance, id)
+{domain, resource} = hd(AshNeo4j.worlds(record))   # outermost (most-nuanced) world
+```
+
+Resolution is dynamic against loaded modules (no registry): a candidate is a loaded `AshNeo4j.DataLayer` resource whose own labels are a subset of the node's; the outermost (most-nuanced) is kept per domain. Labels that don't resolve to a loaded module are left unknown (omitted). Returns `[]` for a record not produced by this data layer. **Pre-1.0 and may change** — shipped to learn its shape from real downstream use.
 
 ## Naming conventions
 

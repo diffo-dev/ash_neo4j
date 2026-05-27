@@ -15,8 +15,6 @@ defmodule AshNeo4j.Functions.StWithinTest do
   alias AshNeo4j.Functions.StWithin
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias AshNeo4j.Type.Box
-  alias Bolty.Types.Point
 
   setup_all do
     BoltyHelper.start()
@@ -27,41 +25,45 @@ defmodule AshNeo4j.Functions.StWithinTest do
     on_exit(&Sandbox.rollback/0)
   end
 
-  defp sydney_box do
-    %Box{
-      sw: Point.create(:wgs_84, 151.0, -34.0),
-      ne: Point.create(:wgs_84, 151.5, -33.5)
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
+
+  defp sydney_polygon do
+    %Geo.Polygon{
+      coordinates: [
+        [{151.0, -34.0}, {151.5, -34.0}, {151.5, -33.5}, {151.0, -33.5}, {151.0, -34.0}]
+      ],
+      srid: 4326
     }
   end
 
   describe "evaluate/1 — delegates to st_contains with args flipped" do
-    test "point within box" do
-      inside = Point.create(:wgs_84, 151.2, -33.8)
-      assert {:known, true} = StWithin.evaluate(%{arguments: [inside, sydney_box()]})
+    test "point within polygon" do
+      assert {:known, true} = StWithin.evaluate(%{arguments: [geo(151.2, -33.8), sydney_polygon()]})
     end
 
-    test "point outside box" do
-      outside = Point.create(:wgs_84, 100.0, 0.0)
-      assert {:known, false} = StWithin.evaluate(%{arguments: [outside, sydney_box()]})
+    test "point outside polygon" do
+      assert {:known, false} = StWithin.evaluate(%{arguments: [geo(100.0, 0.0), sydney_polygon()]})
     end
 
-    test "box within box" do
-      inner = %Box{
-        sw: Point.create(:wgs_84, 151.1, -33.9),
-        ne: Point.create(:wgs_84, 151.4, -33.6)
+    test "polygon within polygon" do
+      inner = %Geo.Polygon{
+        coordinates: [
+          [{151.1, -33.9}, {151.4, -33.9}, {151.4, -33.6}, {151.1, -33.6}, {151.1, -33.9}]
+        ],
+        srid: 4326
       }
-      assert {:known, true} = StWithin.evaluate(%{arguments: [inner, sydney_box()]})
+      assert {:known, true} = StWithin.evaluate(%{arguments: [inner, sydney_polygon()]})
     end
   end
 
   describe "st_within in Ash.Query.filter (in-memory)" do
-    test "finds places whose location is inside the given box" do
-      sydney_place = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      _outside = Place |> Ash.create!(%{name: "Perth CBD", location: Point.create(:wgs_84, 115.8617, -31.9514)})
+    test "finds places whose location is inside the given polygon" do
+      sydney_place = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      _outside = Place |> Ash.create!(%{name: "Perth CBD", location: geo(115.8617, -31.9514)})
 
       {:ok, results} =
         Place
-        |> Ash.Query.filter(st_within(location, ^sydney_box()))
+        |> Ash.Query.filter(st_within(location, ^sydney_polygon()))
         |> Ash.read()
 
       ids = Enum.map(results, & &1.id)
