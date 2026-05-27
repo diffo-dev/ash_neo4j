@@ -52,4 +52,66 @@ defmodule AshNeo4j.Geo do
 
     @wgs_84_equatorial_radius_m * c
   end
+
+  @doc """
+  Geodesic distance in metres from point `p` to the nearest point on the
+  segment `a`–`b` (each a `{lng, lat}` pair) — the true
+  closest-point-on-segment distance, not closest-vertex.
+
+  The closest point is found by projecting `p` onto the segment in a
+  local equirectangular frame (longitude scaled by `cos(lat)` so the
+  projection isn't distorted by meridian convergence), then the distance
+  to that point is measured with `haversine_meters/2`. Accurate for the
+  short segments of fibre paths and admin-boundary edges; a degenerate
+  segment (`a == b`) falls back to the distance to `a`.
+  """
+  @spec point_segment_meters({number(), number()}, {number(), number()}, {number(), number()}) :: float()
+  def point_segment_meters(p, a, b) do
+    haversine_meters(p, closest_point_on_segment(p, a, b))
+  end
+
+  @doc """
+  The point on segment `a`–`b` closest to `p`, as a `{lng, lat}` pair.
+  Clamps to the segment's endpoints. See `point_segment_meters/3` for the
+  projection model.
+  """
+  @spec closest_point_on_segment({number(), number()}, {number(), number()}, {number(), number()}) ::
+          {number(), number()}
+  def closest_point_on_segment({px, py}, {ax, ay} = _a, {bx, by} = _b) do
+    # Scale longitude into a local planar frame so the projection isn't
+    # stretched by meridian convergence at the segment's latitude.
+    scale = :math.cos(:math.pi() / 180 * ((ay + by) / 2))
+    dx = (bx - ax) * scale
+    dy = by - ay
+    denom = dx * dx + dy * dy
+
+    t =
+      if denom == 0.0 do
+        0.0
+      else
+        ((px - ax) * scale * dx + (py - ay) * dy) / denom
+      end
+      |> max(0.0)
+      |> min(1.0)
+
+    {ax + t * (bx - ax), ay + t * (by - ay)}
+  end
+
+  @doc """
+  Minimum `point_segment_meters/3` from `p` to any segment formed by
+  consecutive vertices of `coords` (a list of `{lng, lat}` pairs). Used
+  for point-to-LineString and point-to-polygon-ring-edge distance. A
+  single-vertex list degenerates to the distance to that vertex; an empty
+  list returns `:infinity` (a sentinel that orders above any real distance
+  under `min/2`, so callers can fold it away).
+  """
+  @spec min_segment_meters({number(), number()}, [{number(), number()}]) :: float() | :infinity
+  def min_segment_meters(_p, []), do: :infinity
+  def min_segment_meters(p, [only]), do: haversine_meters(p, only)
+
+  def min_segment_meters(p, coords) when is_list(coords) do
+    coords
+    |> Enum.zip(tl(coords))
+    |> Enum.reduce(:infinity, fn {a, b}, acc -> min(acc, point_segment_meters(p, a, b)) end)
+  end
 end

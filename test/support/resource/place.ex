@@ -37,6 +37,13 @@ defmodule AshNeo4j.Test.Resource.Place do
       public?: true,
       constraints: [geo_types: [:multi_polygon], force_srid: 4326]
 
+    # #279 #5 — MultiLineString round-trips and works with the predicates
+    # by construction (Util handles it, topo supports it); this attribute
+    # gives the tests something concrete to assert against.
+    attribute :routes, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:multi_line_string], force_srid: 4326]
+
     # Test fixture for #274's recursive geo-promotion: a TypedStruct
     # with a nested Geo field. The whole struct stores as JSON at
     # <attr>; the nested home Point's indexable companion gets
