@@ -58,6 +58,13 @@ defmodule AshNeo4j.DataLayer.Cast do
       {:ok, :ash, ash_type} ->
         cast_ash_type(ash_type, value, constraints)
 
+      {:ok, :geo, ash_type} ->
+        # AshGeo geometry types: the data layer's read_attribute_property/4
+        # has already decoded the stored JSON STRING into a %Geo.*{} struct
+        # before we get here. cast_stored is identity for AshGeo on those
+        # structs — no extra cast machinery, just follow the ash typing.
+        cast_ash_type(ash_type, value, constraints)
+
       _ ->
         {:error, "AshNeo4j.DataLayer: cannot cast value #{inspect(value)} of type #{inspect(type)}"}
     end

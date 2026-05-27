@@ -15,7 +15,8 @@ defmodule AshNeo4j.Functions.StDistanceTest do
   alias AshNeo4j.Functions.StDistance
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias Bolty.Types.Point
+
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
   setup_all do
     BoltyHelper.start()
@@ -28,23 +29,20 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "evaluate/1 — haversine on WGS-84 points" do
     test "Sydney to Melbourne is ~713 km within haversine precision" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
-      melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-
-      {:known, meters} = StDistance.evaluate(%{arguments: [sydney, melbourne]})
+      {:known, meters} = StDistance.evaluate(%{arguments: [geo(151.2093, -33.8688), geo(144.9631, -37.8136)]})
 
       assert_in_delta meters, 713_000, 5_000
     end
 
     test "same point is 0" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
+      sydney = geo(151.2093, -33.8688)
 
       {:known, meters} = StDistance.evaluate(%{arguments: [sydney, sydney]})
       assert meters == 0.0
     end
 
     test "nil argument yields nil" do
-      sydney = Point.create(:wgs_84, 151.2093, -33.8688)
+      sydney = geo(151.2093, -33.8688)
       assert {:known, nil} = StDistance.evaluate(%{arguments: [nil, sydney]})
       assert {:known, nil} = StDistance.evaluate(%{arguments: [sydney, nil]})
     end
@@ -52,13 +50,13 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "st_distance in Ash.Query.filter" do
     setup do
-      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: Point.create(:wgs_84, 144.9631, -37.8136)})
+      sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})
+      melbourne = Place |> Ash.create!(%{name: "Melbourne CBD", location: geo(144.9631, -37.8136)})
       {:ok, sydney: sydney, melbourne: melbourne}
     end
 
     test "finds places within a given distance of a reference point", %{sydney: sydney, melbourne: melbourne} do
-      near_sydney = Point.create(:wgs_84, 151.2, -33.85)
+      near_sydney = geo(151.2, -33.85)
       threshold = 50_000.0
 
       {:ok, results} =
@@ -72,7 +70,7 @@ defmodule AshNeo4j.Functions.StDistanceTest do
     end
 
     test "returns nothing when threshold is below all distances" do
-      near_sydney = Point.create(:wgs_84, 151.2, -33.85)
+      near_sydney = geo(151.2, -33.85)
       threshold = 100.0
 
       {:ok, results} =
@@ -81,6 +79,99 @@ defmodule AshNeo4j.Functions.StDistanceTest do
         |> Ash.read()
 
       assert results == []
+    end
+  end
+
+  describe "evaluate/1 — LineString to point (closest-vertex approximation)" do
+    setup do
+      line = %Geo.LineString{
+        coordinates: [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}],
+        srid: 4326
+      }
+
+      {:ok, fibre: line}
+    end
+
+    test "returns the haversine distance to the nearest vertex", %{fibre: line} do
+      {:known, meters} = StDistance.evaluate(%{arguments: [line, geo(151.22, -33.85)]})
+
+      # Nearest vertex is (151.21, -33.87); within a few km of the target.
+      assert meters < 5_000
+    end
+
+    test "is symmetric in arguments", %{fibre: line} do
+      target = geo(151.80, -32.95)
+      {:known, ab} = StDistance.evaluate(%{arguments: [line, target]})
+      {:known, ba} = StDistance.evaluate(%{arguments: [target, line]})
+
+      assert ab == ba
+    end
+  end
+
+  describe "st_dwithin LineString filter via Ash.Query" do
+    setup do
+      near = Place |> Ash.create!(%{name: "Near fibre", path: %Geo.LineString{
+        coordinates: [{151.21, -33.87}, {151.30, -33.50}],
+        srid: 4326
+      }})
+
+      far = Place |> Ash.create!(%{name: "Far fibre", path: %Geo.LineString{
+        coordinates: [{144.96, -37.81}, {145.10, -37.50}],
+        srid: 4326
+      }})
+
+      {:ok, near: near, far: far}
+    end
+
+    test "matches paths whose closest vertex is within the threshold", %{near: near, far: far} do
+      customer = geo(151.22, -33.85)
+      threshold = 50_000.0
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_dwithin(path, ^customer, ^threshold))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert near.id in ids
+      refute far.id in ids
+    end
+  end
+
+  describe "evaluate/1 — MultiPoint to point (closest of the set, exact)" do
+    test "returns the distance to the nearest point in the set" do
+      pes = %Geo.MultiPoint{coordinates: [{151.21, -33.87}, {115.86, -31.95}], srid: 4326}
+
+      {:known, meters} = StDistance.evaluate(%{arguments: [pes, geo(151.22, -33.85)]})
+
+      # Sydney candidate is within a few km of the target.
+      assert meters < 5_000
+    end
+  end
+
+  describe "st_dwithin MultiPoint filter via Ash.Query" do
+    test "finds places whose candidate PE set has a point within the threshold" do
+      sydney = Place |> Ash.create!(%{name: "Sydney candidates", pes: %Geo.MultiPoint{
+        coordinates: [{151.21, -33.87}, {151.30, -33.85}],
+        srid: 4326
+      }})
+
+      perth = Place |> Ash.create!(%{name: "Perth candidates", pes: %Geo.MultiPoint{
+        coordinates: [{115.86, -31.95}, {115.90, -32.00}],
+        srid: 4326
+      }})
+
+      customer = geo(151.22, -33.85)
+      threshold = 50_000.0
+
+      {:ok, results} =
+        Place
+        |> Ash.Query.filter(st_dwithin(pes, ^customer, ^threshold))
+        |> Ash.read()
+
+      ids = Enum.map(results, & &1.id)
+      assert sydney.id in ids
+      refute perth.id in ids
     end
   end
 end

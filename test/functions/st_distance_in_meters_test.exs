@@ -15,7 +15,6 @@ defmodule AshNeo4j.Functions.StDistanceInMetersTest do
   alias AshNeo4j.Functions.StDistanceInMeters
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias Bolty.Types.Point
 
   setup_all do
     BoltyHelper.start()
@@ -26,18 +25,18 @@ defmodule AshNeo4j.Functions.StDistanceInMetersTest do
     on_exit(&Sandbox.rollback/0)
   end
 
+  defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
+
   test "evaluate/1 delegates to st_distance" do
-    sydney = Point.create(:wgs_84, 151.2093, -33.8688)
-    melbourne = Point.create(:wgs_84, 144.9631, -37.8136)
-    {:known, meters} = StDistanceInMeters.evaluate(%{arguments: [sydney, melbourne]})
+    {:known, meters} = StDistanceInMeters.evaluate(%{arguments: [geo(151.2093, -33.8688), geo(144.9631, -37.8136)]})
     assert_in_delta meters, 713_000, 5_000
   end
 
   test "pushes down in filter comparison, same as st_distance" do
-    sydney_place = Place |> Ash.create!(%{name: "Sydney", location: Point.create(:wgs_84, 151.2093, -33.8688)})
-    _melbourne = Place |> Ash.create!(%{name: "Melbourne", location: Point.create(:wgs_84, 144.9631, -37.8136)})
+    sydney_place = Place |> Ash.create!(%{name: "Sydney", location: geo(151.2093, -33.8688)})
+    _melbourne = Place |> Ash.create!(%{name: "Melbourne", location: geo(144.9631, -37.8136)})
 
-    near_sydney = Point.create(:wgs_84, 151.2, -33.85)
+    near_sydney = geo(151.2, -33.85)
     threshold = 50_000.0
 
     {:ok, results} =

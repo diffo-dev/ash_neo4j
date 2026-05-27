@@ -56,9 +56,6 @@ defmodule AshNeo4j.DataLayer.CastTest do
       value_unchanged(Ash.Type.TimeUsec, ~T[07:45:41.429903Z])
     end
 
-    test "point" do
-      value_unchanged(AshNeo4j.Type.Point, Bolty.Types.Point.create(:wgs_84, 151.2093, -33.8688))
-    end
   end
 
   describe "cast ash types" do
@@ -66,12 +63,24 @@ defmodule AshNeo4j.DataLayer.CastTest do
       value_changed(Ash.Type.Atom, "a", :a)
     end
 
-    test "box" do
-      sw = Bolty.Types.Point.create(:wgs_84, 151.0, -34.0)
-      se = Bolty.Types.Point.create(:wgs_84, 151.5, -34.0)
-      ne = Bolty.Types.Point.create(:wgs_84, 151.5, -33.5)
-      nw = Bolty.Types.Point.create(:wgs_84, 151.0, -33.5)
-      value_changed(AshNeo4j.Type.Box, [sw, se, ne, nw], %AshNeo4j.Type.Box{sw: sw, ne: ne})
+    test "geo Point — AshGeo.GeoJson cast_stored is identity on %Geo.Point{}" do
+      # The data layer decodes the JSON STRING from <attr>.json into a
+      # %Geo.Point{} before handing to Cast (see read_attribute_property/4
+      # in data_layer.ex); Cast just sees the struct and dispatches through
+      # the :geo classification (which delegates to cast_ash_type → AshGeo's
+      # identity cast_stored).
+      pt = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
+      value_unchanged(AshGeo.GeoJson, pt, geo_types: [:point])
+    end
+
+    test "geo Polygon — same identity path on %Geo.Polygon{}" do
+      poly = %Geo.Polygon{
+        coordinates: [
+          [{151.0, -34.0}, {151.5, -34.0}, {151.5, -33.5}, {151.0, -33.5}, {151.0, -34.0}]
+        ],
+        srid: 4326
+      }
+      value_unchanged(AshGeo.GeoJson, poly, geo_types: [:polygon])
     end
 
     test "ci string" do

@@ -261,17 +261,25 @@ defmodule AshNeo4j.QueryHelper do
   defp to_conditions(%ResourceMapping{} = mapping, predicates) do
     predicates
     |> Enum.map(fn
-      # st_distance(prop, ^p) <op> ^n and the st_distance_in_meters alias —
+      # st_distance(attr, ^p) <op> ^n and the st_distance_in_meters alias —
       # nested function in comparison, pushed down as point.distance comparison
+      # ONLY when attr is a Point attribute (Neo4j point.distance is point-to-point).
+      # Point's primary stored value is at "<attr>.point" (the symmetric split
+      # introduced in #274 — see Type.Point.primary_suffix/0); the pushdown
+      # references that suffixed property, not the bare attribute name.
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        if point_attribute?(mapping, ref) do
+          prop = point_property(mapping, ref)
+          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        if point_attribute?(mapping, ref) do
+          prop = point_property(mapping, ref)
+          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+        end
 
       %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
         prop = property_name(mapping, predicate.left)
@@ -286,26 +294,28 @@ defmodule AshNeo4j.QueryHelper do
         ci? = case_insensitive?(mapping, argument, value)
         {prop, :contains, to_param_value(value), ci?}
 
-      %{name: :st_contains} = predicate ->
-        argument = hd(predicate.arguments)
-        value = hd(tl(predicate.arguments))
-        prop = property_name(mapping, argument)
+      %{name: :st_contains, arguments: [ref, value]} ->
+        if polygon_attribute?(mapping, ref) do
+          prop = property_name(mapping, ref)
 
-        case to_param_value(value) do
-          %Bolty.Types.Point{} = point ->
-            {prop, :st_contains, point, false}
+          case value do
+            %Geo.Point{} = point ->
+              {prop, :st_contains, to_param_value(point), false}
 
-          %AshNeo4j.Type.Box{} = box ->
-            {prop, :st_contains_box, box, false}
+            %Geo.Polygon{} = poly ->
+              {prop, :st_contains_box, polygon_bbox_corners(poly), false}
 
-          _other ->
-            # other forms — skip pushdown, let in-memory eval handle it
-            nil
+            _other ->
+              # other forms — skip pushdown, let in-memory eval handle it
+              nil
+          end
         end
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
-        prop = property_name(mapping, ref)
-        {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+        if point_attribute?(mapping, ref) do
+          prop = point_property(mapping, ref)
+          {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+        end
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
@@ -313,6 +323,54 @@ defmodule AshNeo4j.QueryHelper do
     end)
     |> Enum.reject(&is_nil/1)
   end
+
+  # True when the referenced attribute is a Point-shaped Geo attribute,
+  # i.e. declared with an AshGeo type and constrained to `geo_types`
+  # containing `:point`. Spatial predicates push down to Neo4j's native
+  # `point.distance` / `point.withinBBox` only for Point attributes;
+  # other geometries get bbox-prefilter pushdown via their own companions.
+  defp point_attribute?(mapping, ref_or_atom), do: geo_attribute_with_type?(mapping, ref_or_atom, :point)
+
+  # True when the referenced attribute is a Polygon-shaped Geo attribute.
+  # st_contains pushdown uses the polygon's bbox companions (`<attr>.bbSW`/
+  # `<attr>.bbNE`) for indexed prefilter via `point.withinBBox`.
+  defp polygon_attribute?(mapping, ref_or_atom), do: geo_attribute_with_type?(mapping, ref_or_atom, :polygon)
+
+  defp geo_attribute_with_type?(%ResourceMapping{module: module}, ref_or_atom, geo_type) do
+    name = attribute_name(ref_or_atom)
+
+    if name do
+      case Ash.Resource.Info.attribute(module, name) do
+        %{constraints: constraints} ->
+          case Keyword.get(constraints || [], :geo_types) do
+            types when is_list(types) -> geo_type in types
+            ^geo_type -> true
+            _ -> false
+          end
+
+        _ ->
+          false
+      end
+    else
+      false
+    end
+  end
+
+  # Derives {sw, ne} Bolty Points from a Geo.Polygon's exterior ring,
+  # for use in `:st_contains_box` cypher pushdown (two ANDed
+  # `point.withinBBox` calls — sufficient for testing whether the
+  # polygon's bbox fits inside the attribute's bbox).
+  defp polygon_bbox_corners(%Geo.Polygon{coordinates: [exterior | _]}) do
+    xs = Enum.map(exterior, &elem(&1, 0))
+    ys = Enum.map(exterior, &elem(&1, 1))
+    sw = Bolty.Types.Point.create(:wgs_84, Enum.min(xs), Enum.min(ys))
+    ne = Bolty.Types.Point.create(:wgs_84, Enum.max(xs), Enum.max(ys))
+    {sw, ne}
+  end
+
+  defp attribute_name(%Ash.Query.Ref{} = ref), do: Ash.Query.Ref.name(ref)
+  defp attribute_name(atom) when is_atom(atom), do: atom
+  defp attribute_name(_), do: nil
 
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do
     case ash_query.sort do
@@ -344,7 +402,15 @@ defmodule AshNeo4j.QueryHelper do
 
   defp to_param_value(%Ash.CiString{} = v), do: Ash.CiString.value(v)
   defp to_param_value(%MapSet{} = ms), do: MapSet.to_list(ms)
+  defp to_param_value(%Geo.Point{coordinates: {x, y}}), do: Bolty.Types.Point.create(:wgs_84, x, y)
   defp to_param_value(value), do: value
+
+  # Builds the on-disk property name for a Point attribute under the symmetric
+  # split — `<attr>.point` is where the native Neo4j POINT lives (the indexable
+  # primary), so spatial pushdown predicates reference that suffixed name.
+  defp point_property(%ResourceMapping{} = mapping, ref) do
+    "#{property_name(mapping, ref)}.point"
+  end
 
   defp case_insensitive?(%ResourceMapping{} = mapping, predicate_left, predicate_right) do
     ResourceInfo.attribute_type(mapping.module, predicate_left) in [Ash.Type.CiString, :ci_string] or

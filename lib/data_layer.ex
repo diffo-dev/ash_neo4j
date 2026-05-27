@@ -8,6 +8,7 @@ defmodule AshNeo4j.DataLayer do
   @behaviour Ash.DataLayer
 
   require Logger
+  require AshGeo
   alias AshNeo4j.Resource.Info, as: ResourceInfo
   alias AshNeo4j.ResourceMapping
   alias AshNeo4j.EdgeDescriptor
@@ -90,6 +91,7 @@ defmodule AshNeo4j.DataLayer do
   @impl true
   def functions(_resource) do
     [
+      AshNeo4j.Functions.StClosestPoint,
       AshNeo4j.Functions.StContains,
       AshNeo4j.Functions.StDistance,
       AshNeo4j.Functions.StDistanceInMeters,
@@ -675,6 +677,34 @@ defmodule AshNeo4j.DataLayer do
     records
   end
 
+  # Reads the on-disk property value for an attribute, handling the geo
+  # path specially: for `:geo` classified attributes the canonical lives
+  # at `<attr>.json` as an RFC 7946 GeoJSON STRING, which we decode here
+  # so Cast just sees the resulting %Geo.*{} struct and dispatches it
+  # through standard `:ash` (AshGeo's identity cast_stored).
+  defp read_attribute_property(resource, resource_field, node_field, properties) do
+    base = to_string(node_field)
+
+    case Ash.Resource.Info.attribute(resource, resource_field) do
+      %{type: type} ->
+        attribute_type = Ash.Type.get_type!(type)
+
+        case TypeClassifier.classify(attribute_type) do
+          {:ok, :geo, _} ->
+            case Map.get(properties, "#{base}.json") do
+              nil -> nil
+              json when is_binary(json) -> AshNeo4j.GeoJson.decode!(json)
+            end
+
+          _ ->
+            Map.get(properties, base)
+        end
+
+      _ ->
+        Map.get(properties, base)
+    end
+  end
+
   defp consolidate_groups(groups) when is_list(groups) do
     Enum.reduce(groups, [], fn group, acc ->
       s = Map.get(group, "s")
@@ -863,7 +893,7 @@ defmodule AshNeo4j.DataLayer do
 
     fields_result =
       Enum.reduce_while(translations, {:ok, enriched}, fn {resource_field, node_field}, {:ok, acc} ->
-        property_value = Map.get(node.properties, to_string(node_field))
+        property_value = read_attribute_property(resource, resource_field, node_field, node.properties)
 
         case cast_attribute(resource, resource_field, property_value) do
           {:ok, value} -> {:cont, {:ok, Map.put(acc, resource_field, value)}}
@@ -1054,24 +1084,101 @@ defmodule AshNeo4j.DataLayer do
           Ash.Type.get_type!(attribute.type)
 
         dumped = Dump.dump(attribute_type, value, attribute.constraints)
-        acc = Map.put(acc, translated_key, dumped)
 
-        # Types that expose `companions/1` (e.g. Box, Polygon) also write
-        # dotted scalar companion properties for indexed predicates.
-        if is_atom(attribute_type) and Code.ensure_loaded?(attribute_type) and
-             function_exported?(attribute_type, :companions, 1) do
-          attribute_type.companions(dumped)
-          |> Enum.reduce(acc, fn {suffix, val}, inner_acc ->
-            Map.put(inner_acc, "#{translated_key}.#{suffix}", val)
-          end)
-        else
-          acc
+        case TypeClassifier.classify(attribute_type) do
+          {:ok, :geo, _} ->
+            # Geo attribute: AshGeo's identity dump_to_native returned the
+            # %Geo.*{} struct unchanged. Promote it into RFC 7946 JSON
+            # canonical at <attr>.json + indexable companions (a native
+            # Neo4j Point at <attr>.point for Geo.Point, or scalar
+            # bbSW/bbNE for other geometries).
+            promote_geo(acc, translated_key, dumped)
+
+          _ ->
+            # Non-geo: dumped goes at the bare translated key.
+            acc = Map.put(acc, translated_key, dumped)
+
+            # Recursive geo-promotion: walk the *input* value (not the
+            # dumped form, which may have been JSON-stringified) for any
+            # nested %Geo.*{} structs and promote each one's indexable
+            # companion to the node at its path. The canonical GeoJSON
+            # for the nested geo lives inside the parent's JSON blob —
+            # we only emit the indexable sidecar here. Path joining is
+            # dotted (`<attr>.<field>...`) for namespace clarity.
+            value
+            |> geo_walk([translated_key])
+            |> Enum.reduce(acc, fn {path, geo}, inner_acc ->
+              promote_geo_indexable(inner_acc, Enum.join(path, "."), geo)
+            end)
         end
       else
         acc
       end
     end)
   end
+
+  # Promotes a %Geo.*{} struct into the **full** on-disk shape: RFC 7946
+  # GeoJSON STRING canonical at <attr>.json + an indexable companion sized
+  # to the geometry kind. Point gets a native Neo4j Point at <attr>.point
+  # (preserves point.distance / point.withinBBox server-side pushdown);
+  # any other geometry gets scalar bbSW/bbNE Points derived from the
+  # bounding box (useful for bbox-prefilter pushdown).
+  #
+  # Used for top-level Geo attributes — the canonical lives at
+  # <attr>.json because there's no enclosing JSON blob to nest inside.
+  defp promote_geo(acc, translated_key, geo) do
+    acc
+    |> Map.put("#{translated_key}.json", AshNeo4j.GeoJson.encode!(geo))
+    |> promote_geo_indexable(translated_key, geo)
+  end
+
+  # Promotes only the **indexable** companion for a %Geo.*{} — used when
+  # a Geo struct is nested inside a non-Geo attribute (TypedStruct,
+  # embedded resource, etc.). The canonical GeoJSON for the nested geo
+  # lives inside the parent's JSON blob (via Util.to_json_safe's geo
+  # handling), so we only need the indexable sidecar at the node level.
+  defp promote_geo_indexable(acc, translated_key, %Geo.Point{coordinates: {x, y}}) do
+    Map.put(acc, "#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y))
+  end
+
+  defp promote_geo_indexable(acc, translated_key, %_{} = geo) do
+    if AshGeo.is_geo(geo.__struct__) do
+      [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+
+      acc
+      |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
+      |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
+    else
+      acc
+    end
+  end
+
+  # Recursively walks a value (typically the input form of a non-Geo
+  # attribute — struct, map, etc.) looking for nested %Geo.*{} structs.
+  # Returns a list of `{path :: [String.t()], geo :: %Geo.*{}}` pairs.
+  # Path is the dotted hierarchy down to each Geo leaf, with the
+  # outer-most attribute name supplied by the caller as the initial
+  # path element.
+  #
+  # Arrays are skipped for now — union-bbox-over-array-elements is a
+  # follow-up design question. The pattern extends cleanly when wanted.
+  defp geo_walk(value, path)
+
+  defp geo_walk(%struct{} = value, path) do
+    if AshGeo.is_geo(struct) do
+      [{path, value}]
+    else
+      value
+      |> Map.from_struct()
+      |> Enum.flat_map(fn {k, v} -> geo_walk(v, path ++ [to_string(k)]) end)
+    end
+  end
+
+  defp geo_walk(map, path) when is_map(map) do
+    Enum.flat_map(map, fn {k, v} -> geo_walk(v, path ++ [to_string(k)]) end)
+  end
+
+  defp geo_walk(_other, _path), do: []
 
   defp apply_aggregates_to_records(records, [], _resource), do: {:ok, records}
 

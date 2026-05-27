@@ -4,9 +4,11 @@
 
 defmodule AshNeo4j.BoltyPointRoundtripTest do
   @moduledoc """
-  Round-trip Bolty.Types.Point through a real Neo4j connection ahead of building
-  AshNeo4j.Type.Point. Covers the four CRSs bolty supports (WGS-84 2D/3D,
-  Cartesian 2D/3D), single values and arrays.
+  Round-trip Bolty.Types.Point through a real Neo4j connection — the
+  driver-level foundation the spatial types build on (the data layer
+  converts %Geo.Point{} ↔ native Bolty Point at the storage boundary).
+  Covers the four CRSs bolty supports (WGS-84 2D/3D, Cartesian 2D/3D),
+  single values and arrays.
 
   This test deliberately bypasses the AshNeo4j data layer — we want to know
   what the driver itself does before designing any wrapper.
