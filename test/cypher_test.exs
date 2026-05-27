@@ -223,9 +223,9 @@ defmodule AshNeo4j.CypherTest do
 
   describe "%Geo.Point{} ↔ native Neo4j POINT boundary — for #274 rearchitecture" do
     test "Geo.Point coordinates round-trip through a native Neo4j POINT property" do
-      # Bolty packs %Bolty.Types.Point{} natively. The type-module boundary
-      # for #274's AshNeo4j.Type.Point will convert %Geo.Point{} → Bolty
-      # on dump_to_native and reverse on cast_stored. Verify both legs.
+      # Bolty packs %Bolty.Types.Point{} natively. The data layer's geo
+      # dispatch converts %Geo.Point{} → Bolty for the indexable
+      # <attr>.point companion and reverses it on read. Verify both legs.
       sydney_geo = %Geo.Point{coordinates: {151.2093, -33.8688}, srid: 4326}
 
       sydney_bolty = Point.create(:wgs_84, elem(sydney_geo.coordinates, 0), elem(sydney_geo.coordinates, 1))

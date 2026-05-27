@@ -11,6 +11,32 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [Unreleased]
+
+### Breaking Changes
+
+* **Spatial storage rearchitecture** (#274) — the spatial surface introduced in 0.7.0 is replaced. The `AshNeo4j.Type.Point` and `AshNeo4j.Type.Box` modules are **removed**; spatial attributes now use [`ash_geo`](https://hex.pm/packages/ash_geo) types and carry [`%Geo.*{}`](https://hex.pm/packages/geo) structs. `Bolty.Types.Point` no longer appears at the Ash boundary (it was a driver-layer type leaking through). Migration:
+  - `attribute :loc, AshNeo4j.Type.Point` → `attribute :loc, AshGeo.GeoJson, constraints: [geo_types: [:point], force_srid: 4326]`
+  - `attribute :b, AshNeo4j.Type.Box` → `attribute :b, AshGeo.GeoJson, constraints: [geo_types: [:polygon], force_srid: 4326]` (Box was always proto-Polygon; axis-aligned validation is now an application-layer concern)
+  - values: `Bolty.Types.Point.create(:wgs_84, lng, lat)` → `%Geo.Point{coordinates: {lng, lat}, srid: 4326}`; `%AshNeo4j.Type.Box{sw, ne}` → `%Geo.Polygon{coordinates: [ring], srid: 4326}`
+  - **on-disk shape changed**: Point's native Point moves from `<attr>` to `<attr>.point` and gains a `<attr>.json` canonical; Box's 4-Point array becomes `<attr>.json` + `<attr>.bbSW`/`<attr>.bbNE`. Existing 0.7.0 spatial nodes need re-creation or a one-shot migration cypher (AshNeo4j ships no migrations by design).
+
+  Adds `ash_geo ~> 0.3` as a runtime dependency (clean — `jason`/`geo`/`ash`; the PostGIS-flavoured deps are test-only in ash_geo).
+
+### Features
+
+* **Full GeoJSON geometry surface** (#274) — `AshGeo.GeoJson` / `AshGeo.GeoAny` attributes support all RFC 7946 geometry types: `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, `MultiPolygon`. The data layer detects geometry values (classification `:geo` in `TypeClassifier`) and stores them as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus indexable scalar Point companions — native `<attr>.point` for Point (preserving `point.distance`/`point.withinBBox` pushdown), `<attr>.bbSW`/`<attr>.bbNE` bounding-box corners for everything else. On-disk GeoJSON is strict RFC 7946 (no `crs` member, `bbox` member included) so any GIS tool can ingest it directly.
+
+* **Recursive geo-promotion** (#274) — a geometry nested inside another attribute (an `Ash.TypedStruct` field, embedded resource, map) has its indexable companion promoted to a node-level property at the dotted path (`<attr>.<field>.point` etc.), even though the parent value stores as a single JSON blob. A location buried inside a characteristic is indexable via `point.distance(n.`characteristic.location.point`, …)`. The data layer walks the value tree on write (`geo_walk/2`) and round-trips the nested geometry on read.
+
+* **`st_closest_point`** (#274) — new `Ash.Query.Function` returning the nearest vertex (`%Geo.Point{}`) from a `LineString` or `MultiPoint` to a target point. In-memory.
+
+### Improvements
+
+* **`st_*` expression functions extended** (#274) — `st_distance` / `st_dwithin` / `st_intersects` / `st_contains` / `st_within` now operate on `%Geo.*{}` argument shapes across the full geometry surface (closest-vertex / vertex-in-bbox / bbox approximations where exact computation is future #267 work). Pushdown gating reads the attribute's `geo_types` constraint rather than the (now-removed) type-module identity.
+
+* **`AshNeo4j.GeoJson`** (#274) — RFC 7946 encoder/decoder wrapping `geo`; strips the obsolete `crs` member (which `geo` emits when `srid` is set — see [felt/geo#250](https://github.com/felt/geo/issues/250)), injects the `bbox` member, key-sorts via `AshNeo4j.Util.json_encode`. `Util.to_json_safe`/`json_decode` gained symmetric Geo handling so geometries survive nesting inside JSON-stored types. Local workarounds for [ash_geo#13](https://github.com/bcksl/ash_geo/pull/13) (bare-atom `geo_types` formatter crash) and [ash_geo#14](https://github.com/bcksl/ash_geo/pull/14) (`cast_stored` map handling) are in place pending those upstream fixes.
+
 ## [v0.7.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.6.0...v0.7.0) (2026-05-25)
 
 ### Features
