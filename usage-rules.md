@@ -170,6 +170,17 @@ Customer
 
 Note: `union` and `union_all` look identical at the Ash record level (records dedup by primary key in `consolidate_groups/1`); the Cypher-level duplicate-preservation is only observable when querying Cypher directly. Full details, polymorphic-resource pattern for cross-subtype combinations, and execution-path notes in `usage-rules/combination-queries.md`.
 
+## N-world projection — `AshNeo4j.worlds/1` (exploratory, #273)
+
+A Neo4j node carries labels for every `(Domain, Resource)` world it participates in, but an Ash read returns only the queried world's struct. `AshNeo4j.worlds(record)` projects the read record's labels back to the loadable resource modules — `[{domain, resource}, …]` ordered **outermost-first** — so a consumer can recover the outer type of a polymorphic node (for cross-domain late binding) without dropping to Cypher. An outer world contains the inner worlds and adds detail, so it carries more labels (more labels = more nuanced = more outer):
+
+```elixir
+record = Ash.get!(SomeBaseInstance, id)
+{domain, resource} = hd(AshNeo4j.worlds(record))   # outermost (most-nuanced) world
+```
+
+Resolution is dynamic against loaded modules (no registry): a candidate is a loaded `AshNeo4j.DataLayer` resource whose own labels are a subset of the node's; the outermost (most-nuanced) is kept per domain. Labels that don't resolve to a loaded module are left unknown (omitted). Returns `[]` for a record not produced by this data layer. **Pre-1.0 and may change** — shipped to learn its shape from real downstream use.
+
 ## Naming conventions
 
 AshNeo4j enforces Neo4j conventions at compile time:
