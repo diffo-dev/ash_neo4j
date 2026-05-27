@@ -148,7 +148,7 @@ Place
 |> Ash.read!()
 ```
 
-WGS-84 2D only in this release. On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus scalar Point companions for indexed bbox prefilter (`<attr>.bbSW`/`<attr>.bbNE`); Point additionally keeps a native `<attr>.point` for `point.distance` pushdown. **Geometries nested inside TypedStructs / embedded resources get their indexable companion promoted to a node-level property too** — a location buried in a characteristic is still indexable. Storage is **indexable, not yet indexed** (operators create POINT indexes themselves). `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` were removed in 0.8.0 — full migration notes, recursive-promotion details, holiness composition, and limitations in `usage-rules/spatial.md`.
+WGS-84 2D only in this release. On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus scalar Point companions for indexed bbox prefilter (`<attr>.bbSW`/`<attr>.bbNE`); Point additionally keeps a native `<attr>.point` for `point.distance` pushdown. **Geometries nested inside TypedStructs / embedded resources get their indexable companion promoted to a node-level property too** — a location buried in a characteristic is still indexable. Storage is **indexable, not yet indexed** — `AshNeo4j.Spatial.create_index(Place, :location)` builds and runs the POINT index Cypher from the resource + attribute (operator-invoked, not automatic). `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` were removed in 0.8.0 — full migration notes, recursive-promotion details, holiness composition, and limitations in `usage-rules/spatial.md`.
 
 ## Combination queries
 

@@ -158,7 +158,35 @@ When exclusions are **independent peer resources** with their own lifecycle, the
 
 ## Indexes — **indexable, not yet indexed**
 
-The companions are scalar Point properties specifically so they can be indexed via Neo4j's POINT index. AshNeo4j does not create or manage these indexes — operators who want the speed run them themselves:
+The companions are scalar Point properties specifically so they can be indexed via Neo4j's POINT index. AshNeo4j does not create indexes *for* you — index lifecycle is a deliberate operator concern (no migrations, [#45](https://github.com/diffo-dev/ash_neo4j/issues/45)) — but `AshNeo4j.Spatial` builds and runs the right Cypher from a resource + attribute, so you don't hand-encode the label, translation, and companion suffixes:
+
+```elixir
+# Point attribute → one `.point` index
+AshNeo4j.Spatial.create_index(Place, :location)
+
+# Non-Point geometry → both bbSW and bbNE corner indexes in one call
+AshNeo4j.Spatial.create_index(Place, :bounds)
+
+# Nested geometry — [attribute, field...] path into a TypedStruct
+AshNeo4j.Spatial.create_index(Place, [:pet, :home])
+
+# Rebuild after a storage-shape change (DROP IF EXISTS + CREATE)
+AshNeo4j.Spatial.create_index(Place, :location, recreate: true)
+```
+
+`create_index/3` uses `IF NOT EXISTS`, so it's safe to call repeatedly — e.g. from an application start-up task. It returns `{:ok, responses}` (one `%Bolty.Response{}` per index — two for a bbox geometry) or `{:error, reason}`; `drop_index/2` is the symmetric remove. Indexes are schema objects independent of data — clearing nodes never drops them, and they re-populate as nodes are written — so you create them once. `index_statements/3` returns the exact `CREATE` Cypher without touching the database, for review, a migration file, or a dry run:
+
+```elixir
+AshNeo4j.Spatial.index_statements(Place, :bounds)
+#=> {:ok, [
+#=>   "CREATE POINT INDEX place_bounds_bbSW IF NOT EXISTS FOR (n:Place) ON (n.`bounds.bbSW`)",
+#=>   "CREATE POINT INDEX place_bounds_bbNE IF NOT EXISTS FOR (n:Place) ON (n.`bounds.bbNE`)"
+#=> ]}
+```
+
+### Doing it by hand
+
+The function just applies conventions you can also write directly:
 
 ```cypher
 CREATE POINT INDEX FOR (p:Place) ON (p.`location.point`);
@@ -211,7 +239,7 @@ AshNeo4j.Cypher.run(
 
 `run/2` returns `{:ok, %Bolty.Response{}} | {:error, reason}`. Index creation is idempotent with `IF NOT EXISTS`, so a startup hook that creates the indexes your queries rely on is a reasonable pattern — AshNeo4j just doesn't do it *for* you (it has no migrations, and index lifecycle is a deliberate operator concern).
 
-> A convenience function that builds this Cypher from the resource module + attribute name (resolving the label, translation, and companion suffix for you, including the two-corner case for bbox geometries) is tracked in [#275](https://github.com/diffo-dev/ash_neo4j/issues/275). Until it lands, compose the property name from `translations/1` as above.
+> `AshNeo4j.Spatial.create_index/3` (above) does all of this for you — resolving the label, translation, and companion suffix, including the two-corner case for bbox geometries ([#275](https://github.com/diffo-dev/ash_neo4j/issues/275)). Compose the property name from `translations/1` only when you need the raw Cypher yourself.
 
 The GeoJSON `STRING` and any vertex data are never indexable for spatial queries — Neo4j doesn't index points inside arrays or strings. All spatial WHERE clauses route through the scalar Point companions, which is why they exist.
 
