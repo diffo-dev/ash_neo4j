@@ -85,7 +85,7 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
     end
   end
 
-  describe "evaluate/1 — LineString vs Polygon (vertex-in-bbox approximation)" do
+  describe "evaluate/1 — LineString vs Polygon (exact, via topo)" do
     test "line with a vertex inside the polygon intersects" do
       line = %Geo.LineString{
         coordinates: [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}],
@@ -97,14 +97,20 @@ defmodule AshNeo4j.Functions.StIntersectsTest do
       assert {:known, true} = StIntersects.evaluate(%{arguments: [sydney_bbox, line]})
     end
 
-    test "line with no vertex inside the polygon does not intersect (v1 limitation: segment-crossing is missed)" do
-      # Line skirts past the polygon without any vertex landing inside it.
-      line = %Geo.LineString{
-        coordinates: [{150.0, -34.0}, {152.0, -34.0}],
-        srid: 4326
-      }
+    test "line that crosses the polygon with NO vertex inside it intersects (exact edge-crossing — the old bbox approximation missed this)" do
+      # Both vertices sit outside the polygon (one west, one east), but the
+      # segment passes straight through it. Vertex-in-bbox would say false;
+      # topo correctly says true.
+      line = %Geo.LineString{coordinates: [{150.0, -33.75}, {152.0, -33.75}], srid: 4326}
+      poly = polygon(151.0, -34.0, 151.5, -33.5)
 
-      # Sit the polygon completely above where the line runs.
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [line, poly]})
+      assert {:known, true} = StIntersects.evaluate(%{arguments: [poly, line]})
+    end
+
+    test "line genuinely clear of the polygon does not intersect" do
+      # Runs below the polygon, never crossing it.
+      line = %Geo.LineString{coordinates: [{150.0, -35.0}, {152.0, -35.0}], srid: 4326}
       far_polygon = polygon(151.0, -33.0, 151.5, -32.5)
       assert {:known, false} = StIntersects.evaluate(%{arguments: [line, far_polygon]})
     end

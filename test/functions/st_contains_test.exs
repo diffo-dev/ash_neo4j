@@ -195,4 +195,55 @@ defmodule AshNeo4j.Functions.StContainsTest do
       assert created.id in Enum.map(results, & &1.id)
     end
   end
+
+  describe "exact (non-bbox) containment — #267 via topo" do
+    # A right triangle with the right angle at the SW corner. Its bbox is
+    # the unit square, but the NE half is outside the triangle. A bbox
+    # approximation would (wrongly) report the NE corner as contained.
+    defp triangle, do: %Geo.Polygon{coordinates: [[{0.0, 0.0}, {10.0, 0.0}, {0.0, 10.0}, {0.0, 0.0}]], srid: 4326}
+
+    test "point inside the triangle is contained" do
+      assert {:known, true} = StContains.evaluate(%{arguments: [triangle(), geo(1.0, 1.0)]})
+    end
+
+    test "point in the bbox corner but outside the triangle is NOT contained" do
+      # (9, 9) is inside the bounding box but well outside the triangle's
+      # hypotenuse — bbox containment would have said true.
+      assert {:known, false} = StContains.evaluate(%{arguments: [triangle(), geo(9.0, 9.0)]})
+    end
+
+    # Square with a square hole punched in the middle.
+    defp holed_polygon do
+      %Geo.Polygon{
+        coordinates: [
+          [{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}, {0.0, 0.0}],
+          [{3.0, 3.0}, {7.0, 3.0}, {7.0, 7.0}, {3.0, 7.0}, {3.0, 3.0}]
+        ],
+        srid: 4326
+      }
+    end
+
+    test "hole-aware — a point in the interior ring (hole) is NOT contained" do
+      assert {:known, false} = StContains.evaluate(%{arguments: [holed_polygon(), geo(5.0, 5.0)]})
+    end
+
+    test "hole-aware — a point in the solid part (between exterior and hole) is contained" do
+      assert {:known, true} = StContains.evaluate(%{arguments: [holed_polygon(), geo(1.0, 1.0)]})
+    end
+
+    test "exact containment round-trips through Ash storage + filter (hole excluded)" do
+      holed = Place |> Ash.create!(%{name: "Holed region", bounds: holed_polygon()})
+
+      in_hole = geo(5.0, 5.0)
+      in_solid = geo(1.0, 1.0)
+
+      {:ok, hole_results} = Place |> Ash.Query.filter(st_contains(bounds, ^in_hole)) |> Ash.read()
+      {:ok, solid_results} = Place |> Ash.Query.filter(st_contains(bounds, ^in_solid)) |> Ash.read()
+
+      # The point in the hole passes the bbox prefilter but is rejected by
+      # the exact topo refinement; the solid point survives both.
+      refute holed.id in Enum.map(hole_results, & &1.id)
+      assert holed.id in Enum.map(solid_results, & &1.id)
+    end
+  end
 end

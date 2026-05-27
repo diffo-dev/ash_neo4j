@@ -110,9 +110,9 @@ The canonical GeoJSON for the nested geometry lives inside the parent's JSON blo
 
 | Function | Returns | Pushdown |
 |---|---|---|
-| `st_contains(a, b)` | boolean — `a` contains `b` | ✓ Cypher (polygon-point, polygon-polygon via bbox companions) |
-| `st_within(a, b)` | boolean — `a` is within `b` (flipped `st_contains`) | in-memory |
-| `st_intersects(a, b)` | boolean — `a` overlaps `b` | in-memory |
+| `st_contains(a, b)` | boolean — `a` contains `b` (exact, hole-aware) | ✓ indexed bbox prefilter (Cypher) + exact `topo` refinement (in-memory) |
+| `st_within(a, b)` | boolean — `a` is within `b` (flipped `st_contains`) | exact `topo`, in-memory |
+| `st_intersects(a, b)` | boolean — `a` overlaps `b` (exact, incl. edge crossings) | exact `topo`, in-memory |
 | `st_distance(a, b)` | float meters | ✓ inside a comparison (Point attrs); in-memory in `order_by` / `calculate` and for line/multipoint |
 | `st_distance_in_meters(a, b)` | float meters — alias for `st_distance` | ✓ same as `st_distance` |
 | `st_dwithin(a, b, distance)` | boolean — within `distance` meters | ✓ Cypher (Point attrs) |
@@ -131,7 +131,9 @@ Place |> Ash.Query.filter(st_dwithin(location, ^customer_point, 5_000)) |> Ash.r
 Place |> Ash.Query.filter(st_distance(location, ^customer_point) < 5_000) |> Ash.read!()
 ```
 
-Predicate pushdown for Polygon-shaped containment uses the `bbSW`/`bbNE` companions — exact for axis-aligned polygons, an over-approximation for general polygons (true point-in-polygon refinement is [#267](https://github.com/diffo-dev/ash_neo4j/issues/267)). `st_distance`/`st_intersects` on LineString/MultiPoint use closest-vertex / vertex-in-bbox approximations; documented per function moduledoc.
+`st_contains` and `st_intersects` are **exact and hole-aware** — they refine via [`topo`](https://hex.pm/packages/topo) on the actual `%Geo.*{}` rings, not the bounding box. A point in the bbox but outside the ring is correctly excluded; a point in an interior ring (hole) is not contained; a line that crosses a polygon without a vertex inside it correctly intersects. Inside an `Ash.Query.filter`, the `bbSW`/`bbNE` companions drive a cheap indexed `point.withinBBox` **prefilter** in Cypher (over-selecting candidates whose bbox contains the test geometry); the exact `topo` test then runs in-memory over those candidates. A true match always lies within the polygon's bbox, so the prefilter never drops one.
+
+`st_distance` on LineString/MultiPoint is still a closest-**vertex** approximation (not closest-point-on-segment) — a separate distance-accuracy concern, documented per function moduledoc.
 
 ### Distance matches Neo4j's own model
 
@@ -225,8 +227,8 @@ The GeoJSON `STRING` and any vertex data are never indexable for spatial queries
 
 - **WGS-84 2D only.** Set `force_srid: 4326`; other CRSs are out of scope this release.
 - **`st_distance` in `order_by` / `calculate` is in-memory.** Fine at NBN scale; pushdown for those contexts is future work.
-- **Polygon containment is bbox-approximate.** Exact for axis-aligned polygons; true point-in-polygon is [#267](https://github.com/diffo-dev/ash_neo4j/issues/267).
-- **LineString / MultiPoint distance & intersection are vertex approximations** (closest-vertex, vertex-in-bbox). Documented per function.
+- **`st_distance` on LineString / MultiPoint is closest-vertex** (not closest-point-on-segment). A point near a long edge's midpoint reads the distance to the nearest vertex, which can overstate it. `st_contains` / `st_intersects` are exact (topo); distance refinement is future work.
+- **`st_intersects` has no Cypher prefilter** — it's exact but in-memory only; a bbox-overlap prefilter via the companions is tractable and deferred.
 - **Arrays of geometry-bearing values aren't recursively walked** for companion promotion yet.
 - **Index lifecycle is the operator's responsibility** (see above).
 - **Upstream workarounds in place**: list-form `geo_types` ([ash_geo#13](https://github.com/bcksl/ash_geo/pull/13)), nested-geo read decoding ([ash_geo#14](https://github.com/bcksl/ash_geo/pull/14)), and strict RFC 7946 encoding ([felt/geo#250](https://github.com/felt/geo/issues/250)). These are local until the upstream fixes release.
