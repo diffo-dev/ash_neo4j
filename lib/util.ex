@@ -6,6 +6,20 @@ defmodule AshNeo4j.Util do
   @moduledoc """
   AshNeo4j Util
   """
+  require AshGeo
+
+  # RFC 7946 §3.1 geometry types — fast-path check before invoking
+  # Geo.JSON.decode on a map. Keeps the restore_geo walker cheap on
+  # non-geo data.
+  @geojson_geometry_types ~w[
+    Point
+    LineString
+    Polygon
+    MultiPoint
+    MultiLineString
+    MultiPolygon
+    GeometryCollection
+  ]
 
   @doc """
   Converts an Elixir snake_case atom to Neo4j camelCase atom, used for node properties
@@ -165,10 +179,17 @@ defmodule AshNeo4j.Util do
     |> Jason.encode()
   end
 
-  defp to_json_safe(struct) when is_struct(struct) do
-    struct
-    |> Map.from_struct()
-    |> to_json_safe()
+  # Geo structs (Geo.Point, Geo.LineString, Geo.Polygon, Geo.MultiPoint,
+  # etc.) carry tuple-shaped coordinates that Jason can't encode directly.
+  # Route them through AshNeo4j.GeoJson.encode_map/1 to get an RFC 7946
+  # GeoJSON map (with bbox member), then recurse — keeps the inner
+  # GeoJSON nested inside whatever parent struct is being encoded.
+  defp to_json_safe(%struct{} = geo) do
+    if AshGeo.is_geo(struct) do
+      geo |> AshNeo4j.GeoJson.encode_map() |> to_json_safe()
+    else
+      geo |> Map.from_struct() |> to_json_safe()
+    end
   end
 
   defp to_json_safe(map) when is_map(map) and not is_struct(map) do
@@ -199,8 +220,43 @@ defmodule AshNeo4j.Util do
 
   def json_decode(value) do
     case Jason.decode(value) do
-      {:ok, decoded} -> {:ok, decoded}
+      {:ok, decoded} -> {:ok, restore_geo(decoded)}
       {:error, reason} -> {:error, "AshNeo4j.DataLayer: cannot decode JSON value #{inspect(value)}: #{inspect(reason)}"}
     end
+  end
+
+  # Walks a decoded JSON structure looking for GeoJSON-shaped sub-maps
+  # (which `to_json_safe` produces when it encounters a `%Geo.*{}` struct
+  # nested inside another value) and converts each back to a `%Geo.*{}`
+  # via `Geo.JSON.decode/1`. Round-trip symmetric with the write-side
+  # transformation in `to_json_safe`.
+  #
+  # This is a local workaround for `AshGeo.GeoJson.cast_stored/2` being
+  # strict — it accepts `%Geo.*{}` structs only, not maps, even though
+  # `cast_input/2` is map-permissive. When TypedStruct (or any
+  # JSON-stored type containing an AshGeo field) walks its fields on
+  # cast_stored, each AshGeo field would otherwise see a GeoJSON map
+  # and fail. This restores Geo structs before the type sees them.
+  #
+  # Upstream issue/PR to be filed against bcksl/ash_geo (cc Zach as the
+  # other AshGeo contributor) — once `cast_stored` handles maps natively,
+  # this can be removed.
+  defp restore_geo(%{"type" => type} = map) when type in @geojson_geometry_types do
+    case Geo.JSON.decode(map) do
+      # AshNeo4j is WGS-84 2D throughout; Geo.JSON.decode produces structs
+      # with srid: nil (the on-disk RFC 7946 JSON omits the crs member per
+      # the spec — that's what we want on disk but it loses the srid on
+      # read). Set srid: 4326 here so the round-trip restores faithfully.
+      {:ok, geo} -> %{geo | srid: 4326}
+      _ -> recurse_geo(map)
+    end
+  end
+
+  defp restore_geo(map) when is_map(map), do: recurse_geo(map)
+  defp restore_geo(list) when is_list(list), do: Enum.map(list, &restore_geo/1)
+  defp restore_geo(value), do: value
+
+  defp recurse_geo(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, restore_geo(v)} end)
   end
 end

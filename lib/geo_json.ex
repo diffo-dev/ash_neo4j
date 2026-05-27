@@ -38,14 +38,24 @@ defmodule AshNeo4j.GeoJson do
   """
   @spec encode!(Geo.geometry()) :: String.t()
   def encode!(geom) do
-    map =
-      geom
-      |> Map.put(:srid, nil)
-      |> Geo.JSON.encode!()
-      |> Map.put("bbox", bbox(geom))
-
+    map = encode_map(geom)
     {:ok, json} = AshNeo4j.Util.json_encode(map)
     json
+  end
+
+  @doc """
+  Encodes a `%Geo.*{}` struct to an RFC 7946 GeoJSON **map** (without
+  JSON-stringifying). Used when the GeoJSON needs to be nested inside
+  another structure that will itself be JSON-encoded — e.g. a Geo struct
+  living inside a TypedStruct attribute, where the parent's JSON blob
+  contains the nested GeoJSON inline.
+  """
+  @spec encode_map(Geo.geometry()) :: map()
+  def encode_map(geom) do
+    geom
+    |> Map.put(:srid, nil)
+    |> Geo.JSON.encode!()
+    |> Map.put("bbox", bbox(geom))
   end
 
   @doc """

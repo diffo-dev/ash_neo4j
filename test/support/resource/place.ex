@@ -36,5 +36,11 @@ defmodule AshNeo4j.Test.Resource.Place do
     attribute :regions, AshGeo.GeoJson,
       public?: true,
       constraints: [geo_types: [:multi_polygon], force_srid: 4326]
+
+    # Test fixture for #274's recursive geo-promotion: a TypedStruct
+    # with a nested Geo field. The whole struct stores as JSON at
+    # <attr>; the nested home Point's indexable companion gets
+    # promoted to <attr>.home.point on the node.
+    attribute :pet, AshNeo4j.Test.Type.LocatedDogTypedStruct, public?: true
   end
 end
