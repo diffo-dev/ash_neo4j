@@ -812,7 +812,11 @@ defmodule AshNeo4j.Cypher.Query do
             {Cypher.expression(variable, prop, "is_nil", val), acc_params}
 
           op == :st_contains_box ->
-            %AshNeo4j.Type.Box{sw: sw, ne: ne} = val
+            # Value is a {sw, ne} tuple of Bolty Points — the bbox corners
+            # the caller wants to test for containment via two ANDed
+            # `point.withinBBox` calls. The caller derives these from
+            # whatever Geo struct it has (a Polygon's exterior ring, etc.).
+            {sw, ne} = val
             prop_seg = Cypher.sanitize_param(prop)
             sw_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_sw"
             ne_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_ne"

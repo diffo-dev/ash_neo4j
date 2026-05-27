@@ -15,11 +15,6 @@ defmodule AshNeo4j.Functions.StDistanceTest do
   alias AshNeo4j.Functions.StDistance
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias AshNeo4j.Type.LineString
-  alias AshNeo4j.Type.MultiPoint
-  # Bolty.Types.Point retained because LineString.vertices and MultiPoint.points
-  # internals still hold Bolty Points until those types migrate.
-  alias Bolty.Types.Point
 
   defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
@@ -89,12 +84,9 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "evaluate/1 — LineString to point (closest-vertex approximation)" do
     setup do
-      line = %LineString{
-        vertices: [
-          Point.create(:wgs_84, 151.21, -33.87),
-          Point.create(:wgs_84, 151.30, -33.50),
-          Point.create(:wgs_84, 151.78, -32.93)
-        ]
+      line = %Geo.LineString{
+        coordinates: [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}],
+        srid: 4326
       }
 
       {:ok, fibre: line}
@@ -118,18 +110,14 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "st_dwithin LineString filter via Ash.Query" do
     setup do
-      near = Place |> Ash.create!(%{name: "Near fibre", path: %LineString{
-        vertices: [
-          Point.create(:wgs_84, 151.21, -33.87),
-          Point.create(:wgs_84, 151.30, -33.50)
-        ]
+      near = Place |> Ash.create!(%{name: "Near fibre", path: %Geo.LineString{
+        coordinates: [{151.21, -33.87}, {151.30, -33.50}],
+        srid: 4326
       }})
 
-      far = Place |> Ash.create!(%{name: "Far fibre", path: %LineString{
-        vertices: [
-          Point.create(:wgs_84, 144.96, -37.81),
-          Point.create(:wgs_84, 145.10, -37.50)
-        ]
+      far = Place |> Ash.create!(%{name: "Far fibre", path: %Geo.LineString{
+        coordinates: [{144.96, -37.81}, {145.10, -37.50}],
+        srid: 4326
       }})
 
       {:ok, near: near, far: far}
@@ -152,10 +140,7 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "evaluate/1 — MultiPoint to point (closest of the set, exact)" do
     test "returns the distance to the nearest point in the set" do
-      pes = %MultiPoint{points: [
-        Point.create(:wgs_84, 151.21, -33.87),
-        Point.create(:wgs_84, 115.86, -31.95)
-      ]}
+      pes = %Geo.MultiPoint{coordinates: [{151.21, -33.87}, {115.86, -31.95}], srid: 4326}
 
       {:known, meters} = StDistance.evaluate(%{arguments: [pes, geo(151.22, -33.85)]})
 
@@ -166,15 +151,15 @@ defmodule AshNeo4j.Functions.StDistanceTest do
 
   describe "st_dwithin MultiPoint filter via Ash.Query" do
     test "finds places whose candidate PE set has a point within the threshold" do
-      sydney = Place |> Ash.create!(%{name: "Sydney candidates", pes: %MultiPoint{points: [
-        Point.create(:wgs_84, 151.21, -33.87),
-        Point.create(:wgs_84, 151.30, -33.85)
-      ]}})
+      sydney = Place |> Ash.create!(%{name: "Sydney candidates", pes: %Geo.MultiPoint{
+        coordinates: [{151.21, -33.87}, {151.30, -33.85}],
+        srid: 4326
+      }})
 
-      perth = Place |> Ash.create!(%{name: "Perth candidates", pes: %MultiPoint{points: [
-        Point.create(:wgs_84, 115.86, -31.95),
-        Point.create(:wgs_84, 115.90, -32.00)
-      ]}})
+      perth = Place |> Ash.create!(%{name: "Perth candidates", pes: %Geo.MultiPoint{
+        coordinates: [{115.86, -31.95}, {115.90, -32.00}],
+        srid: 4326
+      }})
 
       customer = geo(151.22, -33.85)
       threshold = 50_000.0

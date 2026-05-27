@@ -295,15 +295,15 @@ defmodule AshNeo4j.QueryHelper do
         {prop, :contains, to_param_value(value), ci?}
 
       %{name: :st_contains, arguments: [ref, value]} ->
-        if attribute_type(mapping, ref) == AshNeo4j.Type.Box do
+        if polygon_attribute?(mapping, ref) do
           prop = property_name(mapping, ref)
 
-          case to_param_value(value) do
-            %Bolty.Types.Point{} = point ->
-              {prop, :st_contains, point, false}
+          case value do
+            %Geo.Point{} = point ->
+              {prop, :st_contains, to_param_value(point), false}
 
-            %AshNeo4j.Type.Box{} = box ->
-              {prop, :st_contains_box, box, false}
+            %Geo.Polygon{} = poly ->
+              {prop, :st_contains_box, polygon_bbox_corners(poly), false}
 
             _other ->
               # other forms — skip pushdown, let in-memory eval handle it
@@ -325,19 +325,26 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   # True when the referenced attribute is a Point-shaped Geo attribute,
-  # i.e. declared with an AshGeo type and constrained to `geo_types: :point`
-  # (or a list containing it). Spatial predicates push down to Neo4j's
-  # native `point.distance` / `point.withinBBox` only for Point attributes;
+  # i.e. declared with an AshGeo type and constrained to `geo_types`
+  # containing `:point`. Spatial predicates push down to Neo4j's native
+  # `point.distance` / `point.withinBBox` only for Point attributes;
   # other geometries get bbox-prefilter pushdown via their own companions.
-  defp point_attribute?(%ResourceMapping{module: module}, ref_or_atom) do
+  defp point_attribute?(mapping, ref_or_atom), do: geo_attribute_with_type?(mapping, ref_or_atom, :point)
+
+  # True when the referenced attribute is a Polygon-shaped Geo attribute.
+  # st_contains pushdown uses the polygon's bbox companions (`<attr>.bbSW`/
+  # `<attr>.bbNE`) for indexed prefilter via `point.withinBBox`.
+  defp polygon_attribute?(mapping, ref_or_atom), do: geo_attribute_with_type?(mapping, ref_or_atom, :polygon)
+
+  defp geo_attribute_with_type?(%ResourceMapping{module: module}, ref_or_atom, geo_type) do
     name = attribute_name(ref_or_atom)
 
     if name do
       case Ash.Resource.Info.attribute(module, name) do
         %{constraints: constraints} ->
           case Keyword.get(constraints || [], :geo_types) do
-            types when is_list(types) -> :point in types
-            :point -> true
+            types when is_list(types) -> geo_type in types
+            ^geo_type -> true
             _ -> false
           end
 
@@ -349,18 +356,16 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  # Looks up the Ash attribute type for a Ref or atom; returns the type
-  # module (or `nil` if it can't be resolved). Used by legacy spatial-type
-  # pushdown gating (Box) that hasn't yet migrated to the AshGeo path.
-  defp attribute_type(%ResourceMapping{module: module}, ref_or_atom) do
-    name = attribute_name(ref_or_atom)
-
-    if name do
-      case Ash.Resource.Info.attribute(module, name) do
-        %{type: type} -> type
-        _ -> nil
-      end
-    end
+  # Derives {sw, ne} Bolty Points from a Geo.Polygon's exterior ring,
+  # for use in `:st_contains_box` cypher pushdown (two ANDed
+  # `point.withinBBox` calls — sufficient for testing whether the
+  # polygon's bbox fits inside the attribute's bbox).
+  defp polygon_bbox_corners(%Geo.Polygon{coordinates: [exterior | _]}) do
+    xs = Enum.map(exterior, &elem(&1, 0))
+    ys = Enum.map(exterior, &elem(&1, 1))
+    sw = Bolty.Types.Point.create(:wgs_84, Enum.min(xs), Enum.min(ys))
+    ne = Bolty.Types.Point.create(:wgs_84, Enum.max(xs), Enum.max(ys))
+    {sw, ne}
   end
 
   defp attribute_name(%Ash.Query.Ref{} = ref), do: Ash.Query.Ref.name(ref)

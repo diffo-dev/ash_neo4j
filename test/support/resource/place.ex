@@ -16,12 +16,25 @@ defmodule AshNeo4j.Test.Resource.Place do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
+
     attribute :location, AshGeo.GeoJson,
       public?: true,
       constraints: [geo_types: [:point], force_srid: 4326]
-    attribute :bounds, AshNeo4j.Type.Box, public?: true
-    attribute :path, AshNeo4j.Type.LineString, public?: true
-    attribute :pes, AshNeo4j.Type.MultiPoint, public?: true
-    attribute :regions, AshNeo4j.Type.MultiBox, public?: true
+
+    attribute :bounds, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:polygon], force_srid: 4326]
+
+    attribute :path, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:line_string], force_srid: 4326]
+
+    attribute :pes, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:multi_point], force_srid: 4326]
+
+    attribute :regions, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:multi_polygon], force_srid: 4326]
   end
 end

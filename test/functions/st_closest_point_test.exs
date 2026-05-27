@@ -15,11 +15,6 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
   alias AshNeo4j.Functions.StClosestPoint
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias AshNeo4j.Type.LineString
-  alias AshNeo4j.Type.MultiPoint
-  # Bolty.Types.Point retained because LineString.vertices and MultiPoint.points
-  # are still held internally as Bolty Points until those types migrate.
-  alias Bolty.Types.Point
 
   setup_all do
     BoltyHelper.start()
@@ -33,24 +28,19 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
   defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
   defp fibre_run do
-    %LineString{
-      vertices: [
-        Point.create(:wgs_84, 151.21, -33.87),
-        Point.create(:wgs_84, 151.30, -33.50),
-        Point.create(:wgs_84, 151.78, -32.93)
-      ]
+    %Geo.LineString{
+      coordinates: [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}],
+      srid: 4326
     }
   end
 
   describe "LineString round-trip via Ash" do
-    test "create + read preserves the vertex array intact" do
+    test "create + read preserves the vertex coordinates intact" do
       created = Place |> Ash.create!(%{name: "Sydney to Newcastle", path: fibre_run()})
       reread = Place |> Ash.get!(created.id)
 
-      assert %LineString{vertices: vs} = reread.path
-      assert length(vs) == 3
-      assert Enum.map(vs, & &1.x) == [151.21, 151.30, 151.78]
-      assert Enum.map(vs, & &1.y) == [-33.87, -33.50, -32.93]
+      assert %Geo.LineString{coordinates: coords, srid: 4326} = reread.path
+      assert coords == [{151.21, -33.87}, {151.30, -33.50}, {151.78, -32.93}]
     end
   end
 
@@ -82,12 +72,9 @@ defmodule AshNeo4j.Functions.StClosestPointTest do
 
   describe "st_closest_point(multipoint, point) via evaluate" do
     test "returns the nearest PE from a candidate set" do
-      pes = %MultiPoint{
-        points: [
-          Point.create(:wgs_84, 151.21, -33.87),
-          Point.create(:wgs_84, 151.50, -33.50),
-          Point.create(:wgs_84, 115.86, -31.95)
-        ]
+      pes = %Geo.MultiPoint{
+        coordinates: [{151.21, -33.87}, {151.50, -33.50}, {115.86, -31.95}],
+        srid: 4326
       }
 
       {:known, closest} = StClosestPoint.evaluate(%{arguments: [pes, geo(151.22, -33.85)]})

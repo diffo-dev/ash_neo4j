@@ -13,7 +13,9 @@ defmodule AshNeo4j.CypherTest do
   alias AshNeo4j.Cypher
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  alias AshNeo4j.Type.Box
+  # Bolty.Types.Point retained for direct cypher round-trip tests below
+  # that bypass the Ash type system and send Bolty values straight to
+  # the driver.
   alias Bolty.Types.Point
 
   setup_all do
@@ -27,16 +29,18 @@ defmodule AshNeo4j.CypherTest do
 
   defp geo(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
-  defp sydney_box do
-    %Box{
-      sw: Point.create(:wgs_84, 151.0, -34.0),
-      ne: Point.create(:wgs_84, 151.5, -33.5)
+  defp sydney_polygon do
+    %Geo.Polygon{
+      coordinates: [
+        [{151.0, -34.0}, {151.5, -34.0}, {151.5, -33.5}, {151.0, -33.5}, {151.0, -34.0}]
+      ],
+      srid: 4326
     }
   end
 
   describe "within_bbox" do
     setup do
-      created = Place |> Ash.create!(%{name: "Sydney bbox", bounds: sydney_box()})
+      created = Place |> Ash.create!(%{name: "Sydney bbox", bounds: sydney_polygon()})
       {:ok, place: created}
     end
 
