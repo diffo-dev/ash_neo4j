@@ -133,6 +133,10 @@ Place |> Ash.Query.filter(st_distance(location, ^customer_point) < 5_000) |> Ash
 
 Predicate pushdown for Polygon-shaped containment uses the `bbSW`/`bbNE` companions — exact for axis-aligned polygons, an over-approximation for general polygons (true point-in-polygon refinement is [#267](https://github.com/diffo-dev/ash_neo4j/issues/267)). `st_distance`/`st_intersects` on LineString/MultiPoint use closest-vertex / vertex-in-bbox approximations; documented per function moduledoc.
 
+### Distance matches Neo4j's own model
+
+`st_distance` runs two ways — pushed down to Neo4j's native `point.distance` inside a comparison filter, or evaluated in Elixir (`AshNeo4j.Geo.haversine_meters/2`) for `order_by` / `calculate` and for LineString/MultiPoint. **Both deliberately use the same model** so the same query gives the same answer regardless of which path it takes: a spherical haversine on the WGS-84 **equatorial** radius (6 378 137 m) — the radius Neo4j's `point.distance` uses, *not* the mean Earth radius (6 371 000 m) a naive haversine reaches for. The two agree to within ~1 m over a 700 km span. AshNeo4j matches Neo4j's capability here rather than inventing its own — Neo4j's model is the reference because that's what the pushdown executes. (Neo4j's model is spherical, not ellipsoidal; true ellipsoidal distance would differ by a further ~0.1–0.5 %, but matching the pushdown is what keeps results consistent.)
+
 ## Holiness via Ash composition
 
 Excluding regions from positive matches — "in this CSA *but not in any exclusion zone*" — is plain Ash composition over the predicates:

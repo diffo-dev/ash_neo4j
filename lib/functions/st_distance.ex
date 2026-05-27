@@ -58,28 +58,13 @@ defmodule AshNeo4j.Functions.StDistance do
 
   defp min_vertex_distance(coords, %Geo.Point{coordinates: target}) do
     coords
-    |> Enum.map(&haversine_xy(&1, target))
+    |> Enum.map(&AshNeo4j.Geo.haversine_meters(&1, target))
     |> Enum.min()
   end
 
-  # Haversine on a spherical Earth — matches Neo4j's `point.distance` for WGS-84 2D.
+  # Matches Neo4j's `point.distance` for WGS-84 2D — see AshNeo4j.Geo,
+  # the single source of truth for the radius the pushdown path uses.
   defp haversine_meters(%Geo.Point{coordinates: a}, %Geo.Point{coordinates: b}) do
-    haversine_xy(a, b)
-  end
-
-  defp haversine_xy({lng1, lat1}, {lng2, lat2}) do
-    earth_radius_m = 6_371_000.0
-    rad_lat1 = :math.pi() / 180 * lat1
-    rad_lat2 = :math.pi() / 180 * lat2
-    delta_lat = :math.pi() / 180 * (lat2 - lat1)
-    delta_lng = :math.pi() / 180 * (lng2 - lng1)
-
-    a =
-      :math.sin(delta_lat / 2) ** 2 +
-        :math.cos(rad_lat1) * :math.cos(rad_lat2) * :math.sin(delta_lng / 2) ** 2
-
-    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
-
-    earth_radius_m * c
+    AshNeo4j.Geo.haversine_meters(a, b)
   end
 end

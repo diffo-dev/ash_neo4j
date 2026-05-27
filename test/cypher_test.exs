@@ -77,6 +77,30 @@ defmodule AshNeo4j.CypherTest do
     end
   end
 
+  describe "AshNeo4j.Geo.haversine_meters matches Neo4j point.distance (pushdown ↔ in-memory consistency)" do
+    test "agrees within 1 m on Sydney–Melbourne (~714 km)" do
+      # st_distance pushes down to Neo4j's point.distance inside comparison
+      # filters but evaluates AshNeo4j.Geo.haversine_meters in-memory
+      # elsewhere — they MUST agree or the same query returns different
+      # answers depending on execution path. Both use the WGS-84 equatorial
+      # radius (6 378 137 m). The mean-radius bug this guards against was
+      # ~800 m on exactly this pair, so a 1 m tolerance catches it decisively.
+      syd = {151.2093, -33.8688}
+      mel = {144.9631, -37.8136}
+
+      {:ok, resp} =
+        Sandbox.run(
+          "RETURN point.distance(point({longitude: $ax, latitude: $ay}), point({longitude: $bx, latitude: $by})) AS d",
+          %{"ax" => elem(syd, 0), "ay" => elem(syd, 1), "bx" => elem(mel, 0), "by" => elem(mel, 1)}
+        )
+
+      neo = hd(resp.results)["d"]
+      ours = AshNeo4j.Geo.haversine_meters(syd, mel)
+
+      assert_in_delta ours, neo, 1.0
+    end
+  end
+
   describe "st_distance" do
     setup do
       sydney = Place |> Ash.create!(%{name: "Sydney CBD", location: geo(151.2093, -33.8688)})

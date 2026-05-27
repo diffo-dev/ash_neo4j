@@ -40,23 +40,7 @@ defmodule AshNeo4j.Functions.StClosestPoint do
   def evaluate(_), do: :unknown
 
   defp closest_as_geo(coords, target) do
-    {x, y} = Enum.min_by(coords, &haversine_xy(&1, target))
+    {x, y} = Enum.min_by(coords, &AshNeo4j.Geo.haversine_meters(&1, target))
     %Geo.Point{coordinates: {x, y}, srid: 4326}
-  end
-
-  defp haversine_xy({lng1, lat1}, {lng2, lat2}) do
-    earth_radius_m = 6_371_000.0
-    rad_lat1 = :math.pi() / 180 * lat1
-    rad_lat2 = :math.pi() / 180 * lat2
-    delta_lat = :math.pi() / 180 * (lat2 - lat1)
-    delta_lng = :math.pi() / 180 * (lng2 - lng1)
-
-    a =
-      :math.sin(delta_lat / 2) ** 2 +
-        :math.cos(rad_lat1) * :math.cos(rad_lat2) * :math.sin(delta_lng / 2) ** 2
-
-    c = 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
-
-    earth_radius_m * c
   end
 end
