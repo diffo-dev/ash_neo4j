@@ -375,7 +375,7 @@ defmodule AshNeo4j.DataLayer do
 
     update_properties = dump_properties(mapping, changeset.attributes)
 
-    remove_property_names = remove_property_names(mapping, changeset.attributes)
+    remove_property_names = remove_property_names(mapping, changeset.attributes, changeset.data)
 
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
@@ -1047,11 +1047,61 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp remove_property_names(%ResourceMapping{} = mapping, map) when is_map(map) do
+  defp remove_property_names(%ResourceMapping{} = mapping, map, data) when is_map(map) do
     map
-    |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(mapping.properties, field, nil) end)
-    |> Enum.reject(fn field -> field == nil end)
+    |> Enum.filter(fn {_field, value} -> is_nil(value) end)
+    |> Enum.flat_map(fn {field, _} ->
+      case Keyword.get(mapping.properties, field) do
+        nil -> []
+        translated_key -> removal_property_names(mapping, field, translated_key, data)
+      end
+    end)
+  end
+
+  # The on-disk property names to REMOVE when `field` is being cleared to nil.
+  #
+  # A geo-classified attribute stores no bare property — only companions
+  # (`<attr>.json` plus `<attr>.point` for a Point, or `<attr>.bbSW`/`<attr>.bbNE`
+  # for other geometries — see promote_geo/3). Removing the bare key (the old
+  # behaviour) therefore cleared nothing and the next read reconstructed the
+  # geometry from the still-present companions. Remove every companion variant;
+  # REMOVE of an absent property is a no-op, so this is safe regardless of which
+  # geometry kind was stored.
+  #
+  # A non-geo attribute clears at its bare key, but may also have promoted
+  # indexable companions for any nested %Geo.*{} structs (see dump_properties'
+  # geo_walk branch). The new value is nil, so dump_properties writes no fresh
+  # companions — the stale ones from the *old* value must be removed too, at
+  # their dotted paths.
+  defp removal_property_names(%ResourceMapping{} = mapping, field, translated_key, data) do
+    attribute = Ash.Resource.Info.attribute(mapping.module, field)
+
+    case attribute && TypeClassifier.classify(Ash.Type.get_type!(attribute.type)) do
+      {:ok, :geo, _} ->
+        [
+          "#{translated_key}.json",
+          "#{translated_key}.point",
+          "#{translated_key}.bbSW",
+          "#{translated_key}.bbNE"
+        ]
+
+      _ ->
+        nested =
+          data
+          |> Map.get(field)
+          |> geo_walk([translated_key])
+          |> Enum.flat_map(fn {path, geo} -> nested_companion_names(Enum.join(path, "."), geo) end)
+
+        [translated_key | nested]
+    end
+  end
+
+  # The indexable companion property names promoted for a nested %Geo.*{}
+  # (mirrors promote_geo_indexable/3).
+  defp nested_companion_names(path, %Geo.Point{}), do: ["#{path}.point"]
+
+  defp nested_companion_names(path, %_{} = geo) do
+    if AshGeo.is_geo(geo.__struct__), do: ["#{path}.bbSW", "#{path}.bbNE"], else: []
   end
 
   def cast_attribute(_resource, _name, nil) do

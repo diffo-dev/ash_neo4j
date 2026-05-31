@@ -638,7 +638,10 @@ defmodule AshNeo4j.Cypher.Query do
     {props_cypher, set_params} = Cypher.parameterized_properties(:n, set_props)
 
     set_clauses = if map_size(set_props) > 0, do: [%Set{expression: "n += #{props_cypher}"}], else: []
-    remove_clauses = if remove_props != [], do: [%Remove{items: Enum.map(remove_props, &"n.#{&1}")}], else: []
+    remove_clauses =
+      if remove_props != [],
+        do: [%Remove{items: Enum.map(remove_props, &"n.#{Cypher.quote_if_dotted(&1)}")}],
+        else: []
 
     %__MODULE__{
       clauses: [%Match{pattern: match_pattern}] ++ set_clauses ++ remove_clauses ++ [%Return{items: ["n"]}],
