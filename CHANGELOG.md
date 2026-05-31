@@ -11,6 +11,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.8.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.8.0...v0.8.1) (2026-05-31)
+
+
+
+
+### Bug Fixes:
+
+* drop stale geo companions when a geo value changes shape (#287) by Matt Beanland
+
+* scope node-read pagination to nodes, not edge rows (#285) by Matt Beanland
+
+* clear geo companions when a geo attribute is cleared to nil (#283) by Matt Beanland
+
 ## [v0.8.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.7.0...v0.8.0) (2026-05-28)
 
 ### Breaking Changes
