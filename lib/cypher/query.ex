@@ -434,6 +434,58 @@ defmodule AshNeo4j.Cypher.Query do
   def add_limit(%__MODULE__{} = query, nil), do: query
   def add_limit(%__MODULE__{} = query, n), do: %{query | clauses: query.clauses ++ [%Limit{value: n}]}
 
+  @doc """
+  Applies `SKIP`/`LIMIT` pagination (and the `ORDER BY` that makes them
+  deterministic) to the distinct source nodes `s`, **before** the edge-expansion
+  step of a node read.
+
+  The node-read shapes (`node_read/1`, `node_read_filtered/3`, `node_read_by_ids/2`,
+  `relationship_read/7`, and the combination final read) all expand one row per
+  edge via the clause immediately preceding the `RETURN`
+  (`OPTIONAL MATCH (s)-[r]-(d)` etc.). A trailing `SKIP`/`LIMIT` would therefore
+  truncate *edges*, not *nodes* — dropping relationships (e.g. a `belongs_to`
+  edge) from nodes that have more edges than the limit. This inserts
+  `WITH s [ORDER BY …] [SKIP …] [LIMIT …]` ahead of that expansion so pagination
+  is scoped to nodes.
+
+  No-op when there is no `skip` and no `limit` (a sort alone is handled by the
+  trailing `add_order_by/2`, which orders the per-edge rows by node property and
+  so keeps each node's rows grouped).
+  """
+  @spec paginate_nodes(t(), [{atom() | String.t(), :asc | :desc}], non_neg_integer() | nil, pos_integer() | nil) :: t()
+  def paginate_nodes(%__MODULE__{} = query, order_terms, skip, limit) do
+    order_terms = order_terms || []
+
+    if skip in [nil, 0] and is_nil(limit) do
+      query
+    else
+      page = pagination_subclauses(order_terms, skip, limit)
+      return_idx = Enum.find_index(query.clauses, &match?(%Return{}, &1))
+      {before, rest} = Enum.split(query.clauses, return_idx - 1)
+
+      new_before =
+        case List.last(before) do
+          %With{} -> before ++ page
+          _ -> before ++ [%With{items: ["s"]} | page]
+        end
+
+      %{query | clauses: new_before ++ rest}
+    end
+  end
+
+  defp pagination_subclauses(order_terms, skip, limit) do
+    order =
+      case order_terms do
+        [] -> []
+        terms -> [%OrderBy{terms: Enum.map(terms, fn {prop, dir} -> {"s.#{prop}", dir} end)}]
+      end
+
+    skip_clause = if skip in [nil, 0], do: [], else: [%Skip{value: skip}]
+    limit_clause = if is_nil(limit), do: [], else: [%Limit{value: limit}]
+
+    order ++ skip_clause ++ limit_clause
+  end
+
   # ---------------------------------------------------------------------------
   # Aggregate builders
   # ---------------------------------------------------------------------------
