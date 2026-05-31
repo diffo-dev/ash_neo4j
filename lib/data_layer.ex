@@ -375,7 +375,7 @@ defmodule AshNeo4j.DataLayer do
 
     update_properties = dump_properties(mapping, changeset.attributes)
 
-    remove_property_names = remove_property_names(mapping, changeset.attributes, changeset.data)
+    remove_property_names = stale_property_names(mapping, update_properties, changeset)
 
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
@@ -1047,61 +1047,28 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp remove_property_names(%ResourceMapping{} = mapping, map, data) when is_map(map) do
-    map
-    |> Enum.filter(fn {_field, value} -> is_nil(value) end)
-    |> Enum.flat_map(fn {field, _} ->
-      case Keyword.get(mapping.properties, field) do
-        nil -> []
-        translated_key -> removal_property_names(mapping, field, translated_key, data)
-      end
-    end)
-  end
-
-  # The on-disk property names to REMOVE when `field` is being cleared to nil.
+  # Property names to REMOVE on update: those the OLD value of each changed
+  # attribute occupied that the NEW value no longer writes. Diffing the dumped
+  # property KEYS of old vs new keeps removal exactly consistent with the write
+  # path (dump_properties/2), and covers every companion-shape mismatch with one
+  # mechanism:
   #
-  # A geo-classified attribute stores no bare property — only companions
-  # (`<attr>.json` plus `<attr>.point` for a Point, or `<attr>.bbSW`/`<attr>.bbNE`
-  # for other geometries — see promote_geo/3). Removing the bare key (the old
-  # behaviour) therefore cleared nothing and the next read reconstructed the
-  # geometry from the still-present companions. Remove every companion variant;
-  # REMOVE of an absent property is a no-op, so this is safe regardless of which
-  # geometry kind was stored.
+  #   * cleared to nil           — the new value writes nothing, so every old key
+  #                                goes, including geo companions (#283)
+  #   * geometry kind changed    — a Point's `<attr>.point` and an area's
+  #                                `<attr>.bbSW`/`<attr>.bbNE` swap out (#287)
+  #   * nested geo added/removed — dotted `<attr>.<path>.point|bbSW|bbNE`
+  #                                companions the new value no longer promotes (#287)
   #
-  # A non-geo attribute clears at its bare key, but may also have promoted
-  # indexable companions for any nested %Geo.*{} structs (see dump_properties'
-  # geo_walk branch). The new value is nil, so dump_properties writes no fresh
-  # companions — the stale ones from the *old* value must be removed too, at
-  # their dotted paths.
-  defp removal_property_names(%ResourceMapping{} = mapping, field, translated_key, data) do
-    attribute = Ash.Resource.Info.attribute(mapping.module, field)
+  # Only changed attributes are considered (unchanged ones keep their companions).
+  # REMOVE of an absent property is a no-op; a key present in both old and new is
+  # left in place for SET (`n += {…}`) to overwrite.
+  defp stale_property_names(%ResourceMapping{} = mapping, new_properties, changeset)
+       when is_map(new_properties) do
+    old_properties =
+      dump_properties(mapping, Map.take(changeset.data, Map.keys(changeset.attributes)))
 
-    case attribute && TypeClassifier.classify(Ash.Type.get_type!(attribute.type)) do
-      {:ok, :geo, _} ->
-        [
-          "#{translated_key}.json",
-          "#{translated_key}.point",
-          "#{translated_key}.bbSW",
-          "#{translated_key}.bbNE"
-        ]
-
-      _ ->
-        nested =
-          data
-          |> Map.get(field)
-          |> geo_walk([translated_key])
-          |> Enum.flat_map(fn {path, geo} -> nested_companion_names(Enum.join(path, "."), geo) end)
-
-        [translated_key | nested]
-    end
-  end
-
-  # The indexable companion property names promoted for a nested %Geo.*{}
-  # (mirrors promote_geo_indexable/3).
-  defp nested_companion_names(path, %Geo.Point{}), do: ["#{path}.point"]
-
-  defp nested_companion_names(path, %_{} = geo) do
-    if AshGeo.is_geo(geo.__struct__), do: ["#{path}.bbSW", "#{path}.bbNE"], else: []
+    Map.keys(old_properties) -- Map.keys(new_properties)
   end
 
   def cast_attribute(_resource, _name, nil) do
