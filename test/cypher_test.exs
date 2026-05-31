@@ -325,4 +325,80 @@ defmodule AshNeo4j.CypherTest do
       assert miss.results == []
     end
   end
+
+  # The node-read shapes RETURN one row per edge (OPTIONAL MATCH (s)-[r]-(d)).
+  # A trailing SKIP/LIMIT would truncate *edges*, not *nodes* — silently dropping
+  # relationships (e.g. a belongs_to edge) from any node with more edges than the
+  # limit. paginate_nodes/4 must scope SKIP/LIMIT to the distinct source nodes,
+  # ahead of the edge expansion. Regression for #285.
+  describe "paginate_nodes — pagination is scoped to nodes, not edge rows" do
+    alias AshNeo4j.Cypher.Query
+
+    test "node_read with a limit puts LIMIT on the nodes before the edge expansion" do
+      {cypher, _} =
+        Query.node_read(:Thing)
+        |> Query.paginate_nodes([], 0, 2)
+        |> Query.add_order_by([])
+        |> Cypher.render()
+
+      assert cypher == "MATCH (s:Thing) WITH s LIMIT 2 OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+      # the LIMIT must precede the edge expansion, never truncate the RETURN rows
+      [pre, _post] = String.split(cypher, "OPTIONAL MATCH", parts: 2)
+      assert pre =~ "LIMIT 2"
+      refute String.ends_with?(cypher, "LIMIT 2")
+    end
+
+    test "node_read_filtered keeps the WHERE and scopes pagination to nodes" do
+      {cypher, _} =
+        Query.node_read_filtered(:Thing, [{"uuid", :==, "x", false}])
+        |> Query.paginate_nodes([], 0, 2)
+        |> Query.add_order_by([])
+        |> Cypher.render()
+
+      assert cypher ==
+               "MATCH (s:Thing) WHERE s.uuid = $s_uuid_0 WITH s LIMIT 2 OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
+    end
+
+    test "sort + skip + limit orders/paginates nodes, with a trailing ORDER BY for output order" do
+      {cypher, _} =
+        Query.node_read(:Thing)
+        |> Query.paginate_nodes([{"name", :asc}], 5, 10)
+        |> Query.add_order_by([{"name", :asc}])
+        |> Cypher.render()
+
+      assert cypher ==
+               "MATCH (s:Thing) WITH s ORDER BY s.name ASC SKIP 5 LIMIT 10 " <>
+                 "OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d ORDER BY s.name ASC"
+    end
+
+    test "sort alone (no skip/limit) is a no-op for paginate_nodes — trailing ORDER BY only" do
+      {cypher, _} =
+        Query.node_read(:Thing)
+        |> Query.paginate_nodes([{"name", :asc}], 0, nil)
+        |> Query.add_order_by([{"name", :asc}])
+        |> Cypher.render()
+
+      assert cypher == "MATCH (s:Thing) OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d ORDER BY s.name ASC"
+    end
+
+    test "relationship_read reuses its existing WITH s rather than adding a second" do
+      {cypher, _} =
+        Query.relationship_read(:Thing, :HAS, :outgoing, :ThingTag, "uuid", :==, "x")
+        |> Query.paginate_nodes([], 0, 2)
+        |> Query.add_order_by([])
+        |> Cypher.render()
+
+      assert cypher ==
+               "MATCH (s:Thing)-[r:HAS]->(d:ThingTag) WHERE d.uuid = $d_uuid WITH s LIMIT 2 " <>
+                 "MATCH (s)-[r0]-(d0) RETURN s, r0, d0"
+
+      refute cypher =~ "WITH s WITH s"
+    end
+
+    test "no pagination and no sort leaves the query untouched" do
+      base = Query.node_read(:Thing)
+      assert Query.paginate_nodes(base, [], 0, nil) == base
+      assert Query.paginate_nodes(base, [], nil, nil) == base
+    end
+  end
 end

@@ -10,7 +10,7 @@ defmodule AshNeo4j.Test.Resource.Place do
 
   actions do
     default_accept :*
-    defaults [:read, :create, :destroy]
+    defaults [:read, :create, :destroy, update: :*]
   end
 
   attributes do
@@ -43,6 +43,11 @@ defmodule AshNeo4j.Test.Resource.Place do
     attribute :routes, AshGeo.GeoJson,
       public?: true,
       constraints: [geo_types: [:multi_line_string], force_srid: 4326]
+
+    # #287 — a multi-kind geo attribute (accepts any geometry) so tests can
+    # transition the same attribute across the Point / non-Point companion
+    # boundary and assert the stale indexable companion is removed.
+    attribute :shape, AshGeo.GeoAny, public?: true
 
     # Test fixture for #274's recursive geo-promotion: a TypedStruct
     # with a nested Geo field. The whole struct stores as JSON at

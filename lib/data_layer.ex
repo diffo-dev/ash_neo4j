@@ -375,7 +375,7 @@ defmodule AshNeo4j.DataLayer do
 
     update_properties = dump_properties(mapping, changeset.attributes)
 
-    remove_property_names = remove_property_names(mapping, changeset.attributes)
+    remove_property_names = stale_property_names(mapping, update_properties, changeset)
 
     property_update_result =
       if !Enum.empty?(update_properties) or !Enum.empty?(remove_property_names) do
@@ -1047,11 +1047,28 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
-  defp remove_property_names(%ResourceMapping{} = mapping, map) when is_map(map) do
-    map
-    |> Map.reject(fn {_k, v} -> v != nil end)
-    |> Enum.into([], fn {field, _} -> Keyword.get(mapping.properties, field, nil) end)
-    |> Enum.reject(fn field -> field == nil end)
+  # Property names to REMOVE on update: those the OLD value of each changed
+  # attribute occupied that the NEW value no longer writes. Diffing the dumped
+  # property KEYS of old vs new keeps removal exactly consistent with the write
+  # path (dump_properties/2), and covers every companion-shape mismatch with one
+  # mechanism:
+  #
+  #   * cleared to nil           — the new value writes nothing, so every old key
+  #                                goes, including geo companions (#283)
+  #   * geometry kind changed    — a Point's `<attr>.point` and an area's
+  #                                `<attr>.bbSW`/`<attr>.bbNE` swap out (#287)
+  #   * nested geo added/removed — dotted `<attr>.<path>.point|bbSW|bbNE`
+  #                                companions the new value no longer promotes (#287)
+  #
+  # Only changed attributes are considered (unchanged ones keep their companions).
+  # REMOVE of an absent property is a no-op; a key present in both old and new is
+  # left in place for SET (`n += {…}`) to overwrite.
+  defp stale_property_names(%ResourceMapping{} = mapping, new_properties, changeset)
+       when is_map(new_properties) do
+    old_properties =
+      dump_properties(mapping, Map.take(changeset.data, Map.keys(changeset.attributes)))
+
+    Map.keys(old_properties) -- Map.keys(new_properties)
   end
 
   def cast_attribute(_resource, _name, nil) do

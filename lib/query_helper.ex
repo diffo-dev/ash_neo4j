@@ -28,13 +28,13 @@ defmodule AshNeo4j.QueryHelper do
 
   defp run_simple_query(ash_query) do
     mapping = ResourceInfo.mapping(ash_query.resource)
+    terms = sort_terms(ash_query, mapping)
 
     query =
       ash_query
       |> build_query(mapping)
-      |> Query.add_order_by(sort_terms(ash_query, mapping))
-      |> Query.add_skip(ash_query.offset)
-      |> Query.add_limit(ash_query.limit)
+      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+      |> Query.add_order_by(terms)
 
     run_cypher_query(query)
   end
@@ -62,12 +62,13 @@ defmodule AshNeo4j.QueryHelper do
         build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
       end)
 
+    terms = sort_terms(ash_query, mapping)
+
     query =
       branch_queries
       |> Query.combination_block(union_type: union_type)
-      |> Query.add_order_by(sort_terms(ash_query, mapping))
-      |> Query.add_skip(ash_query.offset)
-      |> Query.add_limit(ash_query.limit)
+      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+      |> Query.add_order_by(terms)
 
     run_cypher_query(query)
   end
@@ -98,12 +99,13 @@ defmodule AshNeo4j.QueryHelper do
         if keep_ids == [] do
           {:ok, []}
         else
+          terms = sort_terms(ash_query, mapping)
+
           final =
             mapping.label_pair
             |> Query.node_read_by_ids(keep_ids)
-            |> Query.add_order_by(sort_terms(ash_query, mapping))
-            |> Query.add_skip(ash_query.offset)
-            |> Query.add_limit(ash_query.limit)
+            |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+            |> Query.add_order_by(terms)
 
           run_cypher_query(final)
         end
