@@ -10,7 +10,7 @@ defmodule AshNeo4j.Test.Resource.Place do
 
   actions do
     default_accept :*
-    defaults [:read, :create, :destroy]
+    defaults [:read, :create, :destroy, update: :*]
   end
 
   attributes do
