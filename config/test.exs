@@ -25,7 +25,7 @@ config :bolty, Bolt,
   level: level
 
 config :bolty, Bolt6,
-  uri: "bolt://localhost:7690",
+  uri: "bolt://localhost:7689",
   auth: [username: "neo4j", password: "password"],
   versions: [6.0],
   user_agent: "boltyTest/1",
