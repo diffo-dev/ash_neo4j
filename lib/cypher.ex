@@ -12,6 +12,8 @@ defmodule AshNeo4j.Cypher do
 
   require Logger
 
+  alias AshNeo4j.BoltyHelper
+
   alias AshNeo4j.Cypher.{
     Query,
     Match,
@@ -306,8 +308,10 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   def render(%Query{clauses: clauses, params: params}) do
-    {Enum.map_join(clauses, " ", &render_clause/1), params}
+    {cypher25_prefix() <> Enum.map_join(clauses, " ", &render_clause/1), params}
   end
+
+  defp cypher25_prefix, do: if(BoltyHelper.cypher25?(), do: "CYPHER 25 ", else: "")
 
   defp render_clause(%Match{pattern: p}), do: "MATCH #{p}"
   defp render_clause(%OptionalMatch{pattern: p}), do: "OPTIONAL MATCH #{p}"
@@ -357,12 +361,25 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
+  @doc """
+  Raises `AshNeo4j.Error.RequiresCypher25` when the connected Neo4j server does
+  not support Cypher 25 (i.e. is older than 2025.06). Call this at the top of
+  any function that emits Cypher 25-only syntax.
+  """
+  def require_cypher25!() do
+    unless BoltyHelper.cypher25?() do
+      raise AshNeo4j.Error.RequiresCypher25
+    end
+  end
+
   def run(%Query{} = query) do
     {cypher, params} = render(query)
     run(cypher, params)
   end
 
   def run(cypher, params \\ %{}) when is_bitstring(cypher) do
+    cypher = cypher25_prefix() <> cypher
+
     Logger.debug("""
     AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
     """)
@@ -384,6 +401,7 @@ defmodule AshNeo4j.Cypher do
   end
 
   def run_expecting_deletions(cypher, params \\ %{}) when is_bitstring(cypher) do
+    cypher = cypher25_prefix() <> cypher
     Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
 
     bolty_result = sandboxed_query(cypher, params)
