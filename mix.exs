@@ -137,7 +137,7 @@ defmodule AshNeo4j.MixProject do
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:spark, ">= 2.7.0"},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, bolty_version(">= 0.0.13")},
+      {:bolty, bolty_version("~> 0.1.0")},
       {:geo, "~> 3.6"},
       {:ash_geo, "~> 0.3"},
       {:topo, "~> 1.0"},
