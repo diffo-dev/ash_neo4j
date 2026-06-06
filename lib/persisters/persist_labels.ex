@@ -19,7 +19,7 @@ defmodule AshNeo4j.Persisters.PersistLabels do
     resource_label = Transformer.get_option(dsl, [:neo4j], :label, module_label)
 
     domain_fragment_label =
-      if Code.ensure_loaded?(domain_module) and
+      if match?({:module, _}, Code.ensure_compiled(domain_module)) and
            function_exported?(domain_module, :spark_dsl_config, 0) do
         case AshNeo4j.DataLayer.Domain.Info.neo4j_label(domain_module) do
           {:ok, label} -> label
