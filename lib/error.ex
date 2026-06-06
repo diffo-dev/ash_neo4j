@@ -9,3 +9,4 @@ defmodule AshNeo4j.Error.RequiresCypher25 do
   """
   defexception message: "This operation requires Cypher 25 (Neo4j ≥ 2025.06)"
 end
+

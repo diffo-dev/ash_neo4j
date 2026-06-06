@@ -319,6 +319,12 @@ defmodule AshNeo4j.QueryHelper do
           {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
         end
 
+      %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
+      when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
+        AshNeo4j.Cypher.require_cypher25!()
+        prop = property_name(mapping, ref)
+        {prop, :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil
@@ -406,6 +412,17 @@ defmodule AshNeo4j.QueryHelper do
   defp to_param_value(%MapSet{} = ms), do: MapSet.to_list(ms)
   defp to_param_value(%Geo.Point{coordinates: {x, y}}), do: Bolty.Types.Point.create(:wgs_84, x, y)
   defp to_param_value(value), do: value
+
+  defp to_vector_param(value) when is_list(value) do
+    policy = AshNeo4j.BoltyHelper.policy()
+    if policy && policy.vectors do
+      %Bolty.Types.Vector{type: :float32, data: Enum.map(value, &(&1 / 1))}
+    else
+      Enum.map(value, &(&1 / 1))
+    end
+  end
+
+  defp to_vector_param(%Bolty.Types.Vector{} = v), do: v
 
   # Builds the on-disk property name for a Point attribute under the symmetric
   # split — `<attr>.point` is where the native Neo4j POINT lives (the indexable

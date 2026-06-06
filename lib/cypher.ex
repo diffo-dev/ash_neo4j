@@ -74,6 +74,8 @@ defmodule AshNeo4j.Cypher do
   "point.distance(n.location, $test_point) < $threshold"
   iex> AshNeo4j.Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
   "point.distance(n.location, $test_point) <= $threshold"
+  iex> AshNeo4j.Cypher.expression(:s, "embedding", "vector_similarity", {">", "$s_embedding_0_vec", "$s_embedding_0_t"})
+  "vector.similarity.cosine(s.embedding, $s_embedding_0_vec) > $s_embedding_0_t"
   ```
   """
   def expression(variable, left, operator, right, opts \\ [])
@@ -106,6 +108,10 @@ defmodule AshNeo4j.Cypher do
       operator == "dwithin" ->
         {test_ref, threshold_ref} = right
         "point.distance(#{variable}.#{quote_if_dotted(left)}, #{test_ref}) <= #{threshold_ref}"
+
+      operator == "vector_similarity" ->
+        {comp_op, vec_ref, threshold_ref} = right
+        "vector.similarity.cosine(#{variable}.#{left}, #{vec_ref}) #{comp_op} #{threshold_ref}"
 
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
@@ -362,8 +368,8 @@ defmodule AshNeo4j.Cypher do
   ```
   """
   @doc """
-  Raises `AshNeo4j.Error.RequiresCypher25` when the connected Neo4j server does
-  not support Cypher 25 (i.e. is older than 2025.06). Call this at the top of
+  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
+  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
   any function that emits Cypher 25-only syntax.
   """
   def require_cypher25!() do

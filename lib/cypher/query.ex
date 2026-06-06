@@ -897,6 +897,15 @@ defmodule AshNeo4j.Cypher.Query do
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
+          op == :vector_similarity ->
+            {comp_op_atom, query_vec, threshold} = val
+            prop_seg = Cypher.sanitize_param(prop)
+            vec_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_vec"
+            thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_t"
+            expr = Cypher.expression(variable, prop, "vector_similarity", {convert_operator(comp_op_atom), "$#{vec_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(vec_key, query_vec) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
           true ->
             prop_seg = Cypher.sanitize_param(prop)
             param_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}"

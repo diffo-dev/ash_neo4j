@@ -68,6 +68,8 @@ defmodule AshNeo4j.DataLayer do
   # spatial — st_distance_in_meters: alias for st_distance, same pushdown
   def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistanceInMeters{}}), do: true
 
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorSimilarity{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -97,7 +99,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Functions.StDistanceInMeters,
       AshNeo4j.Functions.StDwithin,
       AshNeo4j.Functions.StIntersects,
-      AshNeo4j.Functions.StWithin
+      AshNeo4j.Functions.StWithin,
+      AshNeo4j.Functions.VectorSimilarity
     ]
   end
 
