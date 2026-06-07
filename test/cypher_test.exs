@@ -401,4 +401,47 @@ defmodule AshNeo4j.CypherTest do
       assert Query.paginate_nodes(base, [], nil, nil) == base
     end
   end
+
+  # #291 — a root-node aggregate has an empty path; it must aggregate over the
+  # source node `s` with no OPTIONAL MATCH, never an unbound `d`.
+  describe "aggregate_total — root-node aggregate (empty path)" do
+    alias AshNeo4j.Cypher.Query
+
+    test "count over root nodes renders COUNT(s) with no OPTIONAL MATCH" do
+      {cypher, params} =
+        Query.aggregate_total([:Nbn, :Nni], :uuid, ["a", "b"], [], :count, nil, :count)
+        |> Cypher.render()
+
+      assert cypher == "MATCH (s:Nbn:Nni) WHERE s.uuid IN $agg_ids RETURN COUNT(s) AS `count`"
+      assert params == %{"agg_ids" => ["a", "b"]}
+      refute cypher =~ "OPTIONAL MATCH"
+      refute cypher =~ ~r/\bd\b/
+    end
+
+    test "exists over root nodes renders COUNT(s) > 0" do
+      {cypher, _} =
+        Query.aggregate_total([:Nbn, :Nni], :uuid, ["a"], [], :exists, nil, :any)
+        |> Cypher.render()
+
+      assert cypher == "MATCH (s:Nbn:Nni) WHERE s.uuid IN $agg_ids RETURN COUNT(s) > 0 AS `any`"
+    end
+
+    test "sum over a root-node property aggregates over s.field" do
+      {cypher, _} =
+        Query.aggregate_total([:Nbn, :Nni], :uuid, ["a"], [], :sum, :score, :total)
+        |> Cypher.render()
+
+      assert cypher == "MATCH (s:Nbn:Nni) WHERE s.uuid IN $agg_ids RETURN sum(s.score) AS `total`"
+    end
+
+    test "a relationship aggregate (non-empty path) still traverses to d" do
+      {cypher, _} =
+        Query.aggregate_total([:Nbn, :Nni], :uuid, ["a"], [{:HAS, :outgoing, :Port}], :count, nil, :count)
+        |> Cypher.render()
+
+      assert cypher ==
+               "MATCH (s:Nbn:Nni) WHERE s.uuid IN $agg_ids " <>
+                 "OPTIONAL MATCH (s)-[:HAS]->(d:Port) RETURN COUNT(d) AS `count`"
+    end
+  end
 end

@@ -601,20 +601,36 @@ defmodule AshNeo4j.Cypher.Query do
         dest_conditions \\ []
       )
       when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
-    path = build_agg_path(path_segments)
-    expr = aggregate_expr(kind, field, name, uniq?)
     src = labels_string(source_label)
-    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
-    %__MODULE__{
-      clauses:
-        [
-          %Match{pattern: "(s:#{src})"},
-          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-          %OptionalMatch{pattern: "(s)#{path}"}
-        ] ++ dest_where ++ [%Return{items: [expr]}],
-      params: Map.merge(%{"agg_ids" => ids}, dest_params)
-    }
+    case path_segments do
+      [] ->
+        # Root-node aggregate (no relationship path, #291) — aggregate over the
+        # source node `s` directly; there is no `d` to bind, so no OPTIONAL MATCH.
+        %__MODULE__{
+          clauses: [
+            %Match{pattern: "(s:#{src})"},
+            %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+            %Return{items: [aggregate_expr(kind, field, name, uniq?, "s")]}
+          ],
+          params: %{"agg_ids" => ids}
+        }
+
+      _ ->
+        path = build_agg_path(path_segments)
+        expr = aggregate_expr(kind, field, name, uniq?)
+        {dest_where, dest_params} = build_dest_conditions(dest_conditions)
+
+        %__MODULE__{
+          clauses:
+            [
+              %Match{pattern: "(s:#{src})"},
+              %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+              %OptionalMatch{pattern: "(s)#{path}"}
+            ] ++ dest_where ++ [%Return{items: [expr]}],
+          params: Map.merge(%{"agg_ids" => ids}, dest_params)
+        }
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -962,14 +978,16 @@ defmodule AshNeo4j.Cypher.Query do
     end)
   end
 
-  defp aggregate_expr(kind, field, name, uniq?) do
+  # `node_var` is the node the aggregate runs over — `"d"` for a relationship
+  # traversal, `"s"` for a root-node aggregate (empty relationship path, #291).
+  defp aggregate_expr(kind, field, name, uniq?, node_var \\ "d") do
     distinct = if uniq?, do: "DISTINCT ", else: ""
-    field_ref = if field, do: "d.#{field}", else: "d"
+    field_ref = if field, do: "#{node_var}.#{field}", else: node_var
 
     fn_str =
       case kind do
-        :count -> "COUNT(#{distinct}d)"
-        :exists -> "COUNT(d) > 0"
+        :count -> "COUNT(#{distinct}#{node_var})"
+        :exists -> "COUNT(#{node_var}) > 0"
         :sum -> "sum(#{distinct}#{field_ref})"
         :avg -> "avg(#{distinct}#{field_ref})"
         :min -> "min(#{field_ref})"
