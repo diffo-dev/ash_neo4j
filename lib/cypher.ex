@@ -382,6 +382,17 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
+  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
+  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
+  any function that emits Cypher 25-only syntax.
+  """
+  def require_cypher25!() do
+    unless BoltyHelper.cypher25?() do
+      raise AshNeo4j.Error.RequiresCypher25
+    end
+  end
+
+  @doc """
   Runs some cypher
 
   ## Examples
@@ -397,17 +408,6 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
-  @doc """
-  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
-  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
-  any function that emits Cypher 25-only syntax.
-  """
-  def require_cypher25!() do
-    unless BoltyHelper.cypher25?() do
-      raise AshNeo4j.Error.RequiresCypher25
-    end
-  end
-
   def run(%Query{} = query) do
     {cypher, params} = render(query)
     run(cypher, params)

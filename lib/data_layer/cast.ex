@@ -4,7 +4,6 @@
 
 defmodule AshNeo4j.DataLayer.Cast do
   @moduledoc "Casting for AshNeo4j.DataLayer"
-  require Logger
 
   alias AshNeo4j.DataLayer.TypeClassifier
   alias AshNeo4j.Util

@@ -4,7 +4,6 @@
 
 defmodule AshNeo4j.DataLayer.TypeClassifier do
   @moduledoc "Type Classifier for AshNeo4j.DataLayer"
-  require Logger
 
   @doc """
   Classifies the type to assist Cast and Dump

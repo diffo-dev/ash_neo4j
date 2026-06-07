@@ -421,7 +421,7 @@ defmodule AshNeo4j.Cypher.Query do
   Each term is `{order_expression, :asc | :desc}` where `order_expression` is a
   fully-formed Cypher expression — e.g. `"s.name"` for a plain property or
   `"vector.similarity.cosine(s.embedding, $q)"` for an expression sort. The
-  caller (see `AshNeo4j.QueryHelper.sort_terms/2`) is responsible for the `s.`
+  caller (`AshNeo4j.QueryHelper`'s sort handling) is responsible for the `s.`
   prefix and for merging any referenced params via `merge_params/2`.
   """
   @spec add_order_by(t(), [{String.t(), :asc | :desc}]) :: t()

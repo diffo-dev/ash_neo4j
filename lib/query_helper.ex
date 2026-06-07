@@ -4,7 +4,6 @@
 
 defmodule AshNeo4j.QueryHelper do
   require Logger
-  require Ash.Query
 
   alias AshNeo4j.Cypher
   alias AshNeo4j.Cypher.Query
