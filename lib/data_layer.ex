@@ -69,6 +69,7 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistanceInMeters{}}), do: true
 
   def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorSimilarity{}}), do: true
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorCosineDistance{}}), do: true
 
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
@@ -100,7 +101,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Functions.StDwithin,
       AshNeo4j.Functions.StIntersects,
       AshNeo4j.Functions.StWithin,
-      AshNeo4j.Functions.VectorSimilarity
+      AshNeo4j.Functions.VectorSimilarity,
+      AshNeo4j.Functions.VectorCosineDistance
     ]
   end
 
@@ -642,7 +644,7 @@ defmodule AshNeo4j.DataLayer do
         Process.delete({:neo4j_in_transaction, label})
       end
     else
-      Bolty.transaction(Bolt, fn conn ->
+      Bolty.transaction(AshNeo4j.BoltyHelper.current_pool(), fn conn ->
         stack = Process.get(:ash_neo4j_tx_stack, [])
         Process.put(:ash_neo4j_tx_stack, [conn | stack])
         Process.put({:neo4j_in_transaction, label}, true)

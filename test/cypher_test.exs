@@ -362,8 +362,8 @@ defmodule AshNeo4j.CypherTest do
     test "sort + skip + limit orders/paginates nodes, with a trailing ORDER BY for output order" do
       {cypher, _} =
         Query.node_read(:Thing)
-        |> Query.paginate_nodes([{"name", :asc}], 5, 10)
-        |> Query.add_order_by([{"name", :asc}])
+        |> Query.paginate_nodes([{"s.name", :asc}], 5, 10)
+        |> Query.add_order_by([{"s.name", :asc}])
         |> Cypher.render()
 
       assert cypher ==
@@ -374,8 +374,8 @@ defmodule AshNeo4j.CypherTest do
     test "sort alone (no skip/limit) is a no-op for paginate_nodes — trailing ORDER BY only" do
       {cypher, _} =
         Query.node_read(:Thing)
-        |> Query.paginate_nodes([{"name", :asc}], 0, nil)
-        |> Query.add_order_by([{"name", :asc}])
+        |> Query.paginate_nodes([{"s.name", :asc}], 0, nil)
+        |> Query.add_order_by([{"s.name", :asc}])
         |> Cypher.render()
 
       assert cypher == "MATCH (s:Thing) OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d ORDER BY s.name ASC"

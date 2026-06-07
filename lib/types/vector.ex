@@ -4,16 +4,19 @@
 
 defmodule AshNeo4j.Types.Vector do
   @moduledoc """
-  Ash attribute type for vector embeddings, backed by `%Bolty.Types.Vector{}` on the Bolt wire.
+  Ash attribute type for vector embeddings, stored as a Neo4j `LIST<FLOAT>`.
 
-  The Elixir-side value is a plain `[float()]` list. On write, vectors travel as
-  `%Bolty.Types.Vector{}` when the connection has `policy.vectors: true` (Bolt 6.0,
-  Neo4j ≥ 2025.10), and as a plain float list otherwise. On read, both forms are
-  unwrapped back to `[float()]`.
+  The Elixir-side value is a plain `[float()]` list, and it is persisted as a
+  `LIST<FLOAT>` node property — which is what Neo4j's vector indexes and
+  `vector.similarity.cosine/2` operate on. The native Bolt 6.0 `%Bolty.Types.Vector{}`
+  type is a *query-parameter* wire type and **cannot be written as a node
+  property**, so it is never used for storage. `cast_input/2` and `cast_stored/2`
+  still accept a `%Bolty.Types.Vector{}` defensively and unwrap it to `[float()]`.
 
   > #### Cypher 25 required {: .warning}
-  > Vector operations require Cypher 25 (Neo4j ≥ 2025.06). This is an AshNeo4j-level
-  > requirement — see `AshNeo4j.Cypher.require_cypher25!/0`.
+  > Vector operations require Cypher 25 (Neo4j ≥ 2025.06) — not Bolt 6.0. With
+  > list storage and list query params, similarity search works over Bolt 5.8.
+  > This is an AshNeo4j-level requirement — see `AshNeo4j.Cypher.require_cypher25!/0`.
 
   ## Constraints
 
@@ -95,18 +98,12 @@ defmodule AshNeo4j.Types.Vector do
   @impl Ash.Type
   def dump_to_native(nil, _constraints), do: {:ok, nil}
 
-  def dump_to_native(value, constraints) when is_list(value) do
-    floats = Enum.map(value, &(&1 / 1))
-    policy = AshNeo4j.BoltyHelper.policy()
-
-    result =
-      if policy && policy.vectors do
-        %Bolty.Types.Vector{type: constraints[:element_type] || :float32, data: floats}
-      else
-        floats
-      end
-
-    {:ok, result}
+  # Persisted as a LIST<FLOAT>. Neo4j stores embeddings as float lists and
+  # `vector.similarity.cosine/2` operates on them directly; the native Bolt 6.0
+  # VECTOR type cannot be written as a node property, so it is never used for
+  # storage.
+  def dump_to_native(value, _constraints) when is_list(value) do
+    {:ok, Enum.map(value, &(&1 / 1))}
   end
 
   def dump_to_native(_, _), do: :error

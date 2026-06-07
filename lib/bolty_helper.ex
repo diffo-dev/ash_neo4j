@@ -37,6 +37,34 @@ defmodule AshNeo4j.BoltyHelper do
     end
   end
 
+  @default_pool Bolt
+
+  @doc """
+  The Bolty pool the data layer should use for the current process.
+
+  Defaults to the primary `Bolt` pool. Override per-process with `with_pool/2`
+  (or by setting `:ash_neo4j_pool` in the process dictionary) — used to route a
+  test's queries and capability checks to a different Neo4j server (e.g. the
+  Bolt 6.0 / Cypher 25 pool).
+  """
+  def current_pool(), do: Process.get(:ash_neo4j_pool, @default_pool)
+
+  @doc """
+  Runs `fun` with the data-layer pool overridden to `pool` for the current
+  process, restoring the previous value afterwards. Query execution and the
+  `policy/0` / `cypher25?/0` capability checks all follow the override.
+  """
+  def with_pool(pool, fun) when is_function(fun, 0) do
+    prev = Process.get(:ash_neo4j_pool)
+    Process.put(:ash_neo4j_pool, pool)
+
+    try do
+      fun.()
+    after
+      if prev, do: Process.put(:ash_neo4j_pool, prev), else: Process.delete(:ash_neo4j_pool)
+    end
+  end
+
   @doc """
   Checks Bolty connectivity
   """
@@ -49,15 +77,19 @@ defmodule AshNeo4j.BoltyHelper do
   end
 
   @doc """
-  Returns the negotiated `%Bolty.Policy{}` for the primary pool, or `nil` when
-  the pool is not yet started. Cached in `:persistent_term` after the first call.
+  Returns the negotiated `%Bolty.Policy{}` for the current pool (see
+  `current_pool/0`), or `nil` when that pool is not started. Cached per pool in
+  `:persistent_term` after the first call.
   """
-  def policy() do
-    case :persistent_term.get({__MODULE__, :policy}, :not_cached) do
+  def policy(), do: policy(current_pool())
+
+  @doc "Returns the `%Bolty.Policy{}` for an explicit `pool`, or `nil` when not started."
+  def policy(pool) do
+    case :persistent_term.get({__MODULE__, :policy, pool}, :not_cached) do
       :not_cached ->
         try do
-          %{policy: policy} = Bolty.connection_info(Bolt)
-          :persistent_term.put({__MODULE__, :policy}, policy)
+          %{policy: policy} = Bolty.connection_info(pool)
+          :persistent_term.put({__MODULE__, :policy, pool}, policy)
           policy
         catch
           :exit, _ -> nil
@@ -69,40 +101,23 @@ defmodule AshNeo4j.BoltyHelper do
   end
 
   @doc """
-  Returns the `%Bolty.Policy{}` for the Bolt6 pool, or `nil` when not started.
-  Cached separately from the primary pool policy.
-  """
-  def policy(:bolt6) do
-    case :persistent_term.get({__MODULE__, :policy_bolt6}, :not_cached) do
-      :not_cached ->
-        try do
-          %{policy: policy} = Bolty.connection_info(Bolt6)
-          :persistent_term.put({__MODULE__, :policy_bolt6}, policy)
-          policy
-        catch
-          :exit, _ -> nil
-        end
-
-      policy ->
-        policy
-    end
-  end
-
-  @doc """
-  Returns `true` when the primary pool is connected to a Neo4j server that
-  supports Cypher 25 (date-versioned Neo4j ≥ 2025.06).
+  Returns `true` when the current pool (see `current_pool/0`) is connected to a
+  Neo4j server that supports Cypher 25 (date-versioned Neo4j ≥ 2025.06).
 
   Derived from the `server_version` string in `Bolty.connection_info/1` and
-  cached in `:persistent_term`. Once diffo-dev/bolty#47 lands this can be
-  simplified to reading `policy().cypher25` directly.
+  cached per pool in `:persistent_term`. Once diffo-dev/bolty#47 lands this can
+  be simplified to reading `policy().cypher25` directly.
   """
-  def cypher25?() do
-    case :persistent_term.get({__MODULE__, :cypher25}, :not_cached) do
+  def cypher25?(), do: cypher25?(current_pool())
+
+  @doc "Cypher 25 support for an explicit `pool`."
+  def cypher25?(pool) do
+    case :persistent_term.get({__MODULE__, :cypher25, pool}, :not_cached) do
       :not_cached ->
         try do
-          %{server_version: server_version} = Bolty.connection_info(Bolt)
+          %{server_version: server_version} = Bolty.connection_info(pool)
           result = cypher25_from_server_version(server_version)
-          :persistent_term.put({__MODULE__, :cypher25}, result)
+          :persistent_term.put({__MODULE__, :cypher25, pool}, result)
           result
         catch
           :exit, _ -> false
