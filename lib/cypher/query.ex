@@ -415,13 +415,26 @@ defmodule AshNeo4j.Cypher.Query do
     %__MODULE__{clauses: [%Match{pattern: pattern}, %Return{items: ["n"]}], params: params}
   end
 
-  @doc "Appends an `ORDER BY` clause. No-op when `terms` is empty."
-  @spec add_order_by(t(), [{atom() | String.t(), :asc | :desc}]) :: t()
+  @doc """
+  Appends an `ORDER BY` clause. No-op when `terms` is empty.
+
+  Each term is `{order_expression, :asc | :desc}` where `order_expression` is a
+  fully-formed Cypher expression — e.g. `"s.name"` for a plain property or
+  `"vector.similarity.cosine(s.embedding, $q)"` for an expression sort. The
+  caller (`AshNeo4j.QueryHelper`'s sort handling) is responsible for the `s.`
+  prefix and for merging any referenced params via `merge_params/2`.
+  """
+  @spec add_order_by(t(), [{String.t(), :asc | :desc}]) :: t()
   def add_order_by(%__MODULE__{} = query, []), do: query
 
   def add_order_by(%__MODULE__{} = query, terms) when is_list(terms) do
-    order_terms = Enum.map(terms, fn {prop, order} -> {"s.#{prop}", order} end)
-    %{query | clauses: query.clauses ++ [%OrderBy{terms: order_terms}]}
+    %{query | clauses: query.clauses ++ [%OrderBy{terms: terms}]}
+  end
+
+  @doc "Merges `params` into the query's param map. Later keys win."
+  @spec merge_params(t(), map()) :: t()
+  def merge_params(%__MODULE__{} = query, params) when is_map(params) do
+    %{query | params: Map.merge(query.params, params)}
   end
 
   @doc "Appends a `SKIP` clause. No-op when `n` is `nil` or `0`."
@@ -452,7 +465,7 @@ defmodule AshNeo4j.Cypher.Query do
   trailing `add_order_by/2`, which orders the per-edge rows by node property and
   so keeps each node's rows grouped).
   """
-  @spec paginate_nodes(t(), [{atom() | String.t(), :asc | :desc}], non_neg_integer() | nil, pos_integer() | nil) :: t()
+  @spec paginate_nodes(t(), [{String.t(), :asc | :desc}], non_neg_integer() | nil, pos_integer() | nil) :: t()
   def paginate_nodes(%__MODULE__{} = query, order_terms, skip, limit) do
     order_terms = order_terms || []
 
@@ -477,7 +490,7 @@ defmodule AshNeo4j.Cypher.Query do
     order =
       case order_terms do
         [] -> []
-        terms -> [%OrderBy{terms: Enum.map(terms, fn {prop, dir} -> {"s.#{prop}", dir} end)}]
+        terms -> [%OrderBy{terms: terms}]
       end
 
     skip_clause = if skip in [nil, 0], do: [], else: [%Skip{value: skip}]
@@ -895,6 +908,15 @@ defmodule AshNeo4j.Cypher.Query do
             thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_d"
             expr = Cypher.expression(variable, prop, "dwithin", {"$#{test_key}", "$#{thresh_key}"})
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
+          op in [:vector_similarity, :vector_cosine_distance] ->
+            {comp_op_atom, query_vec, threshold} = val
+            prop_seg = Cypher.sanitize_param(prop)
+            vec_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_vec"
+            thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_t"
+            expr = Cypher.expression(variable, prop, Atom.to_string(op), {convert_operator(comp_op_atom), "$#{vec_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(vec_key, query_vec) |> Map.put(thresh_key, threshold)
             {expr, params}
 
           true ->

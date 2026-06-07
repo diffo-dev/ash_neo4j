@@ -74,6 +74,10 @@ defmodule AshNeo4j.Cypher do
   "point.distance(n.location, $test_point) < $threshold"
   iex> AshNeo4j.Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
   "point.distance(n.location, $test_point) <= $threshold"
+  iex> AshNeo4j.Cypher.expression(:s, "embedding", "vector_similarity", {">", "$s_embedding_0_vec", "$s_embedding_0_t"})
+  "vector.similarity.cosine(s.embedding, $s_embedding_0_vec) > $s_embedding_0_t"
+  iex> AshNeo4j.Cypher.expression(:s, "embedding", "vector_cosine_distance", {"<", "$s_embedding_0_vec", "$s_embedding_0_t"})
+  "(2.0 * (1.0 - vector.similarity.cosine(s.embedding, $s_embedding_0_vec))) < $s_embedding_0_t"
   ```
   """
   def expression(variable, left, operator, right, opts \\ [])
@@ -107,12 +111,44 @@ defmodule AshNeo4j.Cypher do
         {test_ref, threshold_ref} = right
         "point.distance(#{variable}.#{quote_if_dotted(left)}, #{test_ref}) <= #{threshold_ref}"
 
+      operator == "vector_similarity" ->
+        {comp_op, vec_ref, threshold_ref} = right
+        "#{vector_scalar(:vector_similarity, variable, left, vec_ref)} #{comp_op} #{threshold_ref}"
+
+      operator == "vector_cosine_distance" ->
+        {comp_op, vec_ref, threshold_ref} = right
+        "#{vector_scalar(:vector_cosine_distance, variable, left, vec_ref)} #{comp_op} #{threshold_ref}"
+
       case_insensitive? ->
         "toLower(#{variable}.#{left}) #{String.upcase(operator)} toLower(#{right})"
 
       true ->
         "#{variable}.#{left} #{String.upcase(operator)} #{right}"
     end
+  end
+
+  @doc """
+  Bare scalar Cypher for a vector function, e.g. for use in `ORDER BY`.
+
+  `vec_ref` is the parameter reference holding the query embedding (`"$q"`).
+  `vector_similarity` is Neo4j's normalised cosine similarity in `[0, 1]`
+  (higher = closer); `vector_cosine_distance` rescales it to pgvector-style
+  distance in `[0, 2]` (lower = closer) via `2 * (1 - similarity)`.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.vector_scalar(:vector_similarity, :s, "embedding", "$q")
+  "vector.similarity.cosine(s.embedding, $q)"
+  iex> AshNeo4j.Cypher.vector_scalar(:vector_cosine_distance, :s, "embedding", "$q")
+  "(2.0 * (1.0 - vector.similarity.cosine(s.embedding, $q)))"
+  ```
+  """
+  def vector_scalar(:vector_similarity, variable, prop, vec_ref) do
+    "vector.similarity.cosine(#{variable}.#{prop}, #{vec_ref})"
+  end
+
+  def vector_scalar(:vector_cosine_distance, variable, prop, vec_ref) do
+    "(2.0 * (1.0 - vector.similarity.cosine(#{variable}.#{prop}, #{vec_ref})))"
   end
 
   @doc """
@@ -223,7 +259,7 @@ defmodule AshNeo4j.Cypher do
 
       [] ->
         case AshNeo4j.Sandbox.run(cypher, params) do
-          nil -> Bolty.query(Bolt, cypher, params)
+          nil -> Bolty.query(BoltyHelper.current_pool(), cypher, params)
           result -> result
         end
     end
@@ -346,6 +382,17 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
+  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
+  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
+  any function that emits Cypher 25-only syntax.
+  """
+  def require_cypher25!() do
+    unless BoltyHelper.cypher25?() do
+      raise AshNeo4j.Error.RequiresCypher25
+    end
+  end
+
+  @doc """
   Runs some cypher
 
   ## Examples
@@ -361,17 +408,6 @@ defmodule AshNeo4j.Cypher do
   :ok
   ```
   """
-  @doc """
-  Raises `AshNeo4j.Error.RequiresCypher25` when the connected Neo4j server does
-  not support Cypher 25 (i.e. is older than 2025.06). Call this at the top of
-  any function that emits Cypher 25-only syntax.
-  """
-  def require_cypher25!() do
-    unless BoltyHelper.cypher25?() do
-      raise AshNeo4j.Error.RequiresCypher25
-    end
-  end
-
   def run(%Query{} = query) do
     {cypher, params} = render(query)
     run(cypher, params)

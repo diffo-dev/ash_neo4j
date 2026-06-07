@@ -64,7 +64,17 @@ lib/
   cypher/query.ex              — Typed clause structs (Match, Where, Return, …) and builder
                                  functions for every query shape used by the data layer
   query_helper.ex              — Translates Ash.Query (filter, sort, offset, limit) into
-                                 a Cypher.Query; entry point is query_nodes/1
+                                 a Cypher.Query; entry point is query_nodes/1. sort_terms/2
+                                 pushes vector-similarity sorts into ORDER BY expressions
+  bolty_helper.ex              — Pool lifecycle + capability detection: current_pool/0,
+                                 with_pool/2, policy/1, cypher25?/1 (cached per pool)
+  error.ex                     — AshNeo4j.Error.RequiresCypher25
+  spatial.ex                   — AshNeo4j.Spatial: POINT index lifecycle (operator-invoked)
+  vector.ex                    — AshNeo4j.Vector: VECTOR index lifecycle (operator-invoked)
+  types/vector.ex              — AshNeo4j.Types.Vector: embedding attribute (LIST<FLOAT>)
+  functions/                   — Ash.Query.Function modules pushed down to Cypher:
+                                 st_* (spatial), vector_similarity / vector_cosine_distance,
+                                 and vector_math.ex (shared in-memory cosine for evaluate/1)
   resource/info.ex             — All DSL introspection: label/1, module_label/1, domain_label/1,
                                  domain_fragment_label/1, all_labels/1, label_pair/1,
                                  mapping/1, relate/1, translations/1, and relationship helpers
@@ -214,15 +224,37 @@ aggregate builders, use `labels_string/1` for the source pattern, not direct ato
 
 ## Running tests
 
-Tests require a running Neo4j instance (configured in `config/runtime.exs` via `BOLT_URL`
-or similar). `AshNeo4j.Sandbox` wraps each test in a transaction that rolls back on completion.
+Tests require a running Neo4j instance. Pools are configured in `config/test.exs` (the
+preferred config method — the old `BOLT_URL`-style env var is deprecated). The primary
+`Bolt` pool targets a Neo4j 5.x server; a second `Bolt6` pool targets Neo4j 2026.05 (Bolt
+6.0 / Cypher 25) for the version-gated tests. `AshNeo4j.Sandbox` wraps each test in a
+transaction that rolls back on completion.
 
 ```sh
-mix test                          # full suite
+mix test                          # full suite (excludes :show_neo4j, :bolt6, :cypher25)
 mix test test/blog_test.exs       # single file
 mix test test/blog_test.exs:LINE  # single test
 mix test --max-failures 5         # stop early
+mix test --include cypher25       # also run the Cypher 25 vector tests (needs the Bolt6 pool)
 ```
+
+### Pool routing and version tags
+
+The data layer talks to `AshNeo4j.BoltyHelper.current_pool/0` (default `Bolt`). A test routes
+its queries — and the `cypher25?/1` / `policy/1` capability checks — to another pool with
+`Process.put(:ash_neo4j_pool, Bolt6)` in `setup`, or `BoltyHelper.with_pool/2` for code in a
+separate process (e.g. an `on_exit`). The sandbox holder captures the pool at `checkout/0`.
+
+- `:cypher25` — needs a Neo4j ≥ 2025.06 server (the `Bolt6` pool). Tag vector/Cypher-25 tests
+  with it; excluded by default. Run `async: false` (the pool is small and the sandbox holds a
+  connection per test).
+- `:bolt6` — reserved for tests that genuinely require the Bolt 6.0 protocol (vectors do not —
+  see the vector gotcha below).
+
+**Start a long-lived pool from `test_helper.exs`, never a per-test `setup`.** `Bolty.start_link/1`
+links the pool to the calling process, so starting it inside a test ties the pool's lifetime to
+that one test — later tests then hit a dead pool (`:closed` / "no process"). `setup_all` is
+longer-lived than `setup` but `test_helper.exs` (whole-run) is the right place for a shared pool.
 
 The sandbox uses `Process` dictionary flags (`ash_neo4j_in_sandbox_tx`,
 `ash_neo4j_tx_stack`). Tests that bypass the sandbox or start their own transactions may
@@ -289,3 +321,22 @@ as a follow-up comment, then leave it with the upstream maintainers.
 - **Modifying `Cypher.render/1` to reorder clauses.** The clause list is ordered; render
   outputs them in insertion order. Query correctness depends on this ordering. Always add
   clauses in the correct semantic position in the builder, not in render.
+
+- **Giving a pushed-down query function an `evaluate/1` that returns `:unknown`.** The data
+  layer **always re-applies the filter in-memory** via `Ash.Filter.Runtime.filter_matches`
+  after the Cypher read (`filter_matches/3` in `DataLayer`) — the pushdown is treated as an
+  over-selecting prefilter. A custom `Ash.Query.Function` (e.g. `vector_similarity`) whose
+  `evaluate/1` returns `:unknown` will have all its filtered rows **dropped** by that re-filter,
+  even though the Cypher `WHERE` was correct (symptom: correct Cypher, empty result; a `sort`
+  using the same function still "works" because there's no filter to re-apply). Implement
+  `evaluate/1` to compute the real value, and make it **numerically match the pushdown** —
+  e.g. Neo4j's `vector.similarity.cosine` is normalised `(1 + raw_cosine)/2`, so the in-memory
+  cosine must use the same normalisation (`AshNeo4j.Functions.VectorMath`) or the re-filter
+  disagrees with the `WHERE` threshold.
+
+- **Storing a native `%Bolty.Types.Vector{}` as a node property.** Neo4j cannot persist the
+  Bolt 6.0 VECTOR type as a property — `CREATE (n {embedding: $vector})` errors. Embeddings are
+  stored as `LIST<FLOAT>` (`AshNeo4j.Types.Vector.dump_to_native/2`), which is what
+  `vector.similarity.cosine/2` operates on and what the vector index indexes. The native VECTOR
+  type is a query-parameter wire type only. Consequently vector search is gated on **Cypher 25
+  (≥ 2025.06)**, not Bolt 6.0 — it works over Bolt 5.8.

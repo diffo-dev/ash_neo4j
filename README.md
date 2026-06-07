@@ -191,6 +191,10 @@ setup do
 end
 ```
 
+### Targeting a second Neo4j (pool routing)
+
+The data layer talks to a configurable Bolty pool — `AshNeo4j.BoltyHelper.current_pool/0`, defaulting to `Bolt`. Override it per-process with `with_pool/2` (or `Process.put(:ash_neo4j_pool, Pool)`) to route a test's queries — and the `cypher25?/1` / `policy/1` capability checks — to a different server. AshNeo4j's own suite uses this to run Cypher-25 vector tests against a Neo4j 2026.05 pool (`Bolt6`) while the rest of the suite stays on a 5.x pool; those tests are tagged `:cypher25` and excluded by default. Start a long-lived pool from `test_helper.exs` (not a per-test `setup`) — `Bolty.start_link/1` links the pool to the calling process, so starting it inside a test ties the pool's lifetime to that one test. See `usage-rules/vectors.md`.
+
 ## Installing Neo4j and Configuring Bolty
 
 ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.
@@ -199,7 +203,17 @@ ash_neo4j uses [bolty](https://github./com/diffo-dev/bolty), a reluctant fork of
 
 Your Ash application needs to configure, start and supervise bolty see [bolty documentation](https://hexdocs.pm/bolty/). Make sure to configure any required authorisation.
 
-I've used a few Neo4j 5.x community edition's up to 5.6.22 (bolty limits to bolt 5.4). I've also used [DozerDB](https://dozerdb.org) 5.26.3 with multi-database. I don't recommend either Neo4j 4.x or Neo4 5.x with BOLT BOLT 4.x, while it *should* work I haven't regressioned tested these.
+Tested against Neo4j 5.26.x community (Bolt 5.x) and the calendar-versioned Neo4j 2026.05 community (Bolt 6.0), as well as [DozerDB](https://dozerdb.org) 5.26.x with multi-database. bolty `~> 0.1.0` negotiates Bolt 5.6–6.0 and drops the older Bolt 1–4.x protocols; Neo4j 4.x / Bolt 4.x are not supported.
+
+## Cypher 25 and Cypher 5
+
+Neo4j 2025.06 introduced **versioned Cypher**: the long-standing language is now **Cypher 5** (the default on Neo4j 5.x and on 2025.x servers), and **Cypher 25** is the new calendar-versioned language available from Neo4j 2025.06 onward. The two coexist on a 2025.06+ server and are selected per-query with a leading `CYPHER 5` / `CYPHER 25` clause.
+
+AshNeo4j detects the connected server version (from `Bolty.connection_info/1`'s `server_version`) and, on **Neo4j ≥ 2025.06**, automatically prepends `CYPHER 25 ` to every query so it runs against the Cypher 25 language. On older servers no prefix is emitted and queries run against the server default (Cypher 5). The result is cached per pool; `AshNeo4j.BoltyHelper.cypher25?/0` reports it.
+
+This is distinct from the **Bolt protocol** version (5.6–6.0) — the Bolt version is how the driver talks to the server, while Cypher 5 / 25 is the query language version. Some features require Cypher 25 regardless of Bolt version: for example vector similarity search (see `usage-rules/vectors.md`) needs Neo4j ≥ 2025.06 but works over Bolt 5.8. A feature that requires it calls `AshNeo4j.Cypher.require_cypher25!/0`, which raises `AshNeo4j.Error.RequiresCypher25` on an older server.
+
+> Until [bolty#47](https://github.com/diffo-dev/bolty/issues/47) adds a `cypher25` indicator to `Bolty.Policy`, AshNeo4j derives this from the `server_version` string (`"Neo4j/YYYY.MM.*"` ≥ `2025.06`).
 
 ## Elixir, Ash and Neo4j Types
 
@@ -236,6 +250,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | 2025-05-11T07:45:41.429903000Z.                        | DATETIME       |
 | :uuid                | Ash.Type.UUID                        | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                  | "0274972c-161c-4dc9-882f-6851704c2af9"                 | STRING         |
 | :uuid7               | Ash.Type.UUIDv7                      | BitString          | "019d85f7-8450-7695-9426-4ede74026140"                  | "019d85f7-8450-7695-9426-4ede74026140"                 | STRING         |
+| (vector embedding)   | AshNeo4j.Types.Vector                | List               | [0.12, -0.04, 0.98]                                     | [0.12, -0.04, 0.98]                                    | LIST<FLOAT>    |
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. 
 
@@ -243,7 +258,7 @@ Struct is supported, however must implement Ash.Type. Ash arrays are supported a
 
 Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 
-Ash.Type.File, Ash.Type.Term and Ash.Type.Vector are not supported.
+Ash.Type.File and Ash.Type.Term are not supported. The built-in `Ash.Type.Vector` is also not supported — AshNeo4j ships its own `AshNeo4j.Types.Vector` for embeddings (stored as a Neo4j `LIST<FLOAT>`), with `vector_similarity` / `vector_cosine_distance` search expressions. See `usage-rules/vectors.md`.
 
 ## Storage Types
 
@@ -335,9 +350,11 @@ Only `expr(...)` calculations are currently supported. Custom `:calculate` callb
 
 ## Limitations and Future Work
 
-Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, and expression calculations. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, expression calculations, spatial types, and vector embeddings. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
-Future work may include: cached calculations and aggregates, vectors/semantic search, geospatial support.
+Vector similarity search is currently a full scan — Neo4j does not use the HNSW vector index for `vector.similarity.cosine` in a `WHERE`/`ORDER BY`. Indexed top-K (via `db.index.vector.queryNodes` / the Cypher 25 `SEARCH` clause) is tracked in [#297](https://github.com/diffo-dev/ash_neo4j/issues/297).
+
+Future work may include: cached calculations and aggregates, indexed vector/semantic search ([#297](https://github.com/diffo-dev/ash_neo4j/issues/297)), and broader geospatial support.
 
 Collaboration on ash_neo4j welcome via github, please use discussions and/or raise issues as you encounter them. If going straight for a PR, please include explanation and test cases.
 
