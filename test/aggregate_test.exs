@@ -379,4 +379,19 @@ defmodule AshNeo4j.AggregateTest do
       assert {:ok, %{any: true}} = Ash.aggregate(Post, {:any, :exists, []})
     end
   end
+
+  # #301 — an exists aggregate over an empty result must be false, not nil.
+  describe "exists over an empty result (#301)" do
+    test "root-node exists is false when there are no nodes" do
+      assert {:ok, %{any: false}} = Ash.aggregate(Post, {:any, :exists, []})
+    end
+
+    test "relationship exists is false when there are no source nodes" do
+      assert {:ok, %{has: false}} = Ash.aggregate(Post, {:has, :exists, [path: [:comments]]})
+    end
+
+    test "Ash.exists?/1 is false on an empty resource" do
+      assert Ash.exists?(Post) == false
+    end
+  end
 end
