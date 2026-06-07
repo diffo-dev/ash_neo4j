@@ -53,6 +53,13 @@ defmodule AshNeo4j.Functions.StDistance do
   def evaluate(%{arguments: [nil, _]}), do: {:known, nil}
   def evaluate(%{arguments: [_, nil]}), do: {:known, nil}
 
+  # WGS-84-3D point ↔ point (#270). Matches Neo4j's 3D point.distance so the
+  # in-memory re-filter agrees with the pushdown. PointZ ↔ 2D Point is *not*
+  # matched here — a dimension mix is caught up front (GeoDimensionMismatch).
+  def evaluate(%{arguments: [%Geo.PointZ{coordinates: a}, %Geo.PointZ{coordinates: b}]}) do
+    known(AshNeo4j.Geo.haversine_meters_3d(a, b))
+  end
+
   # Point ↔ any supported geometry (including Point ↔ Point). Symmetric.
   def evaluate(%{arguments: [%Geo.Point{} = point, %g{} = geo]}) when g in @to_point do
     known(geometry_point_meters(geo, point))

@@ -21,6 +21,11 @@ defmodule AshNeo4j.Test.Resource.Place do
       public?: true,
       constraints: [geo_types: [:point], force_srid: 4326]
 
+    # #270 — WGS-84-3D point (lng, lat, height), carries %Geo.PointZ{}
+    attribute :tower, AshGeo.GeoJson,
+      public?: true,
+      constraints: [geo_types: [:point_z], force_srid: 4979]
+
     attribute :bounds, AshGeo.GeoJson,
       public?: true,
       constraints: [geo_types: [:polygon], force_srid: 4326]
