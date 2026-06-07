@@ -345,7 +345,9 @@ defmodule AshNeo4j.Cypher.Query do
 
     {rendered_branches, merged_params} =
       Enum.reduce(branches, {[], %{}}, fn branch, {acc_cyphers, acc_params} ->
-        {cypher, branch_params} = Cypher.render(branch)
+        # prefix?: false — the CYPHER 25 selector belongs only on the outer
+        # query, never on a branch inside the CALL { … } block (#299).
+        {cypher, branch_params} = Cypher.render(branch, prefix?: false)
         {[cypher | acc_cyphers], Map.merge(acc_params, branch_params)}
       end)
 
