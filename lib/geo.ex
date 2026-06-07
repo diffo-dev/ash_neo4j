@@ -54,6 +54,56 @@ defmodule AshNeo4j.Geo do
   end
 
   @doc """
+  Geodesic distance in metres between two WGS-84-3D `{lng, lat, height}`
+  coordinate triples (#270). Matches Neo4j's 3D `point.distance/2` to within
+  ~0.1 m.
+
+  Neo4j's 3D geographic model is **not** a naive `√(ground² + Δh²)` — the
+  great-circle arc is taken at the **mean height** `(h₁+h₂)/2`, then combined
+  with the height delta by Pythagoras:
+
+      d = √( (arc × (R + h_mean) / R)²  +  Δh² )
+
+  where `arc` is the surface haversine (at the equatorial radius `R`). Matching
+  this exactly keeps in-memory `order_by` / `calculate` consistent with the
+  `point.distance` pushdown, the same invariant the 2D path holds.
+  """
+  @spec haversine_meters_3d({number(), number(), number()}, {number(), number(), number()}) :: float()
+  def haversine_meters_3d({lng1, lat1, h1}, {lng2, lat2, h2}) do
+    arc = haversine_meters({lng1, lat1}, {lng2, lat2})
+    h_mean = (h1 + h2) / 2
+    delta_h = h2 - h1
+    scaled = arc * (@wgs_84_equatorial_radius_m + h_mean) / @wgs_84_equatorial_radius_m
+
+    :math.sqrt(scaled * scaled + delta_h * delta_h)
+  end
+
+  @doc """
+  Projects a 3D (`Z`) geometry **down** to its 2D footprint by dropping the
+  height ordinate — the OGC `ST_Force2D` operation (#270). This is the only
+  sanctioned bridge between the 3D and 2D worlds: e.g. asking whether a 3D
+  antenna is inside a 2D coverage area is `st_contains(area, ^force_2d(antenna))`.
+
+  Returns the 2D sibling struct with `srid: 4326`. A geometry that is already
+  2D is returned unchanged. There is no `to_3d` — a height cannot be fabricated.
+
+      iex> AshNeo4j.Geo.force_2d(%Geo.PointZ{coordinates: {151.0, -33.0, 50.0}, srid: 4979})
+      %Geo.Point{coordinates: {151.0, -33.0}, srid: 4326}
+  """
+  @spec force_2d(Geo.geometry()) :: Geo.geometry()
+  def force_2d(%Geo.PointZ{coordinates: {x, y, _z}} = g), do: %Geo.Point{coordinates: {x, y}, srid: 4326, properties: g.properties}
+  def force_2d(%Geo.LineStringZ{coordinates: c} = g), do: %Geo.LineString{coordinates: drop_z(c), srid: 4326, properties: g.properties}
+  def force_2d(%Geo.PolygonZ{coordinates: c} = g), do: %Geo.Polygon{coordinates: drop_z(c), srid: 4326, properties: g.properties}
+  def force_2d(%Geo.MultiPointZ{coordinates: c} = g), do: %Geo.MultiPoint{coordinates: drop_z(c), srid: 4326, properties: g.properties}
+  def force_2d(%Geo.MultiLineStringZ{coordinates: c} = g), do: %Geo.MultiLineString{coordinates: drop_z(c), srid: 4326, properties: g.properties}
+  def force_2d(%Geo.MultiPolygonZ{coordinates: c} = g), do: %Geo.MultiPolygon{coordinates: drop_z(c), srid: 4326, properties: g.properties}
+  # already 2D — no-op, so callers can project uniformly
+  def force_2d(%mod{} = g) when mod in [Geo.Point, Geo.LineString, Geo.Polygon, Geo.MultiPoint, Geo.MultiLineString, Geo.MultiPolygon], do: g
+
+  defp drop_z({x, y, _z}), do: {x, y}
+  defp drop_z(list) when is_list(list), do: Enum.map(list, &drop_z/1)
+
+  @doc """
   Geodesic distance in metres from point `p` to the nearest point on the
   segment `a`–`b` (each a `{lng, lat}` pair) — the true
   closest-point-on-segment distance, not closest-vertex.

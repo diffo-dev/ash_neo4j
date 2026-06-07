@@ -1163,17 +1163,38 @@ defmodule AshNeo4j.DataLayer do
     Map.put(acc, "#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y))
   end
 
-  defp promote_geo_indexable(acc, translated_key, %_{} = geo) do
-    if AshGeo.is_geo(geo.__struct__) do
-      [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+  # WGS-84-3D point (#270) — native 3D Neo4j POINT (srid 4979) for `point.distance`
+  # / `point.withinBBox` pushdown in 3D.
+  defp promote_geo_indexable(acc, translated_key, %Geo.PointZ{coordinates: {x, y, z}}) do
+    Map.put(acc, "#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y, z))
+  end
 
-      acc
-      |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
-      |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
-    else
-      acc
+  defp promote_geo_indexable(acc, translated_key, %_{} = geo) do
+    cond do
+      # 3D areal/linear geometries (PolygonZ, LineStringZ, …) are deferred to
+      # #270 Phase 2 — silently storing 2D bbox companions would drop the z and
+      # mislead spatial queries, so refuse explicitly rather than degrade.
+      AshGeo.is_geo(geo.__struct__) and geo_dim(geo) == 3 ->
+        raise AshNeo4j.Error.Unsupported3DGeometry, geo
+
+      AshGeo.is_geo(geo.__struct__) ->
+        [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+
+        acc
+        |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
+        |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
+
+      true ->
+        acc
     end
   end
+
+  # Coordinate dimensionality of a %Geo.*{} struct (2 or 3), by inspecting the
+  # first leaf coordinate tuple.
+  defp geo_dim(%{coordinates: coords}), do: coord_dim(coords)
+  defp coord_dim(t) when is_tuple(t), do: tuple_size(t)
+  defp coord_dim([head | _]), do: coord_dim(head)
+  defp coord_dim(_), do: 2
 
   # Recursively walks a value (typically the input form of a non-Geo
   # attribute — struct, map, etc.) looking for nested %Geo.*{} structs.
