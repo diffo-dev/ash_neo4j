@@ -1260,6 +1260,13 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
+  # No source nodes — return the empty value for the aggregate. `exists` over an
+  # empty set is `false` (not the nil default Ash carries for it, #301); other
+  # kinds use their declared default (`count` is 0).
+  defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], %{kind: :exists}, _mode) do
+    {:ok, false}
+  end
+
   defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], aggregate, _mode) do
     {:ok, aggregate.default_value}
   end
