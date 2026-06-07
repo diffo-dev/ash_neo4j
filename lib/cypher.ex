@@ -343,8 +343,15 @@ defmodule AshNeo4j.Cypher do
   "CALL { MATCH (s:Place) WHERE s.uuid = $b0_s_uuid_0 RETURN s UNION ALL MATCH (s:Place) WHERE s.uuid = $b1_s_uuid_0 RETURN s } OPTIONAL MATCH (s)-[r]-(d) RETURN s, r, d"
   ```
   """
-  def render(%Query{clauses: clauses, params: params}) do
-    {cypher25_prefix() <> Enum.map_join(clauses, " ", &render_clause/1), params}
+  def render(query, opts \\ [])
+
+  def render(%Query{clauses: clauses, params: params}, opts) do
+    # The CYPHER 25 language selector may appear only once, at the very start of
+    # a query — never inside a subquery. Branches assembled into a `CALL { … }`
+    # block are rendered with `prefix?: false` so only the outer query carries
+    # the prefix (#299).
+    prefix = if Keyword.get(opts, :prefix?, true), do: cypher25_prefix(), else: ""
+    {prefix <> Enum.map_join(clauses, " ", &render_clause/1), params}
   end
 
   defp cypher25_prefix, do: if(BoltyHelper.cypher25?(), do: "CYPHER 25 ", else: "")

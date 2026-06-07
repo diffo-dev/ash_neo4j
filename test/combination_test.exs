@@ -159,3 +159,63 @@ defmodule AshNeo4j.CombinationTest do
     end
   end
 end
+
+defmodule AshNeo4j.CombinationCypher25Test do
+  @moduledoc """
+  #299 — on a Cypher 25 server the `CYPHER 25` selector must appear only once,
+  at the start of the outer query, never inside the `CALL { … }` block of a
+  native combination query. Tagged `:cypher25` / `async: false` (routes to the
+  Neo4j 2026.05 `Bolt6` pool; excluded by default).
+  """
+  use ExUnit.Case, async: false
+
+  require Ash.Query
+  import Ash.Expr
+
+  alias AshNeo4j.Cypher
+  alias AshNeo4j.Sandbox
+  alias AshNeo4j.Test.Resource.Author
+
+  @moduletag :cypher25
+
+  setup do
+    Process.put(:ash_neo4j_pool, Bolt6)
+    Sandbox.checkout()
+    on_exit(&Sandbox.rollback/0)
+    :ok
+  end
+
+  test "UNION ALL combination runs end-to-end against a Cypher 25 server" do
+    alice = Author |> Ash.create!(%{name: "Alice"})
+    bob = Author |> Ash.create!(%{name: "Bob"})
+    _charlie = Author |> Ash.create!(%{name: "Charlie"})
+
+    {:ok, results} =
+      Author
+      |> Ash.Query.combination_of([
+        Ash.Query.Combination.base(filter: expr(name == "Alice")),
+        Ash.Query.Combination.union_all(filter: expr(name == "Bob"))
+      ])
+      |> Ash.read()
+
+    ids = Enum.map(results, & &1.id)
+    assert alice.id in ids
+    assert bob.id in ids
+    assert length(results) == 2
+  end
+
+  test "the CYPHER 25 selector appears once, only on the outer query" do
+    b0 = Cypher.Query.branch_node_read(:Place, [{"name", :==, "X", false}], param_prefix: "b0_")
+    b1 = Cypher.Query.branch_node_read(:Place, [{"name", :==, "Y", false}], param_prefix: "b1_")
+
+    {cypher, _} =
+      [b0, b1]
+      |> Cypher.Query.combination_block(union_type: :union_all)
+      |> Cypher.render()
+
+    # prefix is active (we routed to the Cypher 25 pool)
+    assert String.starts_with?(cypher, "CYPHER 25 CALL {")
+    # and it appears exactly once — no embedded prefix inside the CALL block
+    assert length(String.split(cypher, "CYPHER 25 ")) == 2
+  end
+end
