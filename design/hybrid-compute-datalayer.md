@@ -54,7 +54,7 @@ This generalises the Cypher-vs-Elixir routing the data layer already does (pushd
 | **logic engine** | constraint search / `solve` (CSP/SAT) |
 
 - **Placement** is by `op × element-type × shape/density`, decided at the engine boundary by **transfer cost vs compute saving** (data gravity): reductions and elementwise stay in Cypher; dense/heavy numeric transfers out.
-- **The engine contract is binary operands** (plus shape/type/driver metadata) in and out — the *universal* marshalling format. Nx tensors are binary buffers; an IEEE 1164 std_logic engine is a binary callback; a future NIF takes binary. **The contract firms up only once a second engine sits behind it** — it should not be over-designed before then.
+- **The engine contract is binary operands** (plus shape/type/driver metadata) in and out — the *universal* marshalling format. Nx tensors are binary buffers; an IEEE 1164 std_logic engine is a binary callback; a future NIF takes binary. At its core an engine op is just a function `(binary_operands, opts) -> binary`; the dispatch value is a `fun` / MFA / module, with a behaviour module being optional richer packaging (capability/cost/multiple ops) over such functions. **The contract firms up only once a second engine sits behind it** — it should not be over-designed before then.
 - **Dependency boundaries are opt-in.** Heavy engines are add-on packages (`ash_neo4j_nx`, `ash_neo4j_logic`) lit up only when registered; the core stays lean.
 - **Placement is inspectable.** An `explain`-style "where will this run." Hide the mechanism, not the cost.
 
@@ -77,7 +77,9 @@ end
 - `resolve:` / `solve:` / `compute:` — dispatch to a registered engine (policy). Omit if the type has no semantic op.
 - Omit the field entry entirely when everything is conventional.
 
-The keys keep mechanism and policy distinguishable — the data layer still never learns *what* the values mean, only that `resolve` → module X — so co-locating does not reconflate "neo4j shouldn't know it's a Sudoku."
+The keys keep mechanism and policy distinguishable — the data layer still never learns *what* the values mean, only that `resolve` → some engine — so co-locating does not reconflate "neo4j shouldn't know it's a Sudoku."
+
+A dispatch value is a `fun` / MFA / module, and it is **introspected from the type at compile time and baked into the plan — not stored on a node and invoked from data.** (An MFA *can* be persisted as node data via `Ash.Type.Function`, but invoking a function named by mutable data is an arbitrary-code-execution and staleness risk; dispatch is therefore resolved by introspection — compile-checked — and never `apply`ed from stored data. The MFA-persistence capability remains only for storing function *values*, not for dispatch.)
 
 Where it lives:
 
