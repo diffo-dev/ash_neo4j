@@ -33,6 +33,15 @@ defmodule AshNeo4j.Cypher do
     Call
   }
 
+  # World-extent WGS-84 corners, used to rewrite bbox-containment predicates
+  # into index-servable range scans on the indexed companion corners (#311).
+  # `point.withinBBox(indexedCorner, worldSW, p)` reads as `indexedCorner <= p`
+  # and is served by the POINT index (NodeIndexSeekByRange); the natural
+  # `point.withinBBox(p, n.bbSW, n.bbNE)` form has the indexed properties as
+  # the box, not the probe, so it can only be a full scan.
+  @world_sw "point({longitude: -180, latitude: -90})"
+  @world_ne "point({longitude: 180, latitude: 90})"
+
   @spec remove_properties(atom(), maybe_improper_list()) :: binary()
   @doc """
   Converts a list of property names into a remove properties string.
@@ -67,9 +76,9 @@ defmodule AshNeo4j.Cypher do
   iex> AshNeo4j.Cypher.expression(:s, "name", "=", "$s_name_0", case_insensitive?: true)
   "toLower(s.name) = toLower($s_name_0)"
   iex> AshNeo4j.Cypher.expression(:n, "bounds", "within_bbox", "$test_point")
-  "point.withinBBox($test_point, n.`bounds.bbSW`, n.`bounds.bbNE`)"
+  "point.withinBBox(n.`bounds.bbSW`, point({longitude: -180, latitude: -90}), $test_point) AND point.withinBBox(n.`bounds.bbNE`, $test_point, point({longitude: 180, latitude: 90}))"
   iex> AshNeo4j.Cypher.expression(:n, "bounds", "within_bbox_box", {"$inner_sw", "$inner_ne"})
-  "point.withinBBox($inner_sw, n.`bounds.bbSW`, n.`bounds.bbNE`) AND point.withinBBox($inner_ne, n.`bounds.bbSW`, n.`bounds.bbNE`)"
+  "point.withinBBox(n.`bounds.bbSW`, point({longitude: -180, latitude: -90}), $inner_sw) AND point.withinBBox(n.`bounds.bbNE`, $inner_ne, point({longitude: 180, latitude: 90}))"
   iex> AshNeo4j.Cypher.expression(:n, "location", "st_distance", {"<", "$test_point", "$threshold"})
   "point.distance(n.location, $test_point) < $threshold"
   iex> AshNeo4j.Cypher.expression(:n, "location", "dwithin", {"$test_point", "$threshold"})
@@ -95,13 +104,24 @@ defmodule AshNeo4j.Cypher do
         "#{variable}.#{left} IS NOT NULL"
 
       operator == "within_bbox" ->
-        "point.withinBBox(#{right}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`)"
+        # P ∈ [bbSW, bbNE] ⟺ bbSW ≤ P AND bbNE ≥ P. Probing the indexed corners
+        # against world-extent boxes keeps the indexed properties as the probe,
+        # so the POINT index serves both ranges (#311).
+        bb_sw = "#{variable}.`#{left}.bbSW`"
+        bb_ne = "#{variable}.`#{left}.bbNE`"
+
+        "point.withinBBox(#{bb_sw}, #{@world_sw}, #{right}) AND " <>
+          "point.withinBBox(#{bb_ne}, #{right}, #{@world_ne})"
 
       operator == "within_bbox_box" ->
         {sw_ref, ne_ref} = right
+        # Test box ⊆ attr box ⟺ attr.bbSW ≤ test.sw AND attr.bbNE ≥ test.ne —
+        # again expressed as indexed-corner range scans (#311).
+        bb_sw = "#{variable}.`#{left}.bbSW`"
+        bb_ne = "#{variable}.`#{left}.bbNE`"
 
-        "point.withinBBox(#{sw_ref}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`) AND " <>
-          "point.withinBBox(#{ne_ref}, #{variable}.`#{left}.bbSW`, #{variable}.`#{left}.bbNE`)"
+        "point.withinBBox(#{bb_sw}, #{@world_sw}, #{sw_ref}) AND " <>
+          "point.withinBBox(#{bb_ne}, #{ne_ref}, #{@world_ne})"
 
       operator == "st_distance" ->
         {comp_op, test_ref, threshold_ref} = right
