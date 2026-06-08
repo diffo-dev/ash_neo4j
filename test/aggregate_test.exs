@@ -11,7 +11,6 @@ defmodule AshNeo4j.AggregateTest do
   alias AshNeo4j.Test.Resource.Post
   alias AshNeo4j.Test.Resource.Comment
   alias AshNeo4j.Test.Type.DogTypedStruct
-  require Ash.Query
   require Ash.Expr
 
   setup_all do
@@ -348,6 +347,51 @@ defmodule AshNeo4j.AggregateTest do
 
       [loaded] = Post |> Ash.read!() |> Ash.load!([:comment_dogs])
       assert loaded.comment_dogs == []
+    end
+  end
+
+  # #291 — aggregates with no relationship path (counting root nodes directly)
+  # must aggregate over the source node `s`, not an unbound `d`.
+  describe "root-node aggregates (no relationship path)" do
+    test "Ash.count/1 counts root nodes" do
+      author = create_author()
+      create_post(author, "p1")
+      create_post(author, "p2")
+      create_post(author, "p3")
+
+      assert {:ok, 3} = Ash.count(Post)
+    end
+
+    test "Ash.count/1 returns 0 when there are no nodes" do
+      assert {:ok, 0} = Ash.count(Post)
+    end
+
+    test "Ash.aggregate/3 :count over root nodes" do
+      author = create_author()
+      create_post(author, "p1")
+      create_post(author, "p2")
+
+      assert {:ok, %{n: 2}} = Ash.aggregate(Post, {:n, :count, []})
+    end
+
+    test "Ash.aggregate/3 :exists over root nodes is true when present" do
+      create_post(create_author(), "p1")
+      assert {:ok, %{any: true}} = Ash.aggregate(Post, {:any, :exists, []})
+    end
+  end
+
+  # #301 — an exists aggregate over an empty result must be false, not nil.
+  describe "exists over an empty result (#301)" do
+    test "root-node exists is false when there are no nodes" do
+      assert {:ok, %{any: false}} = Ash.aggregate(Post, {:any, :exists, []})
+    end
+
+    test "relationship exists is false when there are no source nodes" do
+      assert {:ok, %{has: false}} = Ash.aggregate(Post, {:has, :exists, [path: [:comments]]})
+    end
+
+    test "Ash.exists?/1 is false on an empty resource" do
+      assert Ash.exists?(Post) == false
     end
   end
 end

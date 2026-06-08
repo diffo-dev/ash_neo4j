@@ -71,6 +71,10 @@ defmodule AshNeo4j.Sandbox do
     end
 
     parent = self()
+    # Capture the pool in the parent — the spawned holder does not inherit the
+    # parent's process dictionary, so a `:bolt6` test's pool override has to be
+    # read here and passed in.
+    pool = AshNeo4j.BoltyHelper.current_pool()
 
     holder =
       spawn_link(fn ->
@@ -78,7 +82,7 @@ defmodule AshNeo4j.Sandbox do
         # killing the holder before Bolty.rollback/2 can be called.
         Process.flag(:trap_exit, true)
 
-        Bolty.transaction(Bolt, fn conn ->
+        Bolty.transaction(pool, fn conn ->
           send(parent, {:ash_neo4j_sandbox_ready, self()})
           holder_loop(conn)
         end)

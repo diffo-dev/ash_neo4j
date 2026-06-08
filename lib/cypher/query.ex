@@ -345,7 +345,9 @@ defmodule AshNeo4j.Cypher.Query do
 
     {rendered_branches, merged_params} =
       Enum.reduce(branches, {[], %{}}, fn branch, {acc_cyphers, acc_params} ->
-        {cypher, branch_params} = Cypher.render(branch)
+        # prefix?: false — the CYPHER 25 selector belongs only on the outer
+        # query, never on a branch inside the CALL { … } block (#299).
+        {cypher, branch_params} = Cypher.render(branch, prefix?: false)
         {[cypher | acc_cyphers], Map.merge(acc_params, branch_params)}
       end)
 
@@ -415,13 +417,26 @@ defmodule AshNeo4j.Cypher.Query do
     %__MODULE__{clauses: [%Match{pattern: pattern}, %Return{items: ["n"]}], params: params}
   end
 
-  @doc "Appends an `ORDER BY` clause. No-op when `terms` is empty."
-  @spec add_order_by(t(), [{atom() | String.t(), :asc | :desc}]) :: t()
+  @doc """
+  Appends an `ORDER BY` clause. No-op when `terms` is empty.
+
+  Each term is `{order_expression, :asc | :desc}` where `order_expression` is a
+  fully-formed Cypher expression — e.g. `"s.name"` for a plain property or
+  `"vector.similarity.cosine(s.embedding, $q)"` for an expression sort. The
+  caller (`AshNeo4j.QueryHelper`'s sort handling) is responsible for the `s.`
+  prefix and for merging any referenced params via `merge_params/2`.
+  """
+  @spec add_order_by(t(), [{String.t(), :asc | :desc}]) :: t()
   def add_order_by(%__MODULE__{} = query, []), do: query
 
   def add_order_by(%__MODULE__{} = query, terms) when is_list(terms) do
-    order_terms = Enum.map(terms, fn {prop, order} -> {"s.#{prop}", order} end)
-    %{query | clauses: query.clauses ++ [%OrderBy{terms: order_terms}]}
+    %{query | clauses: query.clauses ++ [%OrderBy{terms: terms}]}
+  end
+
+  @doc "Merges `params` into the query's param map. Later keys win."
+  @spec merge_params(t(), map()) :: t()
+  def merge_params(%__MODULE__{} = query, params) when is_map(params) do
+    %{query | params: Map.merge(query.params, params)}
   end
 
   @doc "Appends a `SKIP` clause. No-op when `n` is `nil` or `0`."
@@ -452,7 +467,7 @@ defmodule AshNeo4j.Cypher.Query do
   trailing `add_order_by/2`, which orders the per-edge rows by node property and
   so keeps each node's rows grouped).
   """
-  @spec paginate_nodes(t(), [{atom() | String.t(), :asc | :desc}], non_neg_integer() | nil, pos_integer() | nil) :: t()
+  @spec paginate_nodes(t(), [{String.t(), :asc | :desc}], non_neg_integer() | nil, pos_integer() | nil) :: t()
   def paginate_nodes(%__MODULE__{} = query, order_terms, skip, limit) do
     order_terms = order_terms || []
 
@@ -477,7 +492,7 @@ defmodule AshNeo4j.Cypher.Query do
     order =
       case order_terms do
         [] -> []
-        terms -> [%OrderBy{terms: Enum.map(terms, fn {prop, dir} -> {"s.#{prop}", dir} end)}]
+        terms -> [%OrderBy{terms: terms}]
       end
 
     skip_clause = if skip in [nil, 0], do: [], else: [%Skip{value: skip}]
@@ -588,20 +603,36 @@ defmodule AshNeo4j.Cypher.Query do
         dest_conditions \\ []
       )
       when is_atom(pk_field) and is_list(ids) and is_list(path_segments) and is_atom(kind) do
-    path = build_agg_path(path_segments)
-    expr = aggregate_expr(kind, field, name, uniq?)
     src = labels_string(source_label)
-    {dest_where, dest_params} = build_dest_conditions(dest_conditions)
 
-    %__MODULE__{
-      clauses:
-        [
-          %Match{pattern: "(s:#{src})"},
-          %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
-          %OptionalMatch{pattern: "(s)#{path}"}
-        ] ++ dest_where ++ [%Return{items: [expr]}],
-      params: Map.merge(%{"agg_ids" => ids}, dest_params)
-    }
+    case path_segments do
+      [] ->
+        # Root-node aggregate (no relationship path, #291) — aggregate over the
+        # source node `s` directly; there is no `d` to bind, so no OPTIONAL MATCH.
+        %__MODULE__{
+          clauses: [
+            %Match{pattern: "(s:#{src})"},
+            %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+            %Return{items: [aggregate_expr(kind, field, name, uniq?, "s")]}
+          ],
+          params: %{"agg_ids" => ids}
+        }
+
+      _ ->
+        path = build_agg_path(path_segments)
+        expr = aggregate_expr(kind, field, name, uniq?)
+        {dest_where, dest_params} = build_dest_conditions(dest_conditions)
+
+        %__MODULE__{
+          clauses:
+            [
+              %Match{pattern: "(s:#{src})"},
+              %Where{conditions: ["s.#{pk_field} IN $agg_ids"]},
+              %OptionalMatch{pattern: "(s)#{path}"}
+            ] ++ dest_where ++ [%Return{items: [expr]}],
+          params: Map.merge(%{"agg_ids" => ids}, dest_params)
+        }
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -897,6 +928,15 @@ defmodule AshNeo4j.Cypher.Query do
             params = acc_params |> Map.put(test_key, test_point) |> Map.put(thresh_key, threshold)
             {expr, params}
 
+          op in [:vector_similarity, :vector_cosine_distance] ->
+            {comp_op_atom, query_vec, threshold} = val
+            prop_seg = Cypher.sanitize_param(prop)
+            vec_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_vec"
+            thresh_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}_t"
+            expr = Cypher.expression(variable, prop, Atom.to_string(op), {convert_operator(comp_op_atom), "$#{vec_key}", "$#{thresh_key}"})
+            params = acc_params |> Map.put(vec_key, query_vec) |> Map.put(thresh_key, threshold)
+            {expr, params}
+
           true ->
             prop_seg = Cypher.sanitize_param(prop)
             param_key = "#{param_prefix}#{variable}_#{prop_seg}_#{index}"
@@ -940,14 +980,16 @@ defmodule AshNeo4j.Cypher.Query do
     end)
   end
 
-  defp aggregate_expr(kind, field, name, uniq?) do
+  # `node_var` is the node the aggregate runs over — `"d"` for a relationship
+  # traversal, `"s"` for a root-node aggregate (empty relationship path, #291).
+  defp aggregate_expr(kind, field, name, uniq?, node_var \\ "d") do
     distinct = if uniq?, do: "DISTINCT ", else: ""
-    field_ref = if field, do: "d.#{field}", else: "d"
+    field_ref = if field, do: "#{node_var}.#{field}", else: node_var
 
     fn_str =
       case kind do
-        :count -> "COUNT(#{distinct}d)"
-        :exists -> "COUNT(d) > 0"
+        :count -> "COUNT(#{distinct}#{node_var})"
+        :exists -> "COUNT(#{node_var}) > 0"
         :sum -> "sum(#{distinct}#{field_ref})"
         :avg -> "avg(#{distinct}#{field_ref})"
         :min -> "min(#{field_ref})"

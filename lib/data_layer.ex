@@ -68,6 +68,9 @@ defmodule AshNeo4j.DataLayer do
   # spatial — st_distance_in_meters: alias for st_distance, same pushdown
   def can?(_, {:filter_expr, %AshNeo4j.Functions.StDistanceInMeters{}}), do: true
 
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorSimilarity{}}), do: true
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorCosineDistance{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -97,7 +100,9 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Functions.StDistanceInMeters,
       AshNeo4j.Functions.StDwithin,
       AshNeo4j.Functions.StIntersects,
-      AshNeo4j.Functions.StWithin
+      AshNeo4j.Functions.StWithin,
+      AshNeo4j.Functions.VectorSimilarity,
+      AshNeo4j.Functions.VectorCosineDistance
     ]
   end
 
@@ -639,7 +644,7 @@ defmodule AshNeo4j.DataLayer do
         Process.delete({:neo4j_in_transaction, label})
       end
     else
-      Bolty.transaction(Bolt, fn conn ->
+      Bolty.transaction(AshNeo4j.BoltyHelper.current_pool(), fn conn ->
         stack = Process.get(:ash_neo4j_tx_stack, [])
         Process.put(:ash_neo4j_tx_stack, [conn | stack])
         Process.put({:neo4j_in_transaction, label}, true)
@@ -1158,17 +1163,38 @@ defmodule AshNeo4j.DataLayer do
     Map.put(acc, "#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y))
   end
 
-  defp promote_geo_indexable(acc, translated_key, %_{} = geo) do
-    if AshGeo.is_geo(geo.__struct__) do
-      [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+  # WGS-84-3D point (#270) — native 3D Neo4j POINT (srid 4979) for `point.distance`
+  # / `point.withinBBox` pushdown in 3D.
+  defp promote_geo_indexable(acc, translated_key, %Geo.PointZ{coordinates: {x, y, z}}) do
+    Map.put(acc, "#{translated_key}.point", Bolty.Types.Point.create(:wgs_84, x, y, z))
+  end
 
-      acc
-      |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
-      |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
-    else
-      acc
+  defp promote_geo_indexable(acc, translated_key, %_{} = geo) do
+    cond do
+      # 3D areal/linear geometries (PolygonZ, LineStringZ, …) are deferred to
+      # #270 Phase 2 — silently storing 2D bbox companions would drop the z and
+      # mislead spatial queries, so refuse explicitly rather than degrade.
+      AshGeo.is_geo(geo.__struct__) and geo_dim(geo) == 3 ->
+        raise AshNeo4j.Error.Unsupported3DGeometry, geo
+
+      AshGeo.is_geo(geo.__struct__) ->
+        [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
+
+        acc
+        |> Map.put("#{translated_key}.bbSW", Bolty.Types.Point.create(:wgs_84, west, south))
+        |> Map.put("#{translated_key}.bbNE", Bolty.Types.Point.create(:wgs_84, east, north))
+
+      true ->
+        acc
     end
   end
+
+  # Coordinate dimensionality of a %Geo.*{} struct (2 or 3), by inspecting the
+  # first leaf coordinate tuple.
+  defp geo_dim(%{coordinates: coords}), do: coord_dim(coords)
+  defp coord_dim(t) when is_tuple(t), do: tuple_size(t)
+  defp coord_dim([head | _]), do: coord_dim(head)
+  defp coord_dim(_), do: 2
 
   # Recursively walks a value (typically the input form of a non-Geo
   # attribute — struct, map, etc.) looking for nested %Geo.*{} structs.
@@ -1253,6 +1279,13 @@ defmodule AshNeo4j.DataLayer do
     else
       records
     end
+  end
+
+  # No source nodes — return the empty value for the aggregate. `exists` over an
+  # empty set is `false` (not the nil default Ash carries for it, #301); other
+  # kinds use their declared default (`count` is 0).
+  defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], %{kind: :exists}, _mode) do
+    {:ok, false}
   end
 
   defp run_aggregate_for_ids(_mapping, _neo4j_pk, [], aggregate, _mode) do

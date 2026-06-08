@@ -23,6 +23,10 @@ defmodule AshNeo4j.Test.Resource.ThingNote do
     uuid_primary_key :id, writable?: true
     attribute :body, :string, public?: true
     attribute :thing_id, :uuid, public?: true
+
+    attribute :embedding, AshNeo4j.Types.Vector,
+      public?: true,
+      constraints: [element_type: :float32, dimensions: 3]
   end
 
   relationships do

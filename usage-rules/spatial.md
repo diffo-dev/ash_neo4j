@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 
 # Spatial types and expressions
 
-AshNeo4j stores geometries using [`ash_geo`](https://hex.pm/packages/ash_geo) types at the Ash boundary and `st_*` expression functions matching ash_geo / PostGIS signatures. Predicates push down to native Cypher (`point.distance`, `point.withinBBox`) where possible, falling back to in-memory evaluation otherwise. WGS-84 2D only in this release.
+AshNeo4j stores geometries using [`ash_geo`](https://hex.pm/packages/ash_geo) types at the Ash boundary and `st_*` expression functions matching ash_geo / PostGIS signatures. Predicates push down to native Cypher (`point.distance`, `point.withinBBox`) where possible, falling back to in-memory evaluation otherwise. WGS-84 2D throughout, plus **WGS-84-3D points** (#270 — see **3D points** below).
 
 > **Changed in 0.8.0.** The whole spatial surface was rearchitected (#274). The previous `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` modules are gone. Attributes now use `AshGeo.GeoJson` (or `AshGeo.GeoAny`) and carry `%Geo.*{}` structs. See the breaking-change notes in `CHANGELOG.md` and the **Migrating from 0.7.0** section below.
 
@@ -139,6 +139,44 @@ Place |> Ash.Query.filter(st_distance(location, ^customer_point) < 5_000) |> Ash
 
 `st_distance` runs two ways — pushed down to Neo4j's native `point.distance` inside a comparison filter, or evaluated in Elixir (`AshNeo4j.Geo.haversine_meters/2`) for `order_by` / `calculate` and for LineString/MultiPoint. **Both deliberately use the same model** so the same query gives the same answer regardless of which path it takes: a spherical haversine on the WGS-84 **equatorial** radius (6 378 137 m) — the radius Neo4j's `point.distance` uses, *not* the mean Earth radius (6 371 000 m) a naive haversine reaches for. The two agree to within ~1 m over a 700 km span. AshNeo4j matches Neo4j's capability here rather than inventing its own — Neo4j's model is the reference because that's what the pushdown executes. (Neo4j's model is spherical, not ellipsoidal; true ellipsoidal distance would differ by a further ~0.1–0.5 %, but matching the pushdown is what keeps results consistent.)
 
+## 3D points (WGS-84-3D) — #270
+
+A point can carry a height. Declare it `:point_z` at `force_srid: 4979` (WGS-84-3D); the value is a `%Geo.PointZ{coordinates: {lng, lat, height}}`:
+
+```elixir
+attribute :antenna, AshGeo.GeoJson, constraints: [geo_types: [:point_z], force_srid: 4979]
+```
+
+`PointZ` is the OGC/Geo name for the 3D point *shape*; `srid 4979` is the WGS-84-3D *CRS* — orthogonal concerns that pair here (you could also have a cartesian `PointZ`). On disk a `PointZ` stores its canonical GeoJSON at `<attr>.json` (a third coordinate per RFC 7946) and a **native 3D Neo4j POINT** (srid 4979) at `<attr>.point`.
+
+`st_distance` / `st_dwithin` work in 3D — pushed down to Neo4j's native 3D `point.distance` inside a comparison filter, and evaluated in-memory (`AshNeo4j.Geo.haversine_meters_3d/2`) for `order_by` / `calculate`. **Both use the same model** so the same query gives the same answer on either path. Neo4j's 3D geographic distance is *not* a naive `√(ground² + Δh²)`: the great-circle arc is taken at the **mean height** and then combined with the height delta by Pythagoras — `√((arc·(R+h_mean)/R)² + Δh²)` — which AshNeo4j matches to ~0.1 m.
+
+```elixir
+require Ash.Query
+
+# towers within 2 km (3D — accounts for height)
+Site |> Ash.Query.filter(st_dwithin(antenna, ^candidate_3d, 2_000)) |> Ash.read!()
+
+# rank by true 3D proximity
+Site |> Ash.Query.sort({calc(st_distance(antenna, ^candidate_3d), type: :float), :asc}) |> Ash.read!()
+```
+
+### Strict 2D/3D evaluation, and the downward projection
+
+Mixing dimensions in one operation is a **hard error**, not a silent result. Neo4j returns `null` for a mixed-CRS `point.distance` / `point.withinBBox` (which then quietly drops rows in a `WHERE`), so AshNeo4j refuses up front with `AshNeo4j.Error.GeoDimensionMismatch` — a 3D value against a 2D attribute, or vice versa.
+
+The only sanctioned bridge is a **downward projection** — collapse the 3D operand to its 2D footprint (OGC `ST_Force2D`) with `AshNeo4j.Geo.force_2d/1`, then evaluate wholly in the 2D world. "Is this 3D antenna inside the 2D coverage area?" is valid *after* the collapse:
+
+```elixir
+Place |> Ash.Query.filter(st_contains(coverage_area, ^AshNeo4j.Geo.force_2d(antenna))) |> Ash.read!()
+```
+
+There is no `to_3d` — a height cannot be fabricated; supplying one is adding data, an explicit act by the caller, never implicit.
+
+### Not yet (3D Phase 2)
+
+3D **areal/linear** geometries (`PolygonZ`, `LineStringZ`, …) are not supported — writing one raises `AshNeo4j.Error.Unsupported3DGeometry`. Exact 3D containment/distance needs a model the 2D `topo` refinement can't give, and "contains" is naturally a 2D footprint question (project the 3D point and ask in 2D). Tracked for a later slice of #270.
+
 ## Holiness via Ash composition
 
 Excluding regions from positive matches — "in this CSA *but not in any exclusion zone*" — is plain Ash composition over the predicates:
@@ -253,7 +291,8 @@ The GeoJSON `STRING` and any vertex data are never indexable for spatial queries
 
 ## Limitations
 
-- **WGS-84 2D only.** Set `force_srid: 4326`; other CRSs are out of scope this release.
+- **WGS-84 2D, plus WGS-84-3D points** (`:point_z`, srid 4979 — #270). 3D areal/linear geometries (`PolygonZ`, …) are not yet supported; other CRSs are out of scope.
+- **Mixed 2D/3D is a hard error** (`GeoDimensionMismatch`) — bridge with `AshNeo4j.Geo.force_2d/1` (3D→2D footprint); there is no implicit 2D→3D lift.
 - **`st_distance` in `order_by` / `calculate` is in-memory.** Fine at NBN scale; pushdown for those contexts is future work.
 - **`st_distance` between two non-Point geometries is not yet implemented** (line↔line, line↔polygon, polygon↔polygon — needs segment-to-segment math; returns `:unknown`). Any geometry **to a Point** is exact (closest-point-on-segment for lines, nearest-boundary for polygons).
 - **`st_intersects` has no Cypher prefilter** — it's exact but in-memory only; a bbox-overlap prefilter via the companions is tractable and deferred.

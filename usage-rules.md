@@ -148,7 +148,34 @@ Place
 |> Ash.read!()
 ```
 
-WGS-84 2D only in this release. On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus scalar Point companions for indexed bbox prefilter (`<attr>.bbSW`/`<attr>.bbNE`); Point additionally keeps a native `<attr>.point` for `point.distance` pushdown. **Geometries nested inside TypedStructs / embedded resources get their indexable companion promoted to a node-level property too** — a location buried in a characteristic is still indexable. Storage is **indexable, not yet indexed** — `AshNeo4j.Spatial.create_index(Place, :location)` builds and runs the POINT index Cypher from the resource + attribute (operator-invoked, not automatic). `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` were removed in 0.8.0 — full migration notes, recursive-promotion details, holiness composition, and limitations in `usage-rules/spatial.md`.
+Mostly WGS-84 2D, with **WGS-84-3D points** (#270): declare `geo_types: [:point_z], force_srid: 4979` to carry a `%Geo.PointZ{coordinates: {lng, lat, height}}`. `st_distance` / `st_dwithin` push down to Neo4j's 3D `point.distance` (which AshNeo4j's in-memory math matches, so `order_by`/`calculate` agree). 3D areal/linear geometries (`PolygonZ`, …) are not yet supported. Mixing 2D and 3D in one operation is a **strict error** (`AshNeo4j.Error.GeoDimensionMismatch`) — Neo4j silently returns `null` for mixed CRS, so AshNeo4j refuses; bridge worlds explicitly with `AshNeo4j.Geo.force_2d/1` (collapse a 3D operand to its 2D footprint, e.g. "is this 3D antenna in the 2D coverage area?").
+
+On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr>.json` plus scalar Point companions for indexed bbox prefilter (`<attr>.bbSW`/`<attr>.bbNE`); Point additionally keeps a native `<attr>.point` for `point.distance` pushdown (a 3D point's companion is a native 3D POINT, srid 4979). **Geometries nested inside TypedStructs / embedded resources get their indexable companion promoted to a node-level property too** — a location buried in a characteristic is still indexable. Storage is **indexable, not yet indexed** — `AshNeo4j.Spatial.create_index(Place, :location)` builds and runs the POINT index Cypher from the resource + attribute (operator-invoked, not automatic). `AshNeo4j.Type.Point` / `AshNeo4j.Type.Box` were removed in 0.8.0 — full migration notes, recursive-promotion details, holiness composition, 3D, and limitations in `usage-rules/spatial.md`.
+
+## Vector embeddings and similarity search
+
+AshNeo4j stores vector embeddings with the `AshNeo4j.Types.Vector` attribute type (Elixir `[float()]`, persisted as a Neo4j `LIST<FLOAT>`) and ranks/filters them with the `vector_similarity` and `vector_cosine_distance` expression functions. The requirement is **Cypher 25 (Neo4j ≥ 2025.06), not Bolt 6.0** — with list storage and list params, similarity search works over Bolt 5.8. The built-in `Ash.Type.Vector` is a different module and is not supported; use `AshNeo4j.Types.Vector`.
+
+```elixir
+attributes do
+  attribute :embedding, AshNeo4j.Types.Vector,
+    constraints: [element_type: :float32, dimensions: 1536]
+end
+
+require Ash.Query
+import Ash.Expr
+
+# rank notes by relevance (ash_ai-compatible distance: ascending = closest first)
+Note
+|> Ash.Query.filter(vector_cosine_distance(embedding, ^query_vector) < 0.5)
+|> Ash.Query.sort({calc(vector_cosine_distance(embedding, ^query_vector), type: :float), :asc})
+|> Ash.Query.limit(10)
+|> Ash.read!()
+```
+
+`vector_similarity(attr, ^q)` is Neo4j's normalised cosine similarity in `[0,1]` (higher = closer); `vector_cosine_distance(attr, ^q)` is pgvector-style distance in `[0,2]` (lower = closer, same name/semantics as AshPostgres so a future ash_ai bridge composes). Both push down to `vector.similarity.cosine(...)` in `WHERE` and `ORDER BY` (distance as `2 * (1 - similarity)`), with an in-memory evaluation that mirrors the same normalisation. `AshNeo4j.Vector.create_index/3` / `drop_index/3` / `index_statements/3` build the `CREATE VECTOR INDEX` Cypher from a resource + attribute.
+
+Note: queries are currently a **full scan** — Neo4j does not use the HNSW vector index for `vector.similarity.cosine` in a `WHERE`/`ORDER BY`. Indexed top-K via `db.index.vector.queryNodes` / the `SEARCH` clause is tracked in [#297](https://github.com/diffo-dev/ash_neo4j/issues/297). Full details — normalisation maths, index lifecycle, and `:cypher25` test pool routing — in `usage-rules/vectors.md`.
 
 ## Combination queries
 

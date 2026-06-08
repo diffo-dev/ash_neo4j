@@ -4,7 +4,6 @@
 
 defmodule AshNeo4j.QueryHelper do
   require Logger
-  require Ash.Query
 
   alias AshNeo4j.Cypher
   alias AshNeo4j.Cypher.Query
@@ -28,11 +27,12 @@ defmodule AshNeo4j.QueryHelper do
 
   defp run_simple_query(ash_query) do
     mapping = ResourceInfo.mapping(ash_query.resource)
-    terms = sort_terms(ash_query, mapping)
+    {terms, sort_params} = sort_terms(ash_query, mapping)
 
     query =
       ash_query
       |> build_query(mapping)
+      |> Query.merge_params(sort_params)
       |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
       |> Query.add_order_by(terms)
 
@@ -62,11 +62,12 @@ defmodule AshNeo4j.QueryHelper do
         build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
       end)
 
-    terms = sort_terms(ash_query, mapping)
+    {terms, sort_params} = sort_terms(ash_query, mapping)
 
     query =
       branch_queries
       |> Query.combination_block(union_type: union_type)
+      |> Query.merge_params(sort_params)
       |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
       |> Query.add_order_by(terms)
 
@@ -99,11 +100,12 @@ defmodule AshNeo4j.QueryHelper do
         if keep_ids == [] do
           {:ok, []}
         else
-          terms = sort_terms(ash_query, mapping)
+          {terms, sort_params} = sort_terms(ash_query, mapping)
 
           final =
             mapping.label_pair
             |> Query.node_read_by_ids(keep_ids)
+            |> Query.merge_params(sort_params)
             |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
             |> Query.add_order_by(terms)
 
@@ -273,14 +275,14 @@ defmodule AshNeo4j.QueryHelper do
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
         end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_param_value(test_point), threshold}, false}
+          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
         end
 
       %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
@@ -316,8 +318,20 @@ defmodule AshNeo4j.QueryHelper do
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
         if point_attribute?(mapping, ref) do
           prop = point_property(mapping, ref)
-          {prop, :st_dwithin, {to_param_value(test_point), threshold}, false}
+          {prop, :st_dwithin, {to_geo_param!(mapping, ref, test_point), threshold}, false}
         end
+
+      %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
+      when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
+        AshNeo4j.Cypher.require_cypher25!()
+        prop = property_name(mapping, ref)
+        {prop, :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+
+      %{operator: op, left: %AshNeo4j.Functions.VectorCosineDistance{arguments: [ref, query_vec]}, right: threshold}
+      when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
+        AshNeo4j.Cypher.require_cypher25!()
+        prop = property_name(mapping, ref)
+        {prop, :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
@@ -326,12 +340,61 @@ defmodule AshNeo4j.QueryHelper do
     |> Enum.reject(&is_nil/1)
   end
 
-  # True when the referenced attribute is a Point-shaped Geo attribute,
-  # i.e. declared with an AshGeo type and constrained to `geo_types`
-  # containing `:point`. Spatial predicates push down to Neo4j's native
-  # `point.distance` / `point.withinBBox` only for Point attributes;
-  # other geometries get bbox-prefilter pushdown via their own companions.
-  defp point_attribute?(mapping, ref_or_atom), do: geo_attribute_with_type?(mapping, ref_or_atom, :point)
+  # True when the referenced attribute is a Point-shaped Geo attribute —
+  # 2D (`geo_types` includes `:point`) or 3D (`:point_z`, #270). Spatial
+  # predicates push down to Neo4j's native `point.distance` / `point.withinBBox`
+  # only for Point attributes; other geometries get bbox-prefilter pushdown via
+  # their own companions.
+  defp point_attribute?(mapping, ref_or_atom) do
+    geo_attribute_with_type?(mapping, ref_or_atom, :point) or
+      geo_attribute_with_type?(mapping, ref_or_atom, :point_z)
+  end
+
+  # Converts a spatial test geometry to a Bolty param, guarding that its
+  # coordinate dimension matches the attribute's. Neo4j returns `null` (then
+  # silently drops rows) for a 2D/3D mix, so a mismatch raises
+  # `AshNeo4j.Error.GeoDimensionMismatch` here instead (#270). Bridge worlds
+  # explicitly with `AshNeo4j.Geo.force_2d/1`.
+  defp to_geo_param!(mapping, ref, value) do
+    types = geo_types_of(mapping, ref)
+    vd = value_dim(value)
+
+    cond do
+      vd == 3 and :point in types and :point_z not in types ->
+        raise AshNeo4j.Error.GeoDimensionMismatch, {2, 3}
+
+      vd == 2 and :point_z in types and :point not in types ->
+        raise AshNeo4j.Error.GeoDimensionMismatch, {3, 2}
+
+      true ->
+        to_param_value(value)
+    end
+  end
+
+  defp geo_types_of(%ResourceMapping{module: module}, ref) do
+    name = attribute_name(ref)
+
+    case name && Ash.Resource.Info.attribute(module, name) do
+      %{constraints: constraints} ->
+        case Keyword.get(constraints || [], :geo_types) do
+          types when is_list(types) -> types
+          type when is_atom(type) -> [type]
+          _ -> []
+        end
+
+      _ ->
+        []
+    end
+  end
+
+  defp value_dim(%Geo.PointZ{}), do: 3
+  defp value_dim(%Geo.Point{}), do: 2
+  defp value_dim(%{coordinates: coords}), do: geo_coord_dim(coords)
+  defp value_dim(_), do: 2
+
+  defp geo_coord_dim(t) when is_tuple(t), do: tuple_size(t)
+  defp geo_coord_dim([head | _]), do: geo_coord_dim(head)
+  defp geo_coord_dim(_), do: 2
 
   # True when the referenced attribute is a Polygon-shaped Geo attribute.
   # st_contains pushdown uses the polygon's bbox companions (`<attr>.bbSW`/
@@ -374,18 +437,54 @@ defmodule AshNeo4j.QueryHelper do
   defp attribute_name(atom) when is_atom(atom), do: atom
   defp attribute_name(_), do: nil
 
+  # Builds the ORDER BY terms and any params they reference.
+  #
+  # Returns `{terms, params}` where each term is `{order_expression, :asc | :desc}`
+  # with `order_expression` a fully-formed Cypher expression (including the `s.`
+  # prefix). Plain properties render to `"s.<prop>"`; a `calc(vector_similarity(…))`
+  # or `calc(vector_cosine_distance(…))` sort renders to the corresponding scalar
+  # expression with the query embedding bound as a param. Other calculations are
+  # dropped (Ash evaluates them in-memory).
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do
     case ash_query.sort do
       sort when sort in [nil, []] ->
-        []
+        {[], %{}}
 
       sort ->
         sort
-        |> Enum.reject(fn {name, _order} -> is_struct(name, Ash.Query.Calculation) end)
-        |> Enum.map(fn {name, order} ->
-          {Keyword.get(mapping.properties, name, name), order}
+        |> Enum.with_index()
+        |> Enum.reduce({[], %{}}, fn {{name, order}, index}, {terms, params} ->
+          case sort_term(mapping, name, order, index) do
+            nil -> {terms, params}
+            {term, term_params} -> {terms ++ [term], Map.merge(params, term_params)}
+          end
         end)
     end
+  end
+
+  # vector_similarity / vector_cosine_distance sort — pushed down as the scalar
+  # expression, with the query embedding bound as a param.
+  defp sort_term(mapping, %Ash.Query.Calculation{module: Ash.Resource.Calculation.Expression, opts: opts}, order, index) do
+    case Keyword.get(opts, :expr) do
+      %Ash.Query.Call{name: fname, args: [ref, query_vec]} when fname in [:vector_similarity, :vector_cosine_distance] ->
+        AshNeo4j.Cypher.require_cypher25!()
+        prop = property_name(mapping, ref)
+        key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
+        expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
+        {{expr, order}, %{key => to_vector_param(query_vec)}}
+
+      _ ->
+        nil
+    end
+  end
+
+  # Any other calculation — Ash evaluates it in-memory, so drop from pushdown.
+  defp sort_term(_mapping, %Ash.Query.Calculation{}, _order, _index), do: nil
+
+  # Plain property sort.
+  defp sort_term(mapping, name, order, _index) do
+    prop = Keyword.get(mapping.properties, name, name)
+    {{"s.#{prop}", order}, %{}}
   end
 
   defp ref_or_atom?(%Ash.Query.Ref{}), do: true
@@ -405,7 +504,13 @@ defmodule AshNeo4j.QueryHelper do
   defp to_param_value(%Ash.CiString{} = v), do: Ash.CiString.value(v)
   defp to_param_value(%MapSet{} = ms), do: MapSet.to_list(ms)
   defp to_param_value(%Geo.Point{coordinates: {x, y}}), do: Bolty.Types.Point.create(:wgs_84, x, y)
+  defp to_param_value(%Geo.PointZ{coordinates: {x, y, z}}), do: Bolty.Types.Point.create(:wgs_84, x, y, z)
   defp to_param_value(value), do: value
+
+  # The query embedding is passed as a plain LIST<FLOAT> param — what
+  # `vector.similarity.cosine/2` expects, and consistent with list storage.
+  defp to_vector_param(value) when is_list(value), do: Enum.map(value, &(&1 / 1))
+  defp to_vector_param(%Bolty.Types.Vector{data: data}), do: Enum.map(data, &(&1 / 1))
 
   # Builds the on-disk property name for a Point attribute under the symmetric
   # split — `<attr>.point` is where the native Neo4j POINT lives (the indexable

@@ -30,6 +30,7 @@ defmodule AshNeo4j.GeoJson do
   """
 
   @wgs_84_2d 4326
+  @wgs_84_3d 4979
 
   @doc """
   Encodes a `%Geo.*{}` struct to an RFC 7946-compliant GeoJSON string
@@ -59,17 +60,32 @@ defmodule AshNeo4j.GeoJson do
   end
 
   @doc """
-  Decodes an RFC 7946 GeoJSON string to a `%Geo.*{}` struct with
-  `srid: 4326` set. The `bbox` member, if present, is ignored — it's
-  metadata derivable from coordinates and the struct doesn't carry it.
+  Decodes an RFC 7946 GeoJSON string to a `%Geo.*{}` struct with the WGS-84
+  srid set by dimensionality — `4326` for 2D geometries, `4979` for 3D (a
+  third coordinate present, e.g. `%Geo.PointZ{}`). The on-disk JSON omits the
+  CRS member (RFC 7946), so the srid is inferred from the coordinate arity and
+  restored here. The `bbox` member, if present, is ignored — it's metadata
+  derivable from coordinates and the struct doesn't carry it.
   """
   @spec decode!(String.t()) :: Geo.geometry()
   def decode!(json) when is_binary(json) do
-    json
-    |> Jason.decode!()
-    |> Geo.JSON.decode!()
-    |> Map.put(:srid, @wgs_84_2d)
+    geom =
+      json
+      |> Jason.decode!()
+      |> Geo.JSON.decode!()
+
+    Map.put(geom, :srid, srid_for(geom))
   end
+
+  # WGS-84 srid by coordinate dimensionality: 4979 when a third ordinate is
+  # present (3D / `%Geo.*Z{}`), 4326 otherwise.
+  defp srid_for(%{coordinates: coords}) do
+    if coord_dim(coords) == 3, do: @wgs_84_3d, else: @wgs_84_2d
+  end
+
+  defp coord_dim(t) when is_tuple(t), do: tuple_size(t)
+  defp coord_dim([head | _]), do: coord_dim(head)
+  defp coord_dim(_), do: 2
 
   @doc """
   Derives the RFC 7946 §5 bbox for a geometry as `[west, south, east, north]`
@@ -83,10 +99,15 @@ defmodule AshNeo4j.GeoJson do
     [min_x, min_y, max_x, max_y]
   end
 
-  # Recursive coordinate walker. Bottoms out on a {x, y} tuple. Nested
-  # lists are walked depth-first.
-  defp walk({x, y}, {nil, nil, nil, nil}), do: {x, x, y, y}
-  defp walk({x, y}, {mn_x, mx_x, mn_y, mx_y}), do: {min(mn_x, x), max(mx_x, x), min(mn_y, y), max(mx_y, y)}
+  # Recursive coordinate walker. Bottoms out on a coordinate tuple — 2D
+  # `{x, y}` or 3D `{x, y, z}` (the z ordinate is ignored; the bbox envelope
+  # is 2D in this release, even for 3D geometries). Nested lists are walked
+  # depth-first.
+  defp walk({x, y}, acc), do: acc_xy(x, y, acc)
+  defp walk({x, y, _z}, acc), do: acc_xy(x, y, acc)
   defp walk([], acc), do: acc
   defp walk([head | tail], acc), do: walk(tail, walk(head, acc))
+
+  defp acc_xy(x, y, {nil, nil, nil, nil}), do: {x, x, y, y}
+  defp acc_xy(x, y, {mn_x, mx_x, mn_y, mx_y}), do: {min(mn_x, x), max(mx_x, x), min(mn_y, y), max(mx_y, y)}
 end
