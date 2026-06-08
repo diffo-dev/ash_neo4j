@@ -33,13 +33,20 @@ defmodule AshNeo4j.ShowNeo4jTest do
       MATCH (n:SRM:Place {name: 'Spatial showcase'}) RETURN keys(n) AS props
 
       // Bounding-box prefilter via the indexed scalar companions —
-      // works uniformly for path, bounds, pes, regions
+      // works uniformly for path, bounds, pes, regions. Probing the indexed
+      // corners against world-extent boxes lets the POINT index serve the
+      // ranges (#311) — equivalent to "test point ∈ [bbSW, bbNE]".
       MATCH (n:SRM:Place)
       WHERE n.`path.bbSW` IS NOT NULL
         AND point.withinBBox(
-          point({longitude: 151.25, latitude: -33.7}),
           n.`path.bbSW`,
-          n.`path.bbNE`
+          point({longitude: -180, latitude: -90}),
+          point({longitude: 151.25, latitude: -33.7})
+        )
+        AND point.withinBBox(
+          n.`path.bbNE`,
+          point({longitude: 151.25, latitude: -33.7}),
+          point({longitude: 180, latitude: 90})
         )
       RETURN n.name, n.`path.json`
 

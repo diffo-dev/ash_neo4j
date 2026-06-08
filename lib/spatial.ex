@@ -223,14 +223,17 @@ defmodule AshNeo4j.Spatial do
 
   # --- companion shape -------------------------------------------------
 
-  # `%Geo.Point{}` promotes to a single `.point` companion; every other
+  # Point-shaped geometries (2D `%Geo.Point{}` and 3D `%Geo.PointZ{}`, #270)
+  # promote to a single `.point` companion (a native Neo4j POINT); every other
   # geometry promotes to `.bbSW` / `.bbNE`. A mixed-type attribute
   # (e.g. geo_types: [:point, :polygon]) can store either shape, so we
   # index all companions it could ever produce.
+  @point_geo_types [:point, :point_z, :point_zm]
+
   defp companion_suffixes(geo_types) do
     types = List.wrap(geo_types)
-    point = if :point in types, do: ["point"], else: []
-    bbox = if Enum.any?(types, &(&1 != :point)), do: ["bbSW", "bbNE"], else: []
+    point = if Enum.any?(types, &(&1 in @point_geo_types)), do: ["point"], else: []
+    bbox = if Enum.any?(types, &(&1 not in @point_geo_types)), do: ["bbSW", "bbNE"], else: []
     point ++ bbox
   end
 

@@ -11,7 +11,6 @@ defmodule AshNeo4j.ThingTest do
   alias AshNeo4j.Test.Resource.ThingCategory
   alias AshNeo4j.Test.Resource.ThingNote
   alias AshNeo4j.Test.Resource.ThingTag
-  require Ash.Query
 
   setup_all do
     BoltyHelper.start()
