@@ -31,7 +31,7 @@ Add to deps in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.4"},
+    {:ash_neo4j, "~> 0.9"},
   ]
 end
 ```

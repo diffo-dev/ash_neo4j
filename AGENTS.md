@@ -68,10 +68,13 @@ lib/
                                  pushes vector-similarity sorts into ORDER BY expressions
   bolty_helper.ex              — Pool lifecycle + capability detection: current_pool/0,
                                  with_pool/2, policy/1, cypher25?/1 (cached per pool)
-  error.ex                     — AshNeo4j.Error.RequiresCypher25
+  error.ex                     — AshNeo4j.Error.{RequiresCypher25, GeoDimensionMismatch,
+                                 Unsupported3DGeometry}
   spatial.ex                   — AshNeo4j.Spatial: POINT index lifecycle (operator-invoked)
   vector.ex                    — AshNeo4j.Vector: VECTOR index lifecycle (operator-invoked)
   types/vector.ex              — AshNeo4j.Types.Vector: embedding attribute (LIST<FLOAT>)
+  geo.ex                       — AshNeo4j.Geo: haversine_meters/2 + 3D variant (match
+                                 Neo4j point.distance), force_2d/1 (3D→2D projection)
   functions/                   — Ash.Query.Function modules pushed down to Cypher:
                                  st_* (spatial), vector_similarity / vector_cosine_distance,
                                  and vector_math.ex (shared in-memory cosine for evaluate/1)
@@ -112,6 +115,9 @@ test/
   aggregate_test.exs           — All aggregate kinds including filtered and expr aggregates
   calculation_test.exs         — Expression calculations
   data_layer/                  — Unit tests for Cast, Dump, TypeClassifier, Info
+
+bench/                         — benchee harnesses (#306): spatial_containment.exs,
+                                 bbox_index_probe.exs; bench/README.md records findings
 ```
 
 ## Label system
@@ -203,6 +209,47 @@ in `mapping.edges`, causing enrichments to silently fail.
 
 `aggregate_has_filter?` treats `%Ash.Filter{expression: true}` as "no filter" (Ash always
 attaches a trivial filter to unfiltered aggregates). Do not change this sentinel check.
+
+## Spatial storage, dimensions & indexing
+
+Geometries (`AshGeo.GeoJson` / `GeoAny`, carrying `%Geo.*{}`) store as canonical RFC 7946
+GeoJSON `STRING` at `<attr>.json`, plus **indexable scalar companions**:
+
+- **Point / PointZ** → a single native Neo4j `POINT` at `<attr>.point` (a 3D PointZ is a
+  native 3D POINT, srid 4979). This is what `point.distance` reads.
+- **Everything else** (LineString, Polygon, Multi*) → bounding-box corners `<attr>.bbSW` /
+  `<attr>.bbNE`, which `point.withinBBox` reads.
+- Geometries nested in a TypedStruct / embedded resource are promoted to a node-level dotted
+  property (`<attr>.<field>.point` etc.) so they stay indexable.
+
+**Strict dimension policy (#270).** Mixing 2D and 3D operands raises
+`AshNeo4j.Error.GeoDimensionMismatch` (Neo4j silently returns `null` for mixed CRS, so we
+refuse). Bridge explicitly with `AshNeo4j.Geo.force_2d/1` (collapse a 3D operand to its 2D
+footprint). 3D areal/linear geometry raises `AshNeo4j.Error.Unsupported3DGeometry` — deferred
+to Phase 2.
+
+**In-memory math must match the pushdown.** `st_distance` / `st_dwithin` push down to Neo4j
+`point.distance` inside filters but evaluate `AshNeo4j.Geo.haversine_meters/2` (+ the 3D
+variant) elsewhere (`order_by`, `calculate`). They MUST agree numerically — the same trap as
+the vector `evaluate/1` one below — so the haversine uses the WGS-84 **equatorial** radius
+Neo4j uses (not the mean radius), and the 3D variant mean-height-scales the arc.
+
+**Index effectiveness (#311 / #306 — don't re-derive this).** `AshNeo4j.Spatial.create_index`
+picks companion suffixes by geometry shape: point/point_z → `.point`, areal → `.bbSW`/`.bbNE`
+(a `:point_z` building `.bbSW`/`.bbNE` indexes was the #311 bug — a `%Geo.PointZ{}` never
+writes those, so distance went unindexed).
+
+- `st_dwithin` (`point.distance`) is **well served** by the POINT index — plans
+  `NodeIndexSeekByRange`, ~6–7× at N=10k, near-constant-time.
+- `st_contains` containment uses the **reformulated** `within_bbox` form
+  `point.withinBBox(n.bbSW, worldSW, $p) AND point.withinBBox(n.bbNE, $p, worldNE)`, which
+  keeps the **indexed corner as the probe** so it plans `NodeIndexSeekByRange`. The natural
+  form `point.withinBBox($p, n.bbSW, n.bbNE)` puts the indexed props in the *box* position and
+  forces a `NodeByLabelScan` — **do not "simplify" it back.** Even reformulated, containment
+  caps near ~1.3× (a single-corner quadrant seek). A "max-extent" bound is infeasible for the
+  real CSA workload (uniform in homes-passed, not area — the NT is one CSA); ≥3× containment
+  needs an adaptive tile / B-rep sub-graph model (epic #314).
+- Benchmarks live in `bench/`; `bench/README.md` records the numbers and methodology.
 
 ## Cypher.Query builders
 

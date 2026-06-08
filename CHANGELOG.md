@@ -11,6 +11,34 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.9.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.8.1...v0.9.0) (2026-06-09)
+
+### Breaking Changes
+
+* **Minimum Neo4j / Bolt raised** (#292, #293) — bumps to [`bolty`](https://hex.pm/packages/bolty) 0.1.0, which speaks Bolt 5.6–6.0, so Neo4j 4.x (Bolt 4.x) is no longer supported. Flagged as breaking for completeness, but it should break no one in practice: Neo4j 4.x is end-of-life and not considered secure, so no realistic ash_neo4j deployment targets it.
+
+### Features
+
+* **Vector embeddings & similarity search** (#74) — a new `AshNeo4j.Types.Vector` attribute type, stored as a Neo4j `LIST<FLOAT>`, with `vector_similarity` (cosine) and `vector_cosine_distance` Ash query functions, k-NN ordering pushed down to Cypher, and `AshNeo4j.Vector` index-lifecycle helpers. Vector predicates and ordering route to a Cypher-25-capable pool. Because the values persist as `LIST<FLOAT>` (the native `VECTOR` type can't be a node property), the feature is gated on Cypher 25.
+
+* **WGS-84-3D points** (#270, Phase 1) — `%Geo.PointZ{}` (srid 4979) stores as a native 3D Neo4j `POINT` at `<attr>.point`, with `point.distance` pushdown in 3D and an in-memory haversine (mean-height-scaled arc + Δh) that matches Neo4j to ~0.1 m. A strict dimension policy stops 2D and 3D mixing silently — a mismatch raises `AshNeo4j.Error.GeoDimensionMismatch`, and `AshNeo4j.Geo.force_2d/1` does an explicit downward projection. 3D areal/linear geometry (`PolygonZ`, …) raises `AshNeo4j.Error.Unsupported3DGeometry`, deferred to Phase 2.
+
+* **CYPHER 25 language selector** (#292, #293) — on Neo4j ≥ 2025.06, AshNeo4j auto-prepends `CYPHER 25` to generated queries, opting into the versioned Cypher 25 language; older servers stay on Cypher 5. The selector is derived from the server version and cached per pool, and is distinct from the Bolt protocol version.
+
+### Bug Fixes
+
+* **Spatial POINT index now effective at scale** (#311) — two issues left geospatial queries unindexed despite a POINT index existing. A `:point_z` attribute built indexes on the `.bbSW`/`.bbNE` companions a `%Geo.PointZ{}` never writes (it now indexes the `.point` it stores), and the `within_bbox` / `within_bbox_box` containment form put the indexed properties in the box position, forcing a `NodeByLabelScan`. The containment predicates are reformulated into range scans on the indexed corners (`NodeIndexSeekByRange`). Benchmarked at N=10k: indexed `st_dwithin` ~6–7×; point-in-polygon containment is index-servable but caps near ~1.3× (single-corner seek).
+
+* **`exists` over an empty result is `false`, not `nil`** (#301).
+
+* **CYPHER 25 selector emitted once** (#299) — inside a `CALL {…}` combination block the selector was prepended per branch and again on the outer query; it is now emitted only once, on the outer query.
+
+* **Root-node aggregates** (#291) — an aggregate with no relationship path now aggregates over the root node, not an unbound relationship variable.
+
+* **Domain-fragment label resolution** (#295) — uses `Code.ensure_compiled/1` so a domain-fragment label resolves under any compilation order.
+
+* **Test-suite stability** (#304) — caps ExUnit `max_cases` to the Bolt pool size, removing intermittent `DBConnection` `:queue_timeout` failures under parallel tests (test-only; no runtime effect).
+
 ## [v0.8.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.8.0...v0.8.1) (2026-05-31)
 
 
