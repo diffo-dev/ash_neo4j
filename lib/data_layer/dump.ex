@@ -37,6 +37,11 @@ defmodule AshNeo4j.DataLayer.Dump do
         # pass through, since Neo4j Bolt driver will handle conversion of native types
         value
 
+      {:ok, :tensor, _type} ->
+        # The data layer's dump_properties promotes a tensor into a flat value
+        # plus <attr>.shape / <attr>.type sidecars; here it passes through.
+        value
+
       {:ok, :ash_base64, ash_type} ->
         # ash values that are dumped and base64 encoded
         dump_ash_type(ash_type, value, constraints)

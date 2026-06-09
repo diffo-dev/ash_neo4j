@@ -20,6 +20,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
         array?(type) ->
           {:ok, :array, classify(elem(type, 1))}
 
+        tensor?(type) ->
+          {:ok, :tensor, type}
+
         neo4j_native?(type) ->
           {:ok, :native, type}
 
@@ -103,6 +106,14 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
       {:array, _} -> true
       _ -> false
     end
+  end
+
+  # A tensor type (`AshNeo4j.Type.NxTensor`, or any type/NewType exposing the
+  # marker) — routed through the data layer's `:tensor` storage path.
+  defp tensor?(type) do
+    is_atom(type) and function_exported?(type, :ash_neo4j_tensor?, 0) and type.ash_neo4j_tensor?()
+  rescue
+    _ -> false
   end
 
   defp ash_type_other_map?(type) do

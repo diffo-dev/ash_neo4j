@@ -76,6 +76,11 @@ defmodule AshNeo4j.DataLayer.Cast do
       {:ok, :ash, ash_type} ->
         cast_ash_type(ash_type, value, constraints)
 
+      {:ok, :tensor, tensor_type} ->
+        # value is the bare stored value (flat LIST or base64 STRING); the type
+        # rebuilds the Nx tensor using the declared type/shape constraints.
+        cast_ash_type(tensor_type, value, constraints)
+
       {:ok, :geo, ash_type} ->
         # AshGeo geometry types: the data layer's read_attribute_property/4
         # has already decoded the stored JSON STRING into a %Geo.*{} struct

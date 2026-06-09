@@ -1116,6 +1116,13 @@ defmodule AshNeo4j.DataLayer do
             # bbSW/bbNE for other geometries).
             promote_geo(acc, translated_key, dumped)
 
+          {:ok, :tensor, tensor_type} ->
+            # Tensor attribute: store just the bare flat value (Neo4j has no
+            # nested-list property). Both type and shape are declared constraints
+            # — schema, not stored — recovered on read, so no sidecar.
+            store = attribute.constraints[:store] || :property
+            Map.put(acc, translated_key, tensor_type.dump_storage(dumped, store))
+
           _ ->
             # Non-geo: dumped goes at the bare translated key.
             acc = Map.put(acc, translated_key, dumped)
