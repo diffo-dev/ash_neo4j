@@ -187,4 +187,11 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
 
     Keyword.merge(subtype, explicit_items)
   end
+
+  # Nested array (`{:array, {:array, _}}`): the constraints for the next level
+  # down live under `:items`. Without this clause an array-of-array raises here
+  # (the `is_atom/1` clause never matches a tuple inner type).
+  def item_constraints({:array, _}, constraints) when is_list(constraints) do
+    constraints[:items] || []
+  end
 end

@@ -19,6 +19,25 @@ defmodule AshNeo4j.DataLayer.Cast do
     {:ok, nil}
   end
 
+  # Nested array: each outer element is a JSON STRING (see `Dump.dump/3`). Decode
+  # it, then cast the inner array back into nested native lists.
+  def cast({:array, {:array, _} = inner_type}, value, constraints) when is_list(value) do
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+
+    Enum.reduce_while(value, {:ok, []}, fn item, {:ok, acc} ->
+      with {:ok, decoded} <- Util.json_decode(item),
+           {:ok, cast_item} <- cast_nested(inner_type, decoded, item_constraints) do
+        {:cont, {:ok, [cast_item | acc]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
+    end
+  end
+
   def cast({:array, inner_type}, value, constraints) when is_list(value) do
     item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
 
@@ -66,6 +85,44 @@ defmodule AshNeo4j.DataLayer.Cast do
 
       _ ->
         {:error, "AshNeo4j.DataLayer: cannot cast value #{inspect(value)} of type #{inspect(type)}"}
+    end
+  end
+
+  # Casts a JSON-decoded nested array back into nested native lists, leaves cast
+  # via the normal path. Mirror of `Dump.dump_nested/3`.
+  defp cast_nested({:array, inner_type}, value, constraints) when is_list(value) do
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+
+    Enum.reduce_while(value, {:ok, []}, fn item, {:ok, acc} ->
+      case cast_nested(inner_type, item, item_constraints) do
+        {:ok, cast_item} -> {:cont, {:ok, [cast_item | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, items} -> {:ok, Enum.reverse(items)}
+      error -> error
+    end
+  end
+
+  # Native leaves inside the JSON came back as scalars — temporal types as ISO
+  # 8601 strings (see `Util.to_json_safe/1`), so re-cast through the type to
+  # restore the struct; numbers/strings/booleans pass straight through.
+  defp cast_nested(type, value, constraints) do
+    case TypeClassifier.classify(type) do
+      {:ok, :native, native} ->
+        case Ash.Type.cast_stored(native, value, constraints) do
+          {:ok, casted} -> {:ok, casted}
+          _ -> {:ok, value}
+        end
+
+      # JSON leaf: already a decoded map (the whole element was json_decoded),
+      # so cast it straight — no second json_decode.
+      {:ok, :ash_json, ash_type} ->
+        cast_ash_type(ash_type, value, constraints)
+
+      _ ->
+        cast(type, value, constraints)
     end
   end
 

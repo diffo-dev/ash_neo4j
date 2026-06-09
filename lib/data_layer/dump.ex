@@ -18,6 +18,14 @@ defmodule AshNeo4j.DataLayer.Dump do
     nil
   end
 
+  # Nested array. Neo4j has no collection-of-collections, so the outer axis
+  # stays a native LIST and each inner array is encoded as a JSON STRING (any
+  # deeper nesting lives inside that JSON). Symmetric with `Cast.cast/3`.
+  def dump({:array, {:array, _} = inner_type}, value, constraints) when is_list(value) do
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+    Enum.map(value, fn inner -> inner_type |> dump_nested(inner, item_constraints) |> json_encode() end)
+  end
+
   def dump({:array, inner_type}, value, constraints) when is_list(value) do
     item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
     Enum.map(value, &dump(inner_type, &1, item_constraints))
@@ -58,6 +66,24 @@ defmodule AshNeo4j.DataLayer.Dump do
 
       _ ->
         raise "AshNeo4j.DataLayer Error dumping value #{inspect(value)} of type #{inspect(type)}"
+    end
+  end
+
+  # Dumps a nested array into nested *native* Elixir lists (leaves dumped via the
+  # normal path), so the whole inner structure is JSON-encoded once at the outer
+  # boundary in `dump/3` rather than per level.
+  defp dump_nested({:array, inner_type}, value, constraints) when is_list(value) do
+    item_constraints = TypeClassifier.item_constraints(inner_type, constraints)
+    Enum.map(value, &dump_nested(inner_type, &1, item_constraints))
+  end
+
+  defp dump_nested(type, value, constraints) do
+    case TypeClassifier.classify(type) do
+      # JSON leaves: keep the dumped value json-*safe* (a map), not yet a string,
+      # so the single json_encode at the outer boundary yields clean nested JSON
+      # instead of double-escaped strings.
+      {:ok, :ash_json, ash_type} -> dump_ash_type(ash_type, value, constraints)
+      _ -> dump(type, value, constraints)
     end
   end
 
