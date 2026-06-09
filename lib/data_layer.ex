@@ -701,6 +701,14 @@ defmodule AshNeo4j.DataLayer do
               json when is_binary(json) -> AshNeo4j.GeoJson.decode!(json)
             end
 
+          {:ok, :tensor, _} ->
+            # Reassemble the flat value + shape sidecar for cast_stored (the
+            # element type comes from the attribute's declared constraint).
+            case Map.get(properties, base) do
+              nil -> nil
+              data -> %{data: data, shape: Map.get(properties, "#{base}.shape")}
+            end
+
           _ ->
             Map.get(properties, base)
         end
@@ -1115,6 +1123,18 @@ defmodule AshNeo4j.DataLayer do
             # Neo4j Point at <attr>.point for Geo.Point, or scalar
             # bbSW/bbNE for other geometries).
             promote_geo(acc, translated_key, dumped)
+
+          {:ok, :tensor, tensor_type} ->
+            # Tensor attribute: store a flat value at <attr> plus a <attr>.shape
+            # sidecar (Neo4j has no nested-list property). The element type is the
+            # declared `type` constraint — schema, not stored — so it's recovered
+            # on read, not kept here.
+            store = attribute.constraints[:store] || :property
+            {stored, shape} = tensor_type.dump_storage(dumped, store)
+
+            acc
+            |> Map.put(translated_key, stored)
+            |> Map.put("#{translated_key}.shape", shape)
 
           _ ->
             # Non-geo: dumped goes at the bare translated key.
