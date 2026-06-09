@@ -179,6 +179,15 @@ defmodule AshNeo4j.Util do
     |> Jason.encode()
   end
 
+  # Temporal structs serialise to ISO 8601 strings (not their internal fields),
+  # so they survive a JSON round-trip and re-cast cleanly. `Duration` in
+  # particular has no `Jason.Encoder`, so without this it can't be encoded at all.
+  defp to_json_safe(%Date{} = v), do: Date.to_iso8601(v)
+  defp to_json_safe(%Time{} = v), do: Time.to_iso8601(v)
+  defp to_json_safe(%NaiveDateTime{} = v), do: NaiveDateTime.to_iso8601(v)
+  defp to_json_safe(%DateTime{} = v), do: DateTime.to_iso8601(v)
+  defp to_json_safe(%Duration{} = v), do: Duration.to_iso8601(v)
+
   # Geo structs (Geo.Point, Geo.LineString, Geo.Polygon, Geo.MultiPoint,
   # etc.) carry tuple-shaped coordinates that Jason can't encode directly.
   # Route them through AshNeo4j.GeoJson.encode_map/1 to get an RFC 7946
