@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
+# Local Neo4j test databases for ash_neo4j.
+#
+#   neo4j-bolt5 → bolt://localhost:7687  (Bolt 5.x / Cypher 5)   — default suite
+#   neo4j-bolt6 → bolt://localhost:7689  (Bolt 6.0 / Cypher 25)  — :cypher25 / :bolt6 tests
+#
+# Ports and creds match the Bolt and Bolt6 blocks in config/test.exs
+# (neo4j / password). Community edition is deliberate — it's the floor of the
+# user base and runs everything the suite needs (vector search + Cypher 25 are
+# in Community). No volumes: tests roll back via AshNeo4j.Sandbox, so the data
+# is ephemeral by design.
+services:
+  neo4j-bolt5:
+    image: neo4j:5.26
+    container_name: neo4j-ash-bolt5
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    environment:
+      NEO4J_AUTH: neo4j/password
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  neo4j-bolt6:
+    image: neo4j:2026.05
+    container_name: neo4j-ash-bolt6
+    ports:
+      - "7689:7687"
+      - "7475:7474"
+    environment:
+      NEO4J_AUTH: neo4j/password
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30

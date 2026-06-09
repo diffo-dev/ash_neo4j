@@ -195,6 +195,19 @@ end
 
 The data layer talks to a configurable Bolty pool — `AshNeo4j.BoltyHelper.current_pool/0`, defaulting to `Bolt`. Override it per-process with `with_pool/2` (or `Process.put(:ash_neo4j_pool, Pool)`) to route a test's queries — and the `cypher25?/1` / `policy/1` capability checks — to a different server. AshNeo4j's own suite uses this to run Cypher-25 vector tests against a Neo4j 2026.05 pool (`Bolt6`) while the rest of the suite stays on a 5.x pool; those tests are tagged `:cypher25` and excluded by default. Start a long-lived pool from `test_helper.exs` (not a per-test `setup`) — `Bolty.start_link/1` links the pool to the calling process, so starting it inside a test ties the pool's lifetime to that one test. See `usage-rules/vectors.md`.
 
+### Running the suite
+
+The suite needs a Neo4j at `bolt://localhost:7687` (`neo4j` / `password`, the `Bolt` block in `config/test.exs`). The `:cypher25` / `:bolt6` tests — excluded by default — additionally need a Neo4j ≥ 2025.06 at `bolt://localhost:7689` (the `Bolt6` block). The bundled `docker-compose.yml` brings both up (community edition is deliberate — it runs everything the suite needs, including vector search and Cypher 25):
+
+```sh
+docker compose up -d --wait                    # neo4j-bolt5 → 7687, neo4j-bolt6 → 7689
+mix test                                        # default suite (7687 only)
+mix test --include cypher25 --include bolt6     # full suite (7687 + 7689)
+docker compose down                             # tear down
+```
+
+Elixir/Erlang versions are pinned in `.tool-versions` (read by [mise](https://mise.jdx.dev) or asdf): `mise install` (or `asdf install`).
+
 ## Installing Neo4j and Configuring Bolty
 
 ash_neo4j uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running.
