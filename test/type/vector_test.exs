@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Types.VectorTest do
+defmodule AshNeo4j.Type.VectorTest do
   @moduledoc """
-  Pure cast/constraint tests for `AshNeo4j.Types.Vector` — no Neo4j connection.
+  Pure cast/constraint tests for `AshNeo4j.Type.Vector` — no Neo4j connection.
 
   `dump_to_native/2`'s wire-format choice (native `%Bolty.Types.Vector{}` vs
   plain float list) depends on the negotiated `policy.vectors` and is exercised
@@ -12,7 +12,7 @@ defmodule AshNeo4j.Types.VectorTest do
   """
   use ExUnit.Case, async: true
 
-  alias AshNeo4j.Types.Vector
+  alias AshNeo4j.Type.Vector
 
   describe "cast_input/2" do
     test "accepts a list of numbers, coercing to floats" do

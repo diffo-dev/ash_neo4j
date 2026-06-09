@@ -263,7 +263,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | 2025-05-11T07:45:41.429903000Z.                        | DATETIME       |
 | :uuid                | Ash.Type.UUID                        | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                  | "0274972c-161c-4dc9-882f-6851704c2af9"                 | STRING         |
 | :uuid7               | Ash.Type.UUIDv7                      | BitString          | "019d85f7-8450-7695-9426-4ede74026140"                  | "019d85f7-8450-7695-9426-4ede74026140"                 | STRING         |
-| (vector embedding)   | AshNeo4j.Types.Vector                | List               | [0.12, -0.04, 0.98]                                     | [0.12, -0.04, 0.98]                                    | LIST<FLOAT>    |
+| (vector embedding)   | AshNeo4j.Type.Vector                | List               | [0.12, -0.04, 0.98]                                     | [0.12, -0.04, 0.98]                                    | LIST<FLOAT>    |
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. 
 
@@ -271,7 +271,7 @@ Struct is supported, however must implement Ash.Type. Ash arrays are supported a
 
 Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 
-Ash.Type.File and Ash.Type.Term are not supported. The built-in `Ash.Type.Vector` is also not supported — AshNeo4j ships its own `AshNeo4j.Types.Vector` for embeddings (stored as a Neo4j `LIST<FLOAT>`), with `vector_similarity` / `vector_cosine_distance` search expressions. See `usage-rules/vectors.md`.
+Ash.Type.File and Ash.Type.Term are not supported. The built-in `Ash.Type.Vector` is also not supported — AshNeo4j ships its own `AshNeo4j.Type.Vector` for embeddings (stored as a Neo4j `LIST<FLOAT>`), with `vector_similarity` / `vector_cosine_distance` search expressions. See `usage-rules/vectors.md`.
 
 ## Storage Types
 

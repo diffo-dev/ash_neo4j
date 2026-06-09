@@ -5,7 +5,7 @@
 defmodule AshNeo4j.Vector do
   @moduledoc """
   Convenience helpers for creating the Neo4j VECTOR indexes that back
-  `AshNeo4j.Types.Vector` attributes.
+  `AshNeo4j.Type.Vector` attributes.
 
   Requires Cypher 25 (Neo4j ≥ 2025.06). Operations against an older server
   raise `AshNeo4j.Error.RequiresCypher25`.
@@ -137,7 +137,7 @@ defmodule AshNeo4j.Vector do
 
   defp resolve_dimensions(attribute, attr) do
     case attribute.type do
-      AshNeo4j.Types.Vector ->
+      AshNeo4j.Type.Vector ->
         case Keyword.get(attribute.constraints || [], :dimensions) do
           nil ->
             {:error,
@@ -150,7 +150,7 @@ defmodule AshNeo4j.Vector do
 
       other ->
         {:error,
-         "AshNeo4j.Vector: attribute #{inspect(attr)} is #{inspect(other)}, not AshNeo4j.Types.Vector"}
+         "AshNeo4j.Vector: attribute #{inspect(attr)} is #{inspect(other)}, not AshNeo4j.Type.Vector"}
     end
   end
 

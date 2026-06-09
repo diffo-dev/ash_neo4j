@@ -72,7 +72,7 @@ lib/
                                  Unsupported3DGeometry}
   spatial.ex                   — AshNeo4j.Spatial: POINT index lifecycle (operator-invoked)
   vector.ex                    — AshNeo4j.Vector: VECTOR index lifecycle (operator-invoked)
-  types/vector.ex              — AshNeo4j.Types.Vector: embedding attribute (LIST<FLOAT>)
+  types/vector.ex              — AshNeo4j.Type.Vector: embedding attribute (LIST<FLOAT>)
   geo.ex                       — AshNeo4j.Geo: haversine_meters/2 + 3D variant (match
                                  Neo4j point.distance), force_2d/1 (3D→2D projection)
   functions/                   — Ash.Query.Function modules pushed down to Cypher:
@@ -383,7 +383,7 @@ as a follow-up comment, then leave it with the upstream maintainers.
 
 - **Storing a native `%Bolty.Types.Vector{}` as a node property.** Neo4j cannot persist the
   Bolt 6.0 VECTOR type as a property — `CREATE (n {embedding: $vector})` errors. Embeddings are
-  stored as `LIST<FLOAT>` (`AshNeo4j.Types.Vector.dump_to_native/2`), which is what
+  stored as `LIST<FLOAT>` (`AshNeo4j.Type.Vector.dump_to_native/2`), which is what
   `vector.similarity.cosine/2` operates on and what the vector index indexes. The native VECTOR
   type is a query-parameter wire type only. Consequently vector search is gated on **Cypher 25
   (≥ 2025.06)**, not Bolt 6.0 — it works over Bolt 5.8.
