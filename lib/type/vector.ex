@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshNeo4j.Types.Vector do
+defmodule AshNeo4j.Type.Vector do
   @moduledoc """
   Ash attribute type for vector embeddings, stored as a Neo4j `LIST<FLOAT>`.
 
@@ -25,7 +25,7 @@ defmodule AshNeo4j.Types.Vector do
 
   ## Usage
 
-      attribute :embedding, AshNeo4j.Types.Vector,
+      attribute :embedding, AshNeo4j.Type.Vector,
         constraints: [element_type: :float32, dimensions: 1536]
 
   See `AshNeo4j.Vector` for index creation helpers and `AshNeo4j.Functions.VectorSimilarity`

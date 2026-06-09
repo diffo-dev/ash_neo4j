@@ -24,7 +24,7 @@ defmodule AshNeo4j.Test.Resource.ThingNote do
     attribute :body, :string, public?: true
     attribute :thing_id, :uuid, public?: true
 
-    attribute :embedding, AshNeo4j.Types.Vector,
+    attribute :embedding, AshNeo4j.Type.Vector,
       public?: true,
       constraints: [element_type: :float32, dimensions: 3]
   end

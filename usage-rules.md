@@ -154,11 +154,11 @@ On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr
 
 ## Vector embeddings and similarity search
 
-AshNeo4j stores vector embeddings with the `AshNeo4j.Types.Vector` attribute type (Elixir `[float()]`, persisted as a Neo4j `LIST<FLOAT>`) and ranks/filters them with the `vector_similarity` and `vector_cosine_distance` expression functions. The requirement is **Cypher 25 (Neo4j ≥ 2025.06), not Bolt 6.0** — with list storage and list params, similarity search works over Bolt 5.8. The built-in `Ash.Type.Vector` is a different module and is not supported; use `AshNeo4j.Types.Vector`.
+AshNeo4j stores vector embeddings with the `AshNeo4j.Type.Vector` attribute type (Elixir `[float()]`, persisted as a Neo4j `LIST<FLOAT>`) and ranks/filters them with the `vector_similarity` and `vector_cosine_distance` expression functions. The requirement is **Cypher 25 (Neo4j ≥ 2025.06), not Bolt 6.0** — with list storage and list params, similarity search works over Bolt 5.8. The built-in `Ash.Type.Vector` is a different module and is not supported; use `AshNeo4j.Type.Vector`.
 
 ```elixir
 attributes do
-  attribute :embedding, AshNeo4j.Types.Vector,
+  attribute :embedding, AshNeo4j.Type.Vector,
     constraints: [element_type: :float32, dimensions: 1536]
 end
 
