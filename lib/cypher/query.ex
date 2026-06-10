@@ -104,6 +104,16 @@ defmodule AshNeo4j.Cypher.Limit do
   defstruct [:value]
 end
 
+defmodule AshNeo4j.Cypher.CallSubquery do
+  @moduledoc """
+  `CALL { … }` subquery block holding a pre-rendered inner query body, e.g. a
+  scoped aggregate `CALL { WITH s MATCH (s)<path>(d) RETURN min(d.p) AS agg_v }`.
+  Distinct from `Call`, which joins branches with `UNION`/`UNION ALL`.
+  """
+  @type t :: %__MODULE__{body: String.t()}
+  defstruct [:body]
+end
+
 defmodule AshNeo4j.Cypher.Query do
   @moduledoc """
   Typed representation of a Cypher query, and builders for constructing common patterns.
@@ -135,7 +145,8 @@ defmodule AshNeo4j.Cypher.Query do
     OrderBy,
     Skip,
     Limit,
-    Call
+    Call,
+    CallSubquery
   }
 
   @type clause ::
@@ -154,6 +165,7 @@ defmodule AshNeo4j.Cypher.Query do
           | Skip.t()
           | Limit.t()
           | Call.t()
+          | CallSubquery.t()
 
   @type t :: %__MODULE__{clauses: [clause()], params: map()}
 
@@ -462,6 +474,42 @@ defmodule AshNeo4j.Cypher.Query do
   defp build_traversal_predicate(path_pattern, {:count, op, value}) do
     key = "traverse_count_0"
     {"COUNT { MATCH #{path_pattern} RETURN DISTINCT d } #{convert_operator(op)} $#{key}", %{key => value}}
+  end
+
+  @doc """
+  Field aggregate over a traversal's reached set (#338) compared against a value.
+
+  No native `MIN {}`/`MAX {}`/`AVG {}`/`SUM {}` subquery expression exists, so
+  this uses a scoped `CALL` that aggregates the reached field, then filters the
+  scalar — plain Cypher 5 (the `WITH s` import form, not `CALL (s) {}`):
+
+  `MATCH (s:Src) CALL { WITH s MATCH (s)<path>(d) RETURN min(d.p) AS agg_v } WITH s, agg_v WHERE agg_v <op> $v OPTIONAL MATCH (s)-[r]-(d0) RETURN s, r, d0`
+
+  `agg` is `{agg_fn, prop, op, value}` where `agg_fn ∈ [:min, :max, :avg, :sum]`
+  and `prop` is the already-resolved reached-node property name.
+
+  Empty-set semantics follow Neo4j's aggregating functions and differ by `agg_fn`:
+  `min`/`max`/`avg` over a no-reach source yield `null` (so `null <op> $v` drops
+  it), while `sum` yields `0` (like `count`) and can still match a comparison.
+  """
+  @spec traversal_aggregate_read(atom() | [atom()], [{atom(), atom(), atom() | nil}], tuple()) :: t()
+  def traversal_aggregate_read(src_label, path_segments, {agg_fn, prop, op, value})
+      when is_list(path_segments) and path_segments != [] and agg_fn in [:min, :max, :avg, :sum] do
+    path = "(s)" <> build_agg_path(path_segments)
+    key = "traverse_agg_0"
+    body = "WITH s MATCH #{path} RETURN #{agg_fn}(d.#{prop}) AS agg_v"
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(src_label))},
+        %CallSubquery{body: body},
+        %With{items: ["s", "agg_v"]},
+        %Where{conditions: ["agg_v #{convert_operator(op)} $#{key}"]},
+        %OptionalMatch{pattern: "(s)-[r]-(d0)"},
+        %Return{items: ["s", "r", "d0"]}
+      ],
+      params: %{key => value}
+    }
   end
 
   @doc """

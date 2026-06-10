@@ -224,8 +224,13 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  # A reached-node predicate over a traversal: a field comparison (#321), or a
-  # spatial predicate with the traversal as its geometry argument (#330).
+  # A reached-node predicate over a traversal: a field comparison (#321), a
+  # field aggregate (#338), or a spatial predicate with the traversal as its
+  # geometry argument (#330).
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, {agg, field}]}})
+       when agg in [:min, :max, :avg, :sum] and is_atom(field),
+       do: true
+
   defp traverse_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, field]}})
        when is_atom(field),
        do: true
@@ -262,6 +267,20 @@ defmodule AshNeo4j.QueryHelper do
        when operator in [:==, :!=, :<, :<=, :>, :>=] and is_integer(value) do
     {segments, _reached} = resolve_chain(mapping.module, chain)
     traversal_predicate(mapping, segments, {:count, operator, value})
+  end
+
+  # Field aggregate over the reached set (#338): `traverse(^chain, {:min, :field}) <op> value`.
+  # Reads `d.field`, so it needs the reached resource's property mapping — a
+  # forward relationship-name chain resolves it; a reverse-terminal chain (#336)
+  # gives `reached = nil` and falls back to an unfiltered read.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, {agg, field}]},
+         right: value
+       })
+       when agg in [:min, :max, :avg, :sum] and operator in [:==, :!=, :<, :<=, :>, :>=] do
+    {segments, reached} = resolve_chain(mapping.module, chain)
+    traversal_aggregate(mapping, segments, reached, agg, field, operator, value)
   end
 
   # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
@@ -345,6 +364,23 @@ defmodule AshNeo4j.QueryHelper do
 
   defp traversal_predicate(%ResourceMapping{} = mapping, segments, agg) do
     Query.traversal_predicate_read(mapping.label_pair, segments, agg)
+  end
+
+  defp traversal_aggregate(%ResourceMapping{} = mapping, [], _reached, _agg, _field, _op, _value) do
+    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
+    Query.node_read(mapping.label_pair)
+  end
+
+  # No resolved reached resource (e.g. reverse-terminal chain, #336) — can't map
+  # the reached field to a property. Fall back to an unfiltered read.
+  defp traversal_aggregate(%ResourceMapping{} = mapping, _segments, nil, _agg, _field, _op, _value) do
+    Logger.debug("AshNeo4j.QueryHelper: traverse aggregate needs a resolvable reached field (forward chain)")
+    Query.node_read(mapping.label_pair)
+  end
+
+  defp traversal_aggregate(%ResourceMapping{} = mapping, segments, reached, agg, field, op, value) do
+    prop = property_name(ResourceInfo.mapping(reached), field)
+    Query.traversal_aggregate_read(mapping.label_pair, segments, {agg, prop, op, to_param_value(value)})
   end
 
   # The reached node's property name. With a resolved reached resource we honour

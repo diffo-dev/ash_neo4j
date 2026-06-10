@@ -400,6 +400,8 @@ defmodule AshNeo4j.Cypher do
     "CALL { #{Enum.join(branches, joiner)} }"
   end
 
+  defp render_clause(%AshNeo4j.Cypher.CallSubquery{body: body}), do: "CALL { #{body} }"
+
   defp render_clause(%OrderBy{terms: terms}) do
     "ORDER BY " <>
       Enum.map_join(terms, ", ", fn
