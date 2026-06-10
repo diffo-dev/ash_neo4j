@@ -71,6 +71,9 @@ defmodule AshNeo4j.DataLayer do
   def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorSimilarity{}}), do: true
   def can?(_, {:filter_expr, %AshNeo4j.Functions.VectorCosineDistance{}}), do: true
 
+  # traversal — traverse(^chain, :field) reached-node filter → Cypher path pushdown (#321)
+  def can?(_, {:filter_expr, %AshNeo4j.Functions.Traverse{}}), do: true
+
   # All other filter expressions are accepted so Ash can hydrate and then evaluate
   # them in-memory via filter_stream / RuntimeExpression. Cypher builder falls
   # back to TRUE for unrecognised predicates; filter_stream corrects the results.
@@ -102,7 +105,8 @@ defmodule AshNeo4j.DataLayer do
       AshNeo4j.Functions.StIntersects,
       AshNeo4j.Functions.StWithin,
       AshNeo4j.Functions.VectorSimilarity,
-      AshNeo4j.Functions.VectorCosineDistance
+      AshNeo4j.Functions.VectorCosineDistance,
+      AshNeo4j.Functions.Traverse
     ]
   end
 
@@ -237,7 +241,7 @@ defmodule AshNeo4j.DataLayer do
               calculations = Map.values(Map.get(query, :calculations) || %{})
 
               with {:ok, records} <- apply_calculations_to_records(records, calculations, resource),
-                   records <- filter_matches(records, query.filter, query.domain),
+                   records <- filter_matches(records, drop_pushdown_only(query.filter), query.domain),
                    {:ok, records} <- apply_aggregates_to_records(records, aggregates, resource) do
                 {:ok, apply_calculation_sort(records, query.sort, query.domain)}
               end
@@ -680,6 +684,46 @@ defmodule AshNeo4j.DataLayer do
   defp filter_matches(records, filter, domain) do
     {:ok, records} = Ash.Filter.Runtime.filter_matches(domain, records, filter)
     records
+  end
+
+  # **Pushdown-only** expressions (#321 `traverse`, and future engine ops) are
+  # graph operations applied *exactly* by the Cypher pushdown and have no
+  # in-memory value. The residual filter for the in-memory correctness pass is
+  # therefore the original filter with every sub-expression containing a
+  # pushdown-only function replaced by `true` — leaving all ordinary predicates
+  # (which the pushdown may over-return on) intact for re-filtering. A function
+  # opts in via `ash_neo4j_pushdown_only?/0`. (Per-predicate residual tracking —
+  # re-applying only what wasn't pushed — is the cleaner end-state, see #327.)
+  defp drop_pushdown_only(nil), do: nil
+
+  defp drop_pushdown_only(%Ash.Filter{expression: expression} = filter),
+    do: %{filter | expression: drop_pushdown_only_expr(expression)}
+
+  defp drop_pushdown_only(filter), do: drop_pushdown_only_expr(filter)
+
+  defp drop_pushdown_only_expr(%Ash.Query.BooleanExpression{left: left, right: right} = boolean) do
+    %{boolean | left: drop_pushdown_only_expr(left), right: drop_pushdown_only_expr(right)}
+  end
+
+  defp drop_pushdown_only_expr(%Ash.Query.Not{expression: expression} = negation) do
+    %{negation | expression: drop_pushdown_only_expr(expression)}
+  end
+
+  defp drop_pushdown_only_expr(expression) do
+    if contains_pushdown_only?(expression), do: true, else: expression
+  end
+
+  defp contains_pushdown_only?(%module{} = struct) do
+    pushdown_only_function?(module) or
+      (struct |> Map.from_struct() |> Map.values() |> Enum.any?(&contains_pushdown_only?/1))
+  end
+
+  defp contains_pushdown_only?(map) when is_map(map), do: map |> Map.values() |> Enum.any?(&contains_pushdown_only?/1)
+  defp contains_pushdown_only?(list) when is_list(list), do: Enum.any?(list, &contains_pushdown_only?/1)
+  defp contains_pushdown_only?(_), do: false
+
+  defp pushdown_only_function?(module) do
+    function_exported?(module, :ash_neo4j_pushdown_only?, 0) and module.ash_neo4j_pushdown_only?()
   end
 
   # Reads the on-disk property value for an attribute, handling the geo
