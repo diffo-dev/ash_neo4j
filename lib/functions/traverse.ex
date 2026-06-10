@@ -20,6 +20,11 @@ defmodule AshNeo4j.Functions.Traverse do
       |> Ash.Query.filter(st_dwithin(traverse(^chain, :location), ^point, 5_000))
       |> Ash.read!()
 
+      # membership / cardinality over the reached set (#334)
+      Service |> Ash.Query.filter(traverse(^chain, :exists) == true)   # reaches a node
+      Service |> Ash.Query.filter(traverse(^chain, :exists) == false)  # reaches none
+      Service |> Ash.Query.filter(traverse(^chain, :count) > 0)        # cardinality
+
   ## Arguments
 
     * `hop_chain` — a list of hops, each `{:forward | :reverse, edge_selector}`.
@@ -27,9 +32,19 @@ defmodule AshNeo4j.Functions.Traverse do
       `edge_selector` is an Ash **relationship name** (atom, resolved on the
       source resource to its edge label + destination label) or an explicit
       `{:edge, label}` / `{:edge, label, dest_label}`.
-    * `projection` (optional, default `:node`) — a field atom on the reached
-      node (the value to compare or feed to `st_dwithin`/`vector_similarity`),
-      or `:node` for the reached node itself.
+    * `projection` (optional, default `:node`) — what to pull from the reached
+      set:
+        * `:node` (default) — the reached node itself
+        * a field atom (e.g. `:status`, `:location`) — a field on the reached
+          node, to compare or feed to `st_dwithin`/`vector_similarity`
+        * `:exists` — membership; renders to `EXISTS {}` / `NOT EXISTS {}`,
+          spelled `== true` / `== false`
+        * `:count` — cardinality of distinct reached nodes; renders to
+          `COUNT { … } <op> n`
+
+  Ash's `count()`/`sum()`/… are inline aggregates welded to a relationship path
+  and expanded at filter hydration, so they can't nest as `traverse(count())`;
+  the aggregate is carried as a projection literal (`:count`) instead.
 
   ## Pushdown only
 

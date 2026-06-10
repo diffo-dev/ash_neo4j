@@ -239,6 +239,31 @@ defmodule AshNeo4j.QueryHelper do
 
   defp traverse_predicate?(_), do: false
 
+  # Membership over the reached set (#334): `traverse(^chain, :exists) == true|false`.
+  # `:exists` renders to `EXISTS {}` / `NOT EXISTS {}` — no reached-node field, so
+  # no reached-resource typing needed (composes over reverse chains too).
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, :exists]},
+         right: value
+       })
+       when operator in [:==, :!=] and is_boolean(value) do
+    {segments, _reached} = resolve_chain(mapping.module, chain)
+    exists? = if operator == :==, do: value, else: not value
+    traversal_predicate(mapping, segments, {:exists, exists?})
+  end
+
+  # Cardinality over the reached set (#334): `traverse(^chain, :count) <op> n`.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, :count]},
+         right: value
+       })
+       when operator in [:==, :!=, :<, :<=, :>, :>=] and is_integer(value) do
+    {segments, _reached} = resolve_chain(mapping.module, chain)
+    traversal_predicate(mapping, segments, {:count, operator, value})
+  end
+
   # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
   defp build_traversal_query(%ResourceMapping{} = mapping, %{
          operator: operator,
@@ -311,6 +336,15 @@ defmodule AshNeo4j.QueryHelper do
 
   defp traversal_query(%ResourceMapping{} = mapping, segments, conditions) do
     Query.traversal_read(mapping.label_pair, segments, conditions)
+  end
+
+  defp traversal_predicate(%ResourceMapping{} = mapping, [], _agg) do
+    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
+    Query.node_read(mapping.label_pair)
+  end
+
+  defp traversal_predicate(%ResourceMapping{} = mapping, segments, agg) do
+    Query.traversal_predicate_read(mapping.label_pair, segments, agg)
   end
 
   # The reached node's property name. With a resolved reached resource we honour
