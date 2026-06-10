@@ -420,6 +420,51 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
+  Existence / cardinality of a traversal's reached set (#334) — a `WHERE`
+  predicate on the source, not a field comparison on the reached node.
+
+  `MATCH (s:Src) WHERE EXISTS { MATCH (s)<path>(d) } OPTIONAL MATCH (s)-[r]-(d0) RETURN s, r, d0`
+  `MATCH (s:Src) WHERE COUNT { MATCH (s)<path>(d) RETURN DISTINCT d } > $n OPTIONAL MATCH (s)-[r]-(d0) RETURN s, r, d0`
+
+  `agg` selects the predicate:
+
+    * `{:exists, true}`  → `EXISTS { … }` (short-circuits on first match)
+    * `{:exists, false}` → `NOT EXISTS { … }` (membership exclusion)
+    * `{:count, op, n}`  → `COUNT { … RETURN DISTINCT d } <op> $n` (distinct reached nodes)
+
+  The source is filtered directly (no per-path row fan-out), and enrichment uses
+  `OPTIONAL MATCH` so a `NOT EXISTS` source with no other edges still returns.
+  Needs no reached-resource typing, so it composes over reverse chains too.
+  """
+  @spec traversal_predicate_read(atom() | [atom()], [{atom(), atom(), atom() | nil}], tuple()) :: t()
+  def traversal_predicate_read(src_label, path_segments, agg)
+      when is_list(path_segments) and path_segments != [] do
+    path_pattern = "(s)" <> build_agg_path(path_segments)
+    {where_string, params} = build_traversal_predicate(path_pattern, agg)
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: Cypher.node(:s, List.wrap(src_label))},
+        %Where{conditions: [where_string]},
+        %OptionalMatch{pattern: "(s)-[r]-(d0)"},
+        %Return{items: ["s", "r", "d0"]}
+      ],
+      params: params
+    }
+  end
+
+  defp build_traversal_predicate(path_pattern, {:exists, true}),
+    do: {"EXISTS { MATCH #{path_pattern} }", %{}}
+
+  defp build_traversal_predicate(path_pattern, {:exists, false}),
+    do: {"NOT EXISTS { MATCH #{path_pattern} }", %{}}
+
+  defp build_traversal_predicate(path_pattern, {:count, op, value}) do
+    key = "traverse_count_0"
+    {"COUNT { MATCH #{path_pattern} RETURN DISTINCT d } #{convert_operator(op)} $#{key}", %{key => value}}
+  end
+
+  @doc """
   `MATCH (n:L1:L2 {props}) OPTIONAL MATCH (n)-[r]-(d) RETURN n, r, d`
 
   Like `node_read/1` but matches by properties in the MATCH pattern (not a WHERE clause).
