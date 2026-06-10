@@ -69,4 +69,50 @@ defmodule AshNeo4j.TraverseSpatialTest do
 
     assert names == ["Melbourne Co", "Sydney Co"]
   end
+
+  test "st_distance composed with a traversal: parties whose site is under an exact distance" do
+    sydney = Ash.create!(Place, %{name: "Sydney", location: geo(151.2093, -33.8688)})
+    melbourne = Ash.create!(Place, %{name: "Melbourne", location: geo(144.9631, -37.8136)})
+    party_at("Sydney Co", sydney)
+    party_at("Melbourne Co", melbourne)
+
+    customer = geo(151.2, -33.85)
+    chain = [{:forward, :place_ref}, {:forward, :place}]
+
+    names =
+      Party
+      |> Ash.Query.filter(st_distance(traverse(^chain, :location), ^customer) < 5_000)
+      |> Ash.read!()
+      |> Enum.map(& &1.name)
+
+    assert names == ["Sydney Co"]
+  end
+
+  test "st_contains composed with a traversal: parties whose site boundary contains a point" do
+    sydney_box = %Geo.Polygon{
+      coordinates: [[{151.0, -34.0}, {151.4, -34.0}, {151.4, -33.7}, {151.0, -33.7}, {151.0, -34.0}]],
+      srid: 4326
+    }
+
+    melbourne_box = %Geo.Polygon{
+      coordinates: [[{144.8, -38.0}, {145.1, -38.0}, {145.1, -37.7}, {144.8, -37.7}, {144.8, -38.0}]],
+      srid: 4326
+    }
+
+    sydney = Ash.create!(Place, %{name: "Sydney", bounds: sydney_box})
+    melbourne = Ash.create!(Place, %{name: "Melbourne", bounds: melbourne_box})
+    party_at("Sydney Co", sydney)
+    party_at("Melbourne Co", melbourne)
+
+    point = geo(151.2, -33.85)
+    chain = [{:forward, :place_ref}, {:forward, :place}]
+
+    names =
+      Party
+      |> Ash.Query.filter(st_contains(traverse(^chain, :bounds), ^point))
+      |> Ash.read!()
+      |> Enum.map(& &1.name)
+
+    assert names == ["Sydney Co"]
+  end
 end

@@ -231,6 +231,12 @@ defmodule AshNeo4j.QueryHelper do
        do: true
 
   defp traverse_predicate?(%AshNeo4j.Functions.StDwithin{arguments: [%AshNeo4j.Functions.Traverse{} | _]}), do: true
+  defp traverse_predicate?(%AshNeo4j.Functions.StContains{arguments: [%AshNeo4j.Functions.Traverse{} | _]}), do: true
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.StDistance{arguments: [%AshNeo4j.Functions.Traverse{} | _]}}), do: true
+
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [%AshNeo4j.Functions.Traverse{} | _]}}),
+    do: true
+
   defp traverse_predicate?(_), do: false
 
   # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
@@ -244,25 +250,56 @@ defmodule AshNeo4j.QueryHelper do
     traversal_query(mapping, segments, [condition])
   end
 
-  # Composition: `st_dwithin(traverse(^chain, :location), ^point, ^km)` — render the
-  # spatial predicate against the reached node (#330). Needs a resolvable reached
-  # resource (relationship-name chain) for its point property.
+  # Composition (#330/#332): a spatial predicate with the traversal as its geometry
+  # argument — render it against the reached node. Needs a resolvable reached
+  # resource (relationship-name chain) for the reached geo attribute.
   defp build_traversal_query(%ResourceMapping{} = mapping, %AshNeo4j.Functions.StDwithin{
          arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, test_point, threshold]
        })
        when is_number(threshold) do
+    spatial_traversal(mapping, chain, fn reached ->
+      {point_property(reached, field), :st_dwithin, {to_geo_param!(reached, field, test_point), threshold}, false}
+    end)
+  end
+
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %distance{arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, test_point]},
+         right: threshold
+       })
+       when distance in [AshNeo4j.Functions.StDistance, AshNeo4j.Functions.StDistanceInMeters] and is_number(threshold) do
+    spatial_traversal(mapping, chain, fn reached ->
+      {point_property(reached, field), :st_distance, {operator, to_geo_param!(reached, field, test_point), threshold}, false}
+    end)
+  end
+
+  defp build_traversal_query(%ResourceMapping{} = mapping, %AshNeo4j.Functions.StContains{
+         arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, %Geo.Point{} = point]
+       }) do
+    spatial_traversal(mapping, chain, fn reached ->
+      if polygon_attribute?(reached, field) do
+        {property_name(reached, field), :st_contains, to_param_value(point), false}
+      end
+    end)
+  end
+
+  # Unsupported traverse predicate shape — fall back to an unfiltered read.
+  defp build_traversal_query(%ResourceMapping{} = mapping, _predicate) do
+    Logger.debug("AshNeo4j.QueryHelper: unsupported traverse predicate, falling back to node_read")
+    Query.node_read(mapping.label_pair)
+  end
+
+  # Resolves the chain + reached resource, applies `condition_fn` against the
+  # reached mapping (`nil` = not applicable), then builds the traversal read.
+  defp spatial_traversal(%ResourceMapping{} = mapping, chain, condition_fn) do
     {segments, reached} = resolve_chain(mapping.module, chain)
 
-    case reached && ResourceInfo.mapping(reached) do
-      %ResourceMapping{} = reached_mapping ->
-        condition =
-          {point_property(reached_mapping, field), :st_dwithin,
-           {to_geo_param!(reached_mapping, field, test_point), threshold}, false}
-
-        traversal_query(mapping, segments, [condition])
-
+    with %ResourceMapping{} = reached_mapping <- reached && ResourceInfo.mapping(reached),
+         condition when not is_nil(condition) <- condition_fn.(reached_mapping) do
+      traversal_query(mapping, segments, [condition])
+    else
       _ ->
-        Logger.debug("AshNeo4j.QueryHelper: st_dwithin traversal needs a resolvable reached resource")
+        Logger.debug("AshNeo4j.QueryHelper: spatial traverse needs a resolvable reached geo attribute")
         Query.node_read(mapping.label_pair)
     end
   end
