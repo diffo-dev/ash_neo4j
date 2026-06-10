@@ -390,6 +390,34 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
+  Multi-hop traversal filter (#321) — generalises `relationship_read/7` to a path.
+
+  `MATCH (s:Src)<path>(d) WHERE d.<field> <op> $param WITH DISTINCT s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
+
+  `path_segments` is `[{edge_label, direction, dest_label}]` (dest_label may be
+  `nil` for an unlabelled hop); the reached node binds as `d`. `WITH DISTINCT s`
+  collapses a source matched via multiple paths to one row before enrichment.
+  """
+  @spec traversal_read(atom() | [atom()], [{atom(), atom(), atom() | nil}], String.t(), atom(), any()) :: t()
+  def traversal_read(src_label, path_segments, reached_property, operator, value)
+      when is_list(path_segments) and path_segments != [] and is_binary(reached_property) do
+    param_key = "n_#{reached_property}"
+    match_pattern = Cypher.node(:s, List.wrap(src_label)) <> build_agg_path(path_segments)
+    where_condition = Cypher.expression(:d, reached_property, convert_operator(operator), "$#{param_key}")
+
+    %__MODULE__{
+      clauses: [
+        %Match{pattern: match_pattern},
+        %Where{conditions: [where_condition]},
+        %With{items: ["DISTINCT s"]},
+        %Match{pattern: "(s)-[r0]-(d0)"},
+        %Return{items: ["s", "r0", "d0"]}
+      ],
+      params: %{param_key => value}
+    }
+  end
+
+  @doc """
   `MATCH (n:L1:L2 {props}) OPTIONAL MATCH (n)-[r]-(d) RETURN n, r, d`
 
   Like `node_read/1` but matches by properties in the MATCH pattern (not a WHERE clause).
@@ -976,7 +1004,8 @@ defmodule AshNeo4j.Cypher.Query do
           _ -> "-[:#{edge_label}]-"
         end
 
-      acc <> rel <> "(#{node_var}:#{dest_label})"
+      node = if dest_label, do: "(#{node_var}:#{dest_label})", else: "(#{node_var})"
+      acc <> rel <> node
     end)
   end
 

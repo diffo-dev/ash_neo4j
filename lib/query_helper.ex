@@ -218,6 +218,83 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
+    case Enum.find(predicates, &traverse_field_predicate?/1) do
+      nil -> build_relationship_or_property_query(mapping, predicates)
+      traverse_predicate -> build_traversal_query(mapping, traverse_predicate)
+    end
+  end
+
+  # A reached-node field comparison: `traverse(^chain, :field) <op> value` (#321).
+  defp traverse_field_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, field]}})
+       when is_atom(field),
+       do: true
+
+  defp traverse_field_predicate?(_), do: false
+
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, field]},
+         right: value
+       }) do
+    case resolve_chain(mapping.module, chain) do
+      [] ->
+        Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
+        Query.node_read(mapping.label_pair)
+
+      segments ->
+        reached_property = field |> AshNeo4j.Util.to_camel_case() |> to_string()
+        Query.traversal_read(mapping.label_pair, segments, reached_property, operator, to_param_value(value))
+    end
+  end
+
+  # Resolves a hop chain to `[{edge_label, direction, dest_label}]`, threading the
+  # current resource so relationship-name hops resolve at each step.
+  defp resolve_chain(resource, chain) when is_list(chain) do
+    {segments, _resource} =
+      Enum.reduce(chain, {[], resource}, fn hop, {acc, current} ->
+        {segment, next} = resolve_hop(current, hop)
+        {acc ++ [segment], next}
+      end)
+
+    segments
+  end
+
+  defp resolve_chain(_resource, _), do: []
+
+  # Relationship-name hop — resolve via `relate` on the current resource. `:forward`
+  # walks the declared edge direction, `:reverse` flips it.
+  defp resolve_hop(resource, {direction, rel_name}) when is_atom(rel_name) and not is_nil(resource) do
+    case ResourceInfo.node_relationship(resource, rel_name) do
+      {_name, edge_label, edge_direction, dest_label} ->
+        cypher_direction = if direction == :reverse, do: flip_direction(edge_direction), else: edge_direction
+        next = relationship_destination(resource, rel_name)
+        dest = if direction == :forward, do: dest_label, else: nil
+        {{edge_label, cypher_direction, dest}, next}
+
+      _ ->
+        {{rel_name, hop_direction(direction), nil}, nil}
+    end
+  end
+
+  # Explicit edge hop — `{:edge, label}` or `{:edge, label, dest_label}`.
+  defp resolve_hop(_resource, {direction, {:edge, label}}), do: {{label, hop_direction(direction), nil}, nil}
+  defp resolve_hop(_resource, {direction, {:edge, label, dest}}), do: {{label, hop_direction(direction), dest}, nil}
+
+  defp relationship_destination(resource, rel_name) do
+    case Ash.Resource.Info.relationship(resource, rel_name) do
+      %{destination: destination} -> destination
+      _ -> nil
+    end
+  end
+
+  defp hop_direction(:forward), do: :outgoing
+  defp hop_direction(:reverse), do: :incoming
+
+  defp flip_direction(:outgoing), do: :incoming
+  defp flip_direction(:incoming), do: :outgoing
+  defp flip_direction(other), do: other
+
+  defp build_relationship_or_property_query(%ResourceMapping{} = mapping, predicates) do
     relationship_predicates =
       Enum.filter(predicates, fn predicate ->
         if Map.has_key?(predicate, :operator) and ref_or_atom?(predicate.left) do
