@@ -392,28 +392,30 @@ defmodule AshNeo4j.Cypher.Query do
   @doc """
   Multi-hop traversal filter (#321) — generalises `relationship_read/7` to a path.
 
-  `MATCH (s:Src)<path>(d) WHERE d.<field> <op> $param WITH DISTINCT s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
+  `MATCH (s:Src)<path>(d) WHERE <reached conditions> WITH DISTINCT s MATCH (s)-[r0]-(d0) RETURN s, r0, d0`
 
   `path_segments` is `[{edge_label, direction, dest_label}]` (dest_label may be
-  `nil` for an unlabelled hop); the reached node binds as `d`. `WITH DISTINCT s`
-  collapses a source matched via multiple paths to one row before enrichment.
+  `nil` for an unlabelled hop); the reached node binds as `d`. `conditions` are
+  the same `{prop, op, val, ci?}` tuples the property/spatial/vector path uses —
+  rendered against `d` via `build_conditions/3`, so a reached-node field
+  comparison, `st_dwithin`, `st_distance` or vector predicate all compose here.
+  `WITH DISTINCT s` collapses a source matched via multiple paths to one row.
   """
-  @spec traversal_read(atom() | [atom()], [{atom(), atom(), atom() | nil}], String.t(), atom(), any()) :: t()
-  def traversal_read(src_label, path_segments, reached_property, operator, value)
-      when is_list(path_segments) and path_segments != [] and is_binary(reached_property) do
-    param_key = "n_#{reached_property}"
+  @spec traversal_read(atom() | [atom()], [{atom(), atom(), atom() | nil}], [tuple()]) :: t()
+  def traversal_read(src_label, path_segments, conditions)
+      when is_list(path_segments) and path_segments != [] and is_list(conditions) do
+    {where_string, params} = build_conditions(:d, conditions, [])
     match_pattern = Cypher.node(:s, List.wrap(src_label)) <> build_agg_path(path_segments)
-    where_condition = Cypher.expression(:d, reached_property, convert_operator(operator), "$#{param_key}")
 
     %__MODULE__{
       clauses: [
         %Match{pattern: match_pattern},
-        %Where{conditions: [where_condition]},
+        %Where{conditions: [where_string]},
         %With{items: ["DISTINCT s"]},
         %Match{pattern: "(s)-[r0]-(d0)"},
         %Return{items: ["s", "r0", "d0"]}
       ],
-      params: %{param_key => value}
+      params: params
     }
   end
 

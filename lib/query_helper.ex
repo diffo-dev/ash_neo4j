@@ -218,48 +218,80 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
-    case Enum.find(predicates, &traverse_field_predicate?/1) do
+    case Enum.find(predicates, &traverse_predicate?/1) do
       nil -> build_relationship_or_property_query(mapping, predicates)
       traverse_predicate -> build_traversal_query(mapping, traverse_predicate)
     end
   end
 
-  # A reached-node field comparison: `traverse(^chain, :field) <op> value` (#321).
-  defp traverse_field_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, field]}})
+  # A reached-node predicate over a traversal: a field comparison (#321), or a
+  # spatial predicate with the traversal as its geometry argument (#330).
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, field]}})
        when is_atom(field),
        do: true
 
-  defp traverse_field_predicate?(_), do: false
+  defp traverse_predicate?(%AshNeo4j.Functions.StDwithin{arguments: [%AshNeo4j.Functions.Traverse{} | _]}), do: true
+  defp traverse_predicate?(_), do: false
 
+  # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
   defp build_traversal_query(%ResourceMapping{} = mapping, %{
          operator: operator,
          left: %AshNeo4j.Functions.Traverse{arguments: [chain, field]},
          right: value
        }) do
-    case resolve_chain(mapping.module, chain) do
-      [] ->
-        Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
-        Query.node_read(mapping.label_pair)
+    {segments, reached} = resolve_chain(mapping.module, chain)
+    condition = {reached_property(reached, field), operator, to_param_value(value), false}
+    traversal_query(mapping, segments, [condition])
+  end
 
-      segments ->
-        reached_property = field |> AshNeo4j.Util.to_camel_case() |> to_string()
-        Query.traversal_read(mapping.label_pair, segments, reached_property, operator, to_param_value(value))
+  # Composition: `st_dwithin(traverse(^chain, :location), ^point, ^km)` — render the
+  # spatial predicate against the reached node (#330). Needs a resolvable reached
+  # resource (relationship-name chain) for its point property.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %AshNeo4j.Functions.StDwithin{
+         arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, test_point, threshold]
+       })
+       when is_number(threshold) do
+    {segments, reached} = resolve_chain(mapping.module, chain)
+
+    case reached && ResourceInfo.mapping(reached) do
+      %ResourceMapping{} = reached_mapping ->
+        condition =
+          {point_property(reached_mapping, field), :st_dwithin,
+           {to_geo_param!(reached_mapping, field, test_point), threshold}, false}
+
+        traversal_query(mapping, segments, [condition])
+
+      _ ->
+        Logger.debug("AshNeo4j.QueryHelper: st_dwithin traversal needs a resolvable reached resource")
+        Query.node_read(mapping.label_pair)
     end
   end
 
-  # Resolves a hop chain to `[{edge_label, direction, dest_label}]`, threading the
-  # current resource so relationship-name hops resolve at each step.
-  defp resolve_chain(resource, chain) when is_list(chain) do
-    {segments, _resource} =
-      Enum.reduce(chain, {[], resource}, fn hop, {acc, current} ->
-        {segment, next} = resolve_hop(current, hop)
-        {acc ++ [segment], next}
-      end)
-
-    segments
+  defp traversal_query(%ResourceMapping{} = mapping, [], _conditions) do
+    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
+    Query.node_read(mapping.label_pair)
   end
 
-  defp resolve_chain(_resource, _), do: []
+  defp traversal_query(%ResourceMapping{} = mapping, segments, conditions) do
+    Query.traversal_read(mapping.label_pair, segments, conditions)
+  end
+
+  # The reached node's property name. With a resolved reached resource we honour
+  # its property mapping; for an explicit-edge chain (no resource) we camelCase.
+  defp reached_property(nil, field), do: field |> AshNeo4j.Util.to_camel_case() |> to_string()
+  defp reached_property(resource, field), do: property_name(ResourceInfo.mapping(resource), field)
+
+  # Resolves a hop chain to `{[{edge_label, direction, dest_label}], reached_resource}`,
+  # threading the current resource so relationship-name hops resolve at each step.
+  # `reached_resource` is `nil` once an explicit-edge hop breaks the resource chain.
+  defp resolve_chain(resource, chain) when is_list(chain) do
+    Enum.reduce(chain, {[], resource}, fn hop, {acc, current} ->
+      {segment, next} = resolve_hop(current, hop)
+      {acc ++ [segment], next}
+    end)
+  end
+
+  defp resolve_chain(_resource, _), do: {[], nil}
 
   # Relationship-name hop — resolve via `relate` on the current resource. `:forward`
   # walks the declared edge direction, `:reverse` flips it.
