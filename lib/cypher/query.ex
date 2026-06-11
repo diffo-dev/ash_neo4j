@@ -804,6 +804,31 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
+  `MATCH (n:L1:L2 {match_props}) SET n:Add1:Add2 REMOVE n:Rem1:Rem2 RETURN n`
+
+  Adds and/or removes node labels on a matched node. A node's label set drives
+  `AshNeo4j.worlds/1`, so this moves a node between worlds — handy in tests to
+  place a node in (or strip it of) a resolvable world after an Ash create.
+  Handles all combinations of empty/non-empty add and remove lists.
+  """
+  @spec update_node_labels(atom() | [atom()], map(), [atom()], [atom()]) :: t()
+  def update_node_labels(label, match_props, add_labels, remove_labels \\ [])
+      when is_map(match_props) and is_list(add_labels) and is_list(remove_labels) do
+    {match_pattern, params} = Cypher.parameterized_node(:n, List.wrap(label), match_props)
+
+    set_clauses =
+      if add_labels != [], do: [%Set{expression: "n:" <> Enum.map_join(add_labels, ":", &to_string/1)}], else: []
+
+    remove_clauses =
+      if remove_labels != [], do: [%Remove{items: ["n:" <> Enum.map_join(remove_labels, ":", &to_string/1)]}], else: []
+
+    %__MODULE__{
+      clauses: [%Match{pattern: match_pattern}] ++ set_clauses ++ remove_clauses ++ [%Return{items: ["n"]}],
+      params: params
+    }
+  end
+
+  @doc """
   `MATCH (n:L1:L2 {props}) DETACH DELETE n`
   """
   @spec delete_nodes(atom() | [atom()], map()) :: t()

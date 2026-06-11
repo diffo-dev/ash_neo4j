@@ -126,6 +126,31 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
+  @spec update_node_labels(atom() | [atom()], map(), [atom()], [atom()]) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  @doc """
+  Adds and/or removes labels on an existing node (matched by label + properties).
+
+  A node's label set drives `AshNeo4j.worlds/1`, so this places a node in — or
+  strips it of — a resolvable world. Useful in tests: create a node via Ash,
+  then mutate its labels to set up a chosen world (or an unresolvable one).
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node([:SRM, :Place], %{name: "Sydney"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.update_node_labels(:Place, %{name: "Sydney"}, [], [:SRM])
+  iex> result
+  :ok
+  ```
+  """
+  def update_node_labels(label, match_properties, add_labels, remove_labels \\ [])
+      when (is_atom(label) or is_list(label)) and is_map(match_properties) and
+             is_list(add_labels) and is_list(remove_labels) do
+    Query.update_node_labels(label, match_properties, add_labels, remove_labels)
+    |> Cypher.run()
+  end
+
   @spec relate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
