@@ -74,7 +74,7 @@ defmodule AshNeo4j.Functions.MultiLineStringTest do
     test "finds places whose routes intersect a search polygon via Ash.Query" do
       sydney = Place |> Ash.create!(%{name: "Sydney routes", routes: routes()})
 
-      _perth =
+      perth =
         Place
         |> Ash.create!(%{
           name: "Perth routes",
@@ -93,7 +93,7 @@ defmodule AshNeo4j.Functions.MultiLineStringTest do
 
       ids = Enum.map(results, & &1.id)
       assert sydney.id in ids
-      refute _perth.id in ids
+      refute perth.id in ids
     end
   end
 

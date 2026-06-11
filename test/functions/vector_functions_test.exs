@@ -23,7 +23,7 @@ defmodule AshNeo4j.Functions.VectorFunctionsTest do
     test "identical → 1.0, orthogonal → 0.5, opposite → 0.0" do
       assert {:known, 1.0} = sim([1.0, 0.0, 0.0], [1.0, 0.0, 0.0])
       assert {:known, 0.5} = sim([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
-      assert {:known, 0.0} = sim([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
+      assert {:known, +0.0} = sim([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
     end
 
     test "is magnitude-invariant" do
@@ -39,7 +39,7 @@ defmodule AshNeo4j.Functions.VectorFunctionsTest do
 
   describe "VectorCosineDistance.evaluate/1 (pgvector-style, [0,2], lower = closer)" do
     test "identical → 0.0, orthogonal → 1.0, opposite → 2.0" do
-      assert {:known, 0.0} = dist([1.0, 0.0, 0.0], [1.0, 0.0, 0.0])
+      assert {:known, +0.0} = dist([1.0, 0.0, 0.0], [1.0, 0.0, 0.0])
       assert {:known, 1.0} = dist([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
       assert {:known, 2.0} = dist([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
     end
