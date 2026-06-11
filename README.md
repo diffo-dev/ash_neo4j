@@ -178,6 +178,18 @@ end
 
 The `on_exit` call is optional — the transaction is rolled back automatically when the test process exits — but is recommended for clarity.
 
+### Placing a node in a world
+
+A node's **label set** is what `AshNeo4j.worlds/1` resolves to a `(domain, resource)` world, so polymorphic / open-world tests sometimes need a node whose labels differ from what an Ash create produces. `AshNeo4j.Neo4jHelper.update_node_labels/4` adds and/or removes labels on an existing node — create the node normally via Ash, then mutate its labels:
+
+```elixir
+place = Ash.create!(Place, %{name: "Sydney"})
+# strip the domain label so worlds/1 can no longer resolve this node to a world
+AshNeo4j.Neo4jHelper.update_node_labels(:Place, %{name: "Sydney"}, [], [:SRM])
+```
+
+This is a **test/maintenance** helper — the data layer sets labels at create time and never mutates them on the normal CRUD path — so it lives in `Neo4jHelper` alongside the other raw-Cypher helpers (`create_node/2`, `relate_nodes/6`, …) rather than on a resource action.
+
 ### Parallel tests
 
 Because each test's writes are confined to an uncommitted transaction, tests can run concurrently without interfering:

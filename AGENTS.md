@@ -323,6 +323,14 @@ as a follow-up comment, then leave it with the upstream maintainers.
 
 ## Common agent mistakes
 
+- **Fabricating a definite where a reached/related resource can't be resolved.** When a reached
+  node's labels resolve to no loaded world (`AshNeo4j.worlds/1` returns `[]`), or a property/edge
+  name can't be introspected from `ResourceInfo.mapping/1`, return `AshNeo4j.Unknown` (stamped with
+  the original query's resource as `:world`, a structural `:reason` atom, and diagnostic
+  `:context`) — never synthesise a `nil`/`0`/camelCased guess. A silently-wrong definite is the
+  worst outcome; `Unknown` is the honest "couldn't determine", complementary to `Ash.NotLoaded`'s
+  "not fetched yet". See `AshNeo4j.Calculations.ProjectedTraversal` for the producing path.
+
 - **Not using `mapping.label_pair` for MATCH.** All read, update, delete, and aggregate queries
   must use `mapping.label_pair` (`[domain_label, module_label]`) as the source node pattern.
   Using `mapping.label` alone matches every resource that extends the same fragment. Using

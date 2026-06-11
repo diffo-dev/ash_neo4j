@@ -388,17 +388,23 @@ defmodule AshNeo4j.QueryHelper do
   defp reached_property(nil, field), do: field |> AshNeo4j.Util.to_camel_case() |> to_string()
   defp reached_property(resource, field), do: property_name(ResourceInfo.mapping(resource), field)
 
-  # Resolves a hop chain to `{[{edge_label, direction, dest_label}], reached_resource}`,
-  # threading the current resource so relationship-name hops resolve at each step.
-  # `reached_resource` is `nil` once an explicit-edge hop breaks the resource chain.
-  defp resolve_chain(resource, chain) when is_list(chain) do
+  @doc """
+  Resolves a hop chain to `{[{edge_label, direction, dest_label}], reached_resource}`,
+  threading the current resource so relationship-name hops resolve at each step.
+  `reached_resource` is `nil` once an explicit-edge hop breaks the resource chain.
+
+  Public so read-time consumers (e.g. the projection calculation) can turn a
+  `chain` opt into Cypher path segments for `Cypher.Query.related_nodes/4`.
+  """
+  @spec resolve_chain(module(), list()) :: {[{atom(), atom(), atom() | nil}], module() | nil}
+  def resolve_chain(resource, chain) when is_list(chain) do
     Enum.reduce(chain, {[], resource}, fn hop, {acc, current} ->
       {segment, next} = resolve_hop(current, hop)
       {acc ++ [segment], next}
     end)
   end
 
-  defp resolve_chain(_resource, _), do: {[], nil}
+  def resolve_chain(_resource, _), do: {[], nil}
 
   # Relationship-name hop — resolve via `relate` on the current resource. `:forward`
   # walks the declared edge direction, `:reverse` flips it.

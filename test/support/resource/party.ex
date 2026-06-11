@@ -35,4 +35,11 @@ defmodule AshNeo4j.Test.Resource.Party do
   relationships do
     belongs_to :place_ref, AshNeo4j.Test.Resource.PlaceRef, public?: true
   end
+
+  calculations do
+    # Read-time projection of the reached Place (#329) — Party -> PlaceRef -> Place.
+    calculate :projected_place,
+              :struct,
+              {AshNeo4j.Calculations.ProjectedTraversal, chain: [{:forward, :place_ref}, {:forward, :place}]}
+  end
 end

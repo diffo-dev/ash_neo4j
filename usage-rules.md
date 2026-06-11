@@ -208,6 +208,20 @@ record = Ash.get!(SomeBaseInstance, id)
 
 Resolution is dynamic against loaded modules (no registry): a candidate is a loaded `AshNeo4j.DataLayer` resource whose own labels are a subset of the node's; the outermost (most-nuanced) is kept per domain. Labels that don't resolve to a loaded module are left unknown (omitted). Returns `[]` for a record not produced by this data layer. **Pre-1.0 and may change** — shipped to learn its shape from real downstream use.
 
+### Read-time projection — `AshNeo4j.Calculations.ProjectedTraversal` (exploratory, #329)
+
+The read-time companion to `worlds/1`. Declare it to follow a hop `chain` to a reached node and return it as a value, late-binding the reached node's concrete type at read time — useful when the reached node's subtype isn't known at the source resource's compile time:
+
+```elixir
+calculate :site, :struct,
+  {AshNeo4j.Calculations.ProjectedTraversal,
+   chain: [{:forward, :place_ref}, {:forward, :place}]}
+```
+
+Per record it returns one of: the **concrete record** (labels resolved to a loaded world); **`%AshNeo4j.Unknown{}`** (a node was reached but its labels resolve to no loaded world — it can't be returned as a typed record); **`nil`** (nothing reached); or `%Ash.NotLoaded{}` (until loaded).
+
+`AshNeo4j.Unknown` is a first-class value, complementary to `Ash.NotLoaded`: `NotLoaded` means "not fetched **yet**" (ask again); `Unknown` means "reached, but **couldn't be determined** in the current view of the graph". Pattern-match it alongside `nil` and concrete values — never read `nil`-meaning-absent into it. Shape: `%AshNeo4j.Unknown{world: queried_resource, reason: atom_or_nested_unknown, context: map}`.
+
 ## Naming conventions
 
 AshNeo4j enforces Neo4j conventions at compile time:

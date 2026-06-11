@@ -1300,6 +1300,61 @@ defmodule AshNeo4j.DataLayer do
     end)
   end
 
+  @doc """
+  Read-time polymorphic projection (#329): for each source record, follows
+  `chain` to the reached node(s) in one query (`related_nodes/4`) and projects
+  each reached node to its concrete world via `AshNeo4j.worlds/1`.
+
+  Returns `%{source_pk_value => projected}` where `projected` is the concrete
+  record, an `AshNeo4j.Unknown` (a node was reached but its labels resolve to no
+  loaded world), or `nil` (genuinely nothing reached). v1 is single-valued.
+  """
+  @spec project_traversal(module(), [Ash.Resource.record()], list()) :: %{optional(any()) => any()}
+  def project_traversal(resource, records, chain) do
+    mapping = ResourceInfo.mapping(resource)
+    pk_field = hd(Ash.Resource.Info.primary_key(resource))
+    neo4j_pk = Keyword.get(mapping.properties, pk_field, pk_field)
+    ids = Enum.map(records, &Map.get(&1, pk_field))
+    {segments, _reached} = AshNeo4j.QueryHelper.resolve_chain(resource, chain)
+
+    if segments == [] do
+      Map.new(ids, &{&1, nil})
+    else
+      query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, segments)
+
+      case Cypher.run(query) do
+        {:ok, %Bolty.Response{results: rows}} ->
+          rows
+          |> Enum.group_by(&Map.get(&1, "source_id"), &Map.get(&1, "dest_node"))
+          |> Map.new(fn {source_id, dest_nodes} -> {source_id, project_reached(resource, dest_nodes)} end)
+
+        {:error, reason} ->
+          raise "AshNeo4j: traverse projection query failed: #{inspect(reason)}"
+      end
+    end
+  end
+
+  # v1 single-valued: the first reached node (or nil when none reached).
+  defp project_reached(resource, dest_nodes) do
+    case Enum.reject(dest_nodes, &is_nil/1) do
+      [] -> nil
+      [node | _] -> project_reached_node(resource, node)
+    end
+  end
+
+  defp project_reached_node(resource, node) do
+    case AshNeo4j.worlds(%{__metadata__: %{labels: node.labels}}) do
+      [{_domain, concrete} | _] ->
+        case convert_node_to_resource(concrete, node) do
+          {:ok, record} -> record
+          _ -> AshNeo4j.Unknown.new(resource, :projection_failed, %{labels: node.labels})
+        end
+
+      [] ->
+        AshNeo4j.Unknown.new(resource, :no_concrete_world, %{labels: node.labels})
+    end
+  end
+
   defp apply_calculations_to_records(records, [], _resource), do: {:ok, records}
 
   defp apply_calculations_to_records(records, calculations, resource) do
