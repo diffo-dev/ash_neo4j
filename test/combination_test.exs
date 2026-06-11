@@ -11,7 +11,6 @@ defmodule AshNeo4j.CombinationTest do
   """
   use ExUnit.Case, async: true
 
-  require Ash.Query
   require Ash.Expr
   import Ash.Expr
 
@@ -169,7 +168,6 @@ defmodule AshNeo4j.CombinationCypher25Test do
   """
   use ExUnit.Case, async: false
 
-  require Ash.Query
   import Ash.Expr
 
   alias AshNeo4j.Cypher

@@ -8,7 +8,6 @@ defmodule AshNeo4j.StateMachineTest do
   alias AshNeo4j.BoltyHelper
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.StateMachine
-  require Ash.Query
 
   setup_all do
     BoltyHelper.start()
