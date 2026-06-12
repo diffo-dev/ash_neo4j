@@ -64,7 +64,9 @@ defmodule AshNeo4j do
   > construction; if real use shows otherwise, a supervised ETS index is the
   > follow-up.
   """
-  @spec worlds(Ash.Resource.record()) :: [world()]
+  # Total over any term: a read record (or a synthetic `%{__metadata__: %{labels:
+  # …}}` map in tests) resolves; anything else yields `[]`.
+  @spec worlds(term()) :: [world()]
   def worlds(record)
 
   def worlds(%{__metadata__: %{labels: labels}}) when is_list(labels) do

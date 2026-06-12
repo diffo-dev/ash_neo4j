@@ -598,7 +598,7 @@ defmodule AshNeo4j.QueryHelper do
 
     case name && Ash.Resource.Info.attribute(module, name) do
       %{constraints: constraints} ->
-        case Keyword.get(constraints || [], :geo_types) do
+        case Keyword.get(constraints, :geo_types) do
           types when is_list(types) -> types
           type when is_atom(type) -> [type]
           _ -> []
@@ -629,7 +629,7 @@ defmodule AshNeo4j.QueryHelper do
     if name do
       case Ash.Resource.Info.attribute(module, name) do
         %{constraints: constraints} ->
-          case Keyword.get(constraints || [], :geo_types) do
+          case Keyword.get(constraints, :geo_types) do
             types when is_list(types) -> geo_type in types
             ^geo_type -> true
             _ -> false

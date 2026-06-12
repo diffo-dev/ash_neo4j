@@ -106,7 +106,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec update_node(atom(), map(), map(), list()) ::
+  @spec update_node(atom() | [atom()], map(), map(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -151,7 +151,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec relate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec relate_nodes(atom() | [atom()], map(), atom() | [atom()], map(), atom(), atom()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -173,7 +173,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec unrelate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec unrelate_nodes(atom() | [atom()], map(), atom() | [atom()], map(), atom(), atom()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -352,7 +352,7 @@ defmodule AshNeo4j.Neo4jHelper do
     end
   end
 
-  @spec relate_nodes(atom(), map(), list()) ::
+  @spec relate_nodes(atom() | [atom()], map(), list()) ::
           {:error, bitstring()}
           | :ok
   @doc """
