@@ -138,7 +138,7 @@ defmodule AshNeo4j.Vector do
   defp resolve_dimensions(attribute, attr) do
     case attribute.type do
       AshNeo4j.Type.Vector ->
-        case Keyword.get(attribute.constraints || [], :dimensions) do
+        case Keyword.get(attribute.constraints, :dimensions) do
           nil ->
             {:error,
              "AshNeo4j.Vector: attribute #{inspect(attr)} has no :dimensions constraint — " <>
