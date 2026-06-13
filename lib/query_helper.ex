@@ -67,16 +67,18 @@ defmodule AshNeo4j.QueryHelper do
         build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
       end)
 
-    {terms, sort_params} = sort_terms(ash_query, mapping)
+    with nil <- Enum.find(branch_queries, &match?({:error, _}, &1)) do
+      {terms, sort_params} = sort_terms(ash_query, mapping)
 
-    query =
-      branch_queries
-      |> Query.combination_block(union_type: union_type)
-      |> Query.merge_params(sort_params)
-      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-      |> Query.add_order_by(terms)
+      query =
+        branch_queries
+        |> Query.combination_block(union_type: union_type)
+        |> Query.merge_params(sort_params)
+        |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+        |> Query.add_order_by(terms)
 
-    run_cypher_query(query)
+      run_cypher_query(query)
+    end
   end
 
   defp run_in_memory_combination(ash_query, mapping, branch_dl_queries, all_types) do
@@ -84,14 +86,9 @@ defmodule AshNeo4j.QueryHelper do
       branch_dl_queries
       |> Enum.with_index()
       |> Enum.map(fn {branch_dl_query, idx} ->
-        query = build_branch_query(branch_dl_query, mapping, "b#{idx}_", :ids)
-
-        case Cypher.run(query) do
-          {:ok, %Bolty.Response{results: results}} ->
-            {:ok, MapSet.new(results, &Map.get(&1, "sid"))}
-
-          {:error, _} = err ->
-            err
+        with %Query{} = query <- build_branch_query(branch_dl_query, mapping, "b#{idx}_", :ids),
+             {:ok, %Bolty.Response{results: results}} <- Cypher.run(query) do
+          {:ok, MapSet.new(results, &Map.get(&1, "sid"))}
         end
       end)
 
@@ -174,17 +171,20 @@ defmodule AshNeo4j.QueryHelper do
 
   defp classify_combination(_), do: {:error, "AshNeo4j: combination_of must start with :base"}
 
-  # builder: :nodes | :ids — which branch_node_read variant to use
+  # builder: :nodes | :ids — which branch_node_read variant to use.
+  # Returns the branch Cypher.Query, or `{:error, _}` if a branch predicate
+  # can't be formed (threaded up by the combination runners).
   defp build_branch_query(branch_dl_query, %ResourceMapping{} = mapping, param_prefix, builder) do
-    conditions = extract_branch_conditions(branch_dl_query, mapping)
-    build = if builder == :ids, do: &Query.branch_node_read_ids/3, else: &Query.branch_node_read/3
-    build.(mapping.label_pair, conditions, param_prefix: param_prefix)
+    with {:ok, conditions} <- extract_branch_conditions(branch_dl_query, mapping) do
+      build = if builder == :ids, do: &Query.branch_node_read_ids/3, else: &Query.branch_node_read/3
+      build.(mapping.label_pair, conditions, param_prefix: param_prefix)
+    end
   end
 
   defp extract_branch_conditions(branch_dl_query, %ResourceMapping{} = mapping) do
     case branch_dl_query.filter do
       nil ->
-        []
+        {:ok, []}
 
       filter ->
         simple_filter = Ash.Filter.to_simple_filter(filter, skip_invalid?: true)
@@ -317,7 +317,9 @@ defmodule AshNeo4j.QueryHelper do
        })
        when is_number(threshold) do
     spatial_traversal(mapping, chain, fn reached ->
-      {point_property(reached, field), :st_dwithin, {to_geo_param!(reached, field, test_point), threshold}, false}
+      geo_condition(reached, field, test_point, fn param ->
+        {point_property(reached, field), :st_dwithin, {param, threshold}, false}
+      end)
     end)
   end
 
@@ -328,7 +330,9 @@ defmodule AshNeo4j.QueryHelper do
        })
        when distance in [AshNeo4j.Functions.StDistance, AshNeo4j.Functions.StDistanceInMeters] and is_number(threshold) do
     spatial_traversal(mapping, chain, fn reached ->
-      {point_property(reached, field), :st_distance, {operator, to_geo_param!(reached, field, test_point), threshold}, false}
+      geo_condition(reached, field, test_point, fn param ->
+        {point_property(reached, field), :st_distance, {operator, param, threshold}, false}
+      end)
     end)
   end
 
@@ -358,6 +362,7 @@ defmodule AshNeo4j.QueryHelper do
     else
       case condition_fn.(ResourceInfo.mapping(reached)) do
         nil -> unresolvable(mapping, :unmapped_property, %{reached: reached})
+        {:error, _} = error -> error
         condition -> traversal_query(mapping, segments, [condition])
       end
     end
@@ -482,8 +487,9 @@ defmodule AshNeo4j.QueryHelper do
 
     cond do
       Enum.empty?(relationship_predicates) ->
-        conditions = to_conditions(mapping, property_predicates)
-        Query.node_read_filtered(mapping.label_pair, conditions)
+        with {:ok, conditions} <- to_conditions(mapping, property_predicates) do
+          Query.node_read_filtered(mapping.label_pair, conditions)
+        end
 
       length(relationship_predicates) == 1 ->
         predicate = hd(relationship_predicates)
@@ -524,15 +530,17 @@ defmodule AshNeo4j.QueryHelper do
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_distance, {op, param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_distance, {op, param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
@@ -567,8 +575,9 @@ defmodule AshNeo4j.QueryHelper do
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_dwithin, {to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_dwithin, {param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
@@ -587,7 +596,26 @@ defmodule AshNeo4j.QueryHelper do
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil
     end)
-    |> Enum.reject(&is_nil/1)
+    |> finalize_conditions()
+  end
+
+  # The condition list, or the first `{:error, _}` a builder produced (e.g. a
+  # geo dimension mismatch) — so the data layer returns it rather than running a
+  # query missing that predicate (#350).
+  defp finalize_conditions(mapped) do
+    case Enum.find(mapped, &match?({:error, _}, &1)) do
+      {:error, _} = error -> error
+      nil -> {:ok, Enum.reject(mapped, &is_nil/1)}
+    end
+  end
+
+  # Builds a spatial condition from a dimension-checked geo param, or returns the
+  # `{:error, %GeoDimensionMismatch{}}` to thread up.
+  defp geo_condition(mapping, ref, value, builder) do
+    case to_geo_param(mapping, ref, value) do
+      {:error, _} = error -> error
+      {:ok, param} -> builder.(param)
+    end
   end
 
   # True when the referenced attribute is a Point-shaped Geo attribute —
@@ -605,19 +633,19 @@ defmodule AshNeo4j.QueryHelper do
   # silently drops rows) for a 2D/3D mix, so a mismatch raises
   # `AshNeo4j.Error.GeoDimensionMismatch` here instead (#270). Bridge worlds
   # explicitly with `AshNeo4j.Geo.force_2d/1`.
-  defp to_geo_param!(mapping, ref, value) do
+  defp to_geo_param(mapping, ref, value) do
     types = geo_types_of(mapping, ref)
     vd = value_dim(value)
 
     cond do
       vd == 3 and :point in types and :point_z not in types ->
-        raise AshNeo4j.Error.GeoDimensionMismatch, {2, 3}
+        {:error, AshNeo4j.Error.GeoDimensionMismatch.exception(attr_dim: 2, value_dim: 3)}
 
       vd == 2 and :point_z in types and :point not in types ->
-        raise AshNeo4j.Error.GeoDimensionMismatch, {3, 2}
+        {:error, AshNeo4j.Error.GeoDimensionMismatch.exception(attr_dim: 3, value_dim: 2)}
 
       true ->
-        to_param_value(value)
+        {:ok, to_param_value(value)}
     end
   end
 
