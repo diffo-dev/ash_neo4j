@@ -79,4 +79,25 @@ defmodule AshNeo4j.TraverseLiveTest do
 
     assert titles == ["by-alice"]
   end
+
+  test "reverse-terminal field access is typed through the real mapping, not a camelCase guess (#336)" do
+    # Author.pen_name is sourced to the property `writerAlias` (not `penName`),
+    # so this only matches if the reverse-reached node resolves to Author and
+    # uses its mapping. The old camelCase fallback queried `penName` — and the
+    # earlier `:name` reverse test passed only because `:name -> "name"` by luck.
+    ghost = Ash.create!(Author, %{name: "G. Writer", pen_name: "Ghost"})
+    public = Ash.create!(Author, %{name: "P. Writer", pen_name: "Public"})
+    {:ok, _} = Post |> Ash.Changeset.for_create(:create, %{title: "ghosted", written_by: ghost.id}) |> Ash.create()
+    {:ok, _} = Post |> Ash.Changeset.for_create(:create, %{title: "open", written_by: public.id}) |> Ash.create()
+
+    chain = [{:reverse, {:edge, :WROTE, :Author}}]
+
+    titles =
+      Post
+      |> Ash.Query.filter(traverse(^chain, :pen_name) == "Ghost")
+      |> Ash.read!()
+      |> Enum.map(& &1.title)
+
+    assert titles == ["ghosted"]
+  end
 end

@@ -29,6 +29,10 @@ defmodule AshNeo4j.Test.Resource.Author do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
+    # #336 — a custom-sourced attribute whose property name (`writerAlias`) is
+    # NOT camelCase(:pen_name) (`penName`), so reverse-terminal typing tests can
+    # prove the reached node uses the real mapping, not a camelCase guess.
+    attribute :pen_name, :string, public?: true, source: :writerAlias
     attribute :post_id, :uuid
   end
 
