@@ -34,21 +34,17 @@ end
 
 defmodule AshNeo4j.Error.Unsupported3DGeometry do
   @moduledoc """
-  Raised when a 3D areal or linear geometry (`%Geo.PolygonZ{}`,
+  Returned (never raised) when a 3D areal or linear geometry (`%Geo.PolygonZ{}`,
   `%Geo.LineStringZ{}`, …) is written. #270 Phase 1 supports 3D **points**
   (`%Geo.PointZ{}`) only; 3D areal/linear geometries are deferred to Phase 2,
   because exact 3D containment/distance needs a model the 2D `topo` refinement
   cannot provide. Storing 2D bbox companions would silently drop the z.
   """
-  defexception [:message]
+  use Splode.Error, fields: [:geometry], class: :invalid
 
-  @impl true
-  def exception(%mod{}) do
-    %__MODULE__{
-      message:
-        "#{inspect(mod)} (3D areal/linear geometry) is not supported yet — #270 Phase 1 covers " <>
-          "Geo.PointZ only. Use a 2D geometry, or project to 2D, until 3D areal support lands."
-    }
+  def message(%{geometry: geometry}) do
+    "#{inspect(geometry)} (3D areal/linear geometry) is not supported yet — #270 Phase 1 covers " <>
+      "Geo.PointZ only. Use a 2D geometry, or project to 2D, until 3D areal support lands."
   end
 end
 
