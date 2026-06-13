@@ -55,3 +55,23 @@ defmodule AshNeo4j.Error.Unsupported3DGeometry do
   end
 end
 
+defmodule AshNeo4j.Error.UnresolvableTraversal do
+  @moduledoc """
+  **Returned** (never raised) when a `traverse(^chain, …)` filter predicate can't
+  be formed because the current graph view can't resolve part of it — a reached
+  node whose label resolves to no loaded resource, or a field that isn't a
+  mapped property of the reached resource.
+
+  The filter-context counterpart to `AshNeo4j.Unknown` (the value-context
+  "couldn't determine"): same `{world, reason, context}` shape. A data layer
+  returns this as `{:error, error}` and never raises — `:reason` is a structural
+  atom, `:context` is diagnostic.
+  """
+  use Splode.Error, fields: [:world, :reason, :context], class: :invalid
+
+  def message(%{world: world, reason: reason, context: context}) do
+    base = "cannot push down a traverse filter on #{inspect(world)} — #{reason}"
+    if context in [nil, %{}], do: base, else: base <> " (#{inspect(context)})"
+  end
+end
+

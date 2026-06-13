@@ -27,16 +27,21 @@ defmodule AshNeo4j.QueryHelper do
 
   defp run_simple_query(ash_query) do
     mapping = ResourceInfo.mapping(ash_query.resource)
-    {terms, sort_params} = sort_terms(ash_query, mapping)
 
-    query =
-      ash_query
-      |> build_query(mapping)
-      |> Query.merge_params(sort_params)
-      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-      |> Query.add_order_by(terms)
+    # A predicate we couldn't form (e.g. an unresolvable traverse, #342) is an
+    # `{:error, _}` that doesn't match `%Query{}` — `with` passes it straight
+    # through rather than running a fabricated query.
+    with %Query{} = base <- build_query(ash_query, mapping) do
+      {terms, sort_params} = sort_terms(ash_query, mapping)
 
-    run_cypher_query(query)
+      query =
+        base
+        |> Query.merge_params(sort_params)
+        |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+        |> Query.add_order_by(terms)
+
+      run_cypher_query(query)
+    end
   end
 
   defp run_combination_query(ash_query, combinations) do
@@ -290,8 +295,18 @@ defmodule AshNeo4j.QueryHelper do
          right: value
        }) do
     {segments, reached} = resolve_chain(mapping.module, chain)
-    condition = {reached_property(reached, field), operator, to_param_value(value), false}
-    traversal_query(mapping, segments, [condition])
+
+    cond do
+      is_nil(reached) ->
+        unresolvable(mapping, :unresolved_reached, %{chain: chain, field: field})
+
+      not mapped_property?(reached, field) ->
+        unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
+
+      true ->
+        condition = {property_name(ResourceInfo.mapping(reached), field), operator, to_param_value(value), false}
+        traversal_query(mapping, segments, [condition])
+    end
   end
 
   # Composition (#330/#332): a spatial predicate with the traversal as its geometry
@@ -327,10 +342,10 @@ defmodule AshNeo4j.QueryHelper do
     end)
   end
 
-  # Unsupported traverse predicate shape — fall back to an unfiltered read.
-  defp build_traversal_query(%ResourceMapping{} = mapping, _predicate) do
-    Logger.debug("AshNeo4j.QueryHelper: unsupported traverse predicate, falling back to node_read")
-    Query.node_read(mapping.label_pair)
+  # Unsupported traverse predicate shape — can't form it, so return an error
+  # rather than a fabricated/unfiltered read (#342).
+  defp build_traversal_query(%ResourceMapping{} = mapping, predicate) do
+    unresolvable(mapping, :unsupported_predicate, %{predicate: predicate})
   end
 
   # Resolves the chain + reached resource, applies `condition_fn` against the
@@ -338,55 +353,58 @@ defmodule AshNeo4j.QueryHelper do
   defp spatial_traversal(%ResourceMapping{} = mapping, chain, condition_fn) do
     {segments, reached} = resolve_chain(mapping.module, chain)
 
-    with %ResourceMapping{} = reached_mapping <- reached && ResourceInfo.mapping(reached),
-         condition when not is_nil(condition) <- condition_fn.(reached_mapping) do
-      traversal_query(mapping, segments, [condition])
+    if is_nil(reached) do
+      unresolvable(mapping, :unresolved_reached, %{chain: chain})
     else
-      _ ->
-        Logger.debug("AshNeo4j.QueryHelper: spatial traverse needs a resolvable reached geo attribute")
-        Query.node_read(mapping.label_pair)
+      case condition_fn.(ResourceInfo.mapping(reached)) do
+        nil -> unresolvable(mapping, :unmapped_property, %{reached: reached})
+        condition -> traversal_query(mapping, segments, [condition])
+      end
     end
   end
 
-  defp traversal_query(%ResourceMapping{} = mapping, [], _conditions) do
-    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
-    Query.node_read(mapping.label_pair)
-  end
+  defp traversal_query(%ResourceMapping{} = mapping, [], _conditions),
+    do: unresolvable(mapping, :empty_chain, %{})
 
   defp traversal_query(%ResourceMapping{} = mapping, segments, conditions) do
     Query.traversal_read(mapping.label_pair, segments, conditions)
   end
 
-  defp traversal_predicate(%ResourceMapping{} = mapping, [], _agg) do
-    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
-    Query.node_read(mapping.label_pair)
-  end
+  defp traversal_predicate(%ResourceMapping{} = mapping, [], _agg),
+    do: unresolvable(mapping, :empty_chain, %{})
 
   defp traversal_predicate(%ResourceMapping{} = mapping, segments, agg) do
     Query.traversal_predicate_read(mapping.label_pair, segments, agg)
   end
 
-  defp traversal_aggregate(%ResourceMapping{} = mapping, [], _reached, _agg, _field, _op, _value) do
-    Logger.debug("AshNeo4j.QueryHelper: empty traverse chain")
-    Query.node_read(mapping.label_pair)
-  end
+  defp traversal_aggregate(%ResourceMapping{} = mapping, [], _reached, _agg, _field, _op, _value),
+    do: unresolvable(mapping, :empty_chain, %{})
 
   # No resolved reached resource (e.g. reverse-terminal chain, #336) — can't map
-  # the reached field to a property. Fall back to an unfiltered read.
-  defp traversal_aggregate(%ResourceMapping{} = mapping, _segments, nil, _agg, _field, _op, _value) do
-    Logger.debug("AshNeo4j.QueryHelper: traverse aggregate needs a resolvable reached field (forward chain)")
-    Query.node_read(mapping.label_pair)
-  end
+  # the reached field to a property.
+  defp traversal_aggregate(%ResourceMapping{} = mapping, _segments, nil, agg, field, _op, _value),
+    do: unresolvable(mapping, :unresolved_reached, %{field: field, aggregate: agg})
 
   defp traversal_aggregate(%ResourceMapping{} = mapping, segments, reached, agg, field, op, value) do
-    prop = property_name(ResourceInfo.mapping(reached), field)
-    Query.traversal_aggregate_read(mapping.label_pair, segments, {agg, prop, op, to_param_value(value)})
+    if mapped_property?(reached, field) do
+      prop = property_name(ResourceInfo.mapping(reached), field)
+      Query.traversal_aggregate_read(mapping.label_pair, segments, {agg, prop, op, to_param_value(value)})
+    else
+      unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
+    end
   end
 
-  # The reached node's property name. With a resolved reached resource we honour
-  # its property mapping; for an explicit-edge chain (no resource) we camelCase.
-  defp reached_property(nil, field), do: field |> AshNeo4j.Util.to_camel_case() |> to_string()
-  defp reached_property(resource, field), do: property_name(ResourceInfo.mapping(resource), field)
+  # Builds the `{:error, %UnresolvableTraversal{}}` a data layer returns when a
+  # traverse predicate can't be formed — `:reason` distinguishes the failure
+  # mode, `:context` carries the specifics.
+  defp unresolvable(%ResourceMapping{module: module}, reason, context) do
+    {:error, AshNeo4j.Error.UnresolvableTraversal.exception(world: module, reason: reason, context: context)}
+  end
+
+  # True when `field` resolves to a property in the reached resource's mapping.
+  defp mapped_property?(resource, field) do
+    Keyword.has_key?(ResourceInfo.mapping(resource).properties, field)
+  end
 
   @doc """
   Resolves a hop chain to `{[{edge_label, direction, dest_label}], reached_resource}`,
