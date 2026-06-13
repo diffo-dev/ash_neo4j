@@ -331,6 +331,17 @@ as a follow-up comment, then leave it with the upstream maintainers.
   worst outcome; `Unknown` is the honest "couldn't determine", complementary to `Ash.NotLoaded`'s
   "not fetched yet". See `AshNeo4j.Calculations.ProjectedTraversal` for the producing path.
 
+- **Raising from the data-layer read/write path.** An Ash data layer must **return `{:error, error}`**,
+  never `raise`, from `run_query` / `create` / `update` / `destroy` and the query-build helpers they
+  call. Raising bypasses Ash's `{:ok | :error}` contract and Splode's error accumulation, so the
+  caller gets an exception instead of a classifiable, accumulable error. Use a **Splode error**
+  (`use Splode.Error`, classed `:invalid` / `:unsupported` / …), returned and threaded up through the
+  build path. This is the filter-context counterpart to returning `AshNeo4j.Unknown` in the value
+  context — same "couldn't determine", correct form for each context. The **only** places that
+  correctly raise are *not* the runtime data path: compile-time DSL verifiers (`Spark.Error.DslError`)
+  and test-infra guards (e.g. `AshNeo4j.Sandbox`). (Past regressions: the Geo / Cypher-25 raises
+  tracked in the data-layer-raises bug.)
+
 - **Not using `mapping.label_pair` for MATCH.** All read, update, delete, and aggregate queries
   must use `mapping.label_pair` (`[domain_label, module_label]`) as the source node pattern.
   Using `mapping.label` alone matches every resource that extends the same fragment. Using
