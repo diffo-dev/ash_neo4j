@@ -41,6 +41,13 @@ defmodule AshNeo4j.Wgs84_3DTest do
     e -> assert Exception.message(e) =~ expected
   end
 
+  # The data layer returns (never raises) a Splode error for an unformable
+  # query (#350) — assert the returned error's message.
+  defp assert_error_message(expected, fun) do
+    assert {:error, error} = fun.()
+    assert Exception.message(error) =~ expected
+  end
+
   describe "GeoJson dimension-aware srid" do
     test "decodes a 3D Point with srid 4979" do
       json = AshNeo4j.GeoJson.encode!(pz(151.0, -33.0, 50.0))
@@ -107,14 +114,14 @@ defmodule AshNeo4j.Wgs84_3DTest do
   end
 
   describe "strict dimension policy (#270)" do
-    test "3D value against a 2D attribute raises GeoDimensionMismatch" do
-      assert_message "dimension mismatch: a 3D value against a 2D attribute", fn ->
+    test "3D value against a 2D attribute returns a GeoDimensionMismatch error" do
+      assert_error_message "dimension mismatch: a 3D value against a 2D attribute", fn ->
         Place |> Ash.Query.filter(st_distance(location, ^pz(151.0, -33.0, 5.0)) < 1000) |> Ash.read()
       end
     end
 
-    test "2D value against a 3D attribute raises GeoDimensionMismatch" do
-      assert_message "dimension mismatch: a 2D value against a 3D attribute", fn ->
+    test "2D value against a 3D attribute returns a GeoDimensionMismatch error" do
+      assert_error_message "dimension mismatch: a 2D value against a 3D attribute", fn ->
         Place |> Ash.Query.filter(st_distance(tower, ^p2(151.0, -33.0)) < 1000) |> Ash.read()
       end
     end

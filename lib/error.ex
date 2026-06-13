@@ -12,26 +12,23 @@ end
 
 defmodule AshNeo4j.Error.GeoDimensionMismatch do
   @moduledoc """
-  Raised when a spatial operation combines geometries of different coordinate
-  dimensions (2D vs 3D) — e.g. a 3D `%Geo.PointZ{}` against a 2D attribute, or
-  vice versa. Neo4j silently returns `null` for mixed-CRS operations (which then
-  drops rows in a `WHERE`), so AshNeo4j refuses up front (#270).
+  Returned (never raised) when a spatial operation combines geometries of
+  different coordinate dimensions (2D vs 3D) — e.g. a 3D `%Geo.PointZ{}` against
+  a 2D attribute, or vice versa. Neo4j silently returns `null` for mixed-CRS
+  operations (which then drops rows in a `WHERE`), so AshNeo4j refuses up front
+  (#270) by returning `{:error, error}`.
 
   Bridge worlds explicitly with a downward projection
   (`AshNeo4j.Geo.force_2d/1`) — collapse the 3D operand to its 2D footprint
   and evaluate in 2D. There is no implicit 2D→3D lift (a height cannot be
   fabricated).
   """
-  defexception [:message]
+  use Splode.Error, fields: [:attr_dim, :value_dim], class: :invalid
 
-  @impl true
-  def exception({attr_dim, value_dim}) do
-    %__MODULE__{
-      message:
-        "spatial dimension mismatch: a #{value_dim}D value against a #{attr_dim}D attribute. " <>
-          "Project the 3D operand to 2D with AshNeo4j.Geo.force_2d/1 to evaluate in the 2D world, " <>
-          "or use genuinely matching dimensions."
-    }
+  def message(%{attr_dim: attr_dim, value_dim: value_dim}) do
+    "spatial dimension mismatch: a #{value_dim}D value against a #{attr_dim}D attribute. " <>
+      "Project the 3D operand to 2D with AshNeo4j.Geo.force_2d/1 to evaluate in the 2D world, " <>
+      "or use genuinely matching dimensions."
   end
 end
 
