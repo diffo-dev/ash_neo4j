@@ -412,8 +412,15 @@ defmodule AshNeo4j.QueryHelper do
     case ResourceInfo.node_relationship(resource, rel_name) do
       {_name, edge_label, edge_direction, dest_label} ->
         cypher_direction = if direction == :reverse, do: flip_direction(edge_direction), else: edge_direction
-        next = relationship_destination(resource, rel_name)
-        dest = if direction == :forward, do: dest_label, else: nil
+
+        # A `relate` edge is declared *out of* this resource, so `:reverse` of it
+        # has no well-defined reached type — the honest typed reverse is the
+        # explicit-edge form. Forward resolves to the relationship's destination.
+        {dest, next} =
+          if direction == :forward,
+            do: {dest_label, relationship_destination(resource, rel_name)},
+            else: {nil, nil}
+
         {{edge_label, cypher_direction, dest}, next}
 
       _ ->
@@ -421,9 +428,12 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  # Explicit edge hop — `{:edge, label}` or `{:edge, label, dest_label}`.
+  # Explicit edge hop — `{:edge, label}` or `{:edge, label, dest_label}`. A given
+  # dest label resolves to its resource so the reached node is typed.
   defp resolve_hop(_resource, {direction, {:edge, label}}), do: {{label, hop_direction(direction), nil}, nil}
-  defp resolve_hop(_resource, {direction, {:edge, label, dest}}), do: {{label, hop_direction(direction), dest}, nil}
+
+  defp resolve_hop(_resource, {direction, {:edge, label, dest}}),
+    do: {{label, hop_direction(direction), dest}, AshNeo4j.resource_for_label(dest)}
 
   defp relationship_destination(resource, rel_name) do
     case Ash.Resource.Info.relationship(resource, rel_name) do
