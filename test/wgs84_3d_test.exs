@@ -32,17 +32,9 @@ defmodule AshNeo4j.Wgs84_3DTest do
   defp pz(lng, lat, h), do: %Geo.PointZ{coordinates: {lng, lat, h}, srid: 4979}
   defp p2(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
-  # The data layer raises during query-build / dump; Ash wraps it (Ash.Error.*),
-  # but the original message is preserved — assert on that.
-  defp assert_message(expected, fun) do
-    fun.()
-    flunk("expected an exception, got none")
-  rescue
-    e -> assert Exception.message(e) =~ expected
-  end
-
-  # The data layer returns (never raises) a Splode error for an unformable
-  # query (#350) — assert the returned error's message.
+  # The data layer returns (never raises) a Splode error for an unformable query
+  # or unsupported write (#350); Ash wraps it but preserves the message — assert
+  # on the returned error.
   defp assert_error_message(expected, fun) do
     assert {:error, error} = fun.()
     assert Exception.message(error) =~ expected
@@ -143,14 +135,14 @@ defmodule AshNeo4j.Wgs84_3DTest do
   end
 
   describe "3D areal/linear deferred to Phase 2" do
-    test "storing a PolygonZ raises Unsupported3DGeometry" do
+    test "storing a PolygonZ returns an Unsupported3DGeometry error" do
       polyz = %Geo.PolygonZ{
         coordinates: [[{151.0, -34.0, 0.0}, {151.5, -34.0, 0.0}, {151.5, -33.0, 0.0}, {151.0, -34.0, 0.0}]],
         srid: 4979
       }
 
-      assert_message "3D areal/linear geometry) is not supported yet", fn ->
-        Place |> Ash.create!(%{name: "bad", shape: polyz})
+      assert_error_message "3D areal/linear geometry) is not supported yet", fn ->
+        Place |> Ash.create(%{name: "bad", shape: polyz})
       end
     end
   end

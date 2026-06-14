@@ -305,10 +305,12 @@ defmodule AshNeo4j.DataLayer do
     id_attributes = Map.take(changeset.attributes, primary_keys)
 
     result =
-      if Enum.empty?(id_attributes) do
-        {:error, "no values supplied for primary keys #{primary_keys}"}
-      else
-        create_from_attributes(mapping, changeset.attributes)
+      with :ok <- validate_writable_geo(mapping, changeset.attributes) do
+        if Enum.empty?(id_attributes) do
+          {:error, "no values supplied for primary keys #{primary_keys}"}
+        else
+          create_from_attributes(mapping, changeset.attributes)
+        end
       end
 
     Logger.debug("""
@@ -379,6 +381,13 @@ defmodule AshNeo4j.DataLayer do
     """)
 
     mapping = ResourceInfo.mapping(resource)
+
+    with :ok <- validate_writable_geo(mapping, changeset.attributes) do
+      do_update(resource, changeset, mapping)
+    end
+  end
+
+  defp do_update(resource, changeset, %ResourceMapping{} = mapping) do
     subject_id = id_properties(mapping, changeset.data)
     subject_label = mapping.label_pair
 
@@ -1138,6 +1147,30 @@ defmodule AshNeo4j.DataLayer do
     end
   end
 
+  # Rejects a write up front (#350) when an attribute carries a 3D areal/linear
+  # geometry (PolygonZ, LineStringZ, …) — #270 supports 3D points only, and a 2D
+  # bbox companion would silently drop the z. Walks top-level and nested geo via
+  # `geo_walk`; returns `:ok` or `{:error, %Unsupported3DGeometry{}}`.
+  defp validate_writable_geo(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
+    Enum.find_value(mapping.properties, :ok, fn {key, translated_key} ->
+      case Map.get(attributes, key) do
+        nil ->
+          nil
+
+        value ->
+          value
+          |> geo_walk([translated_key])
+          |> Enum.find_value(fn {_path, geo} -> unsupported_3d_geometry(geo) end)
+      end
+    end)
+  end
+
+  defp unsupported_3d_geometry(%struct{} = geo) do
+    if struct != Geo.PointZ and geo_dim(geo) == 3 do
+      {:error, AshNeo4j.Error.Unsupported3DGeometry.exception(geometry: struct)}
+    end
+  end
+
   defp dump_properties(%ResourceMapping{} = mapping, attributes) when is_map(attributes) do
     mapping.properties
     |> Enum.reduce(%{}, fn {key, translated_key}, acc ->
@@ -1226,7 +1259,11 @@ defmodule AshNeo4j.DataLayer do
       # #270 Phase 2 — silently storing 2D bbox companions would drop the z and
       # mislead spatial queries, so refuse explicitly rather than degrade.
       AshGeo.is_geo(geo.__struct__) and geo_dim(geo) == 3 ->
-        raise AshNeo4j.Error.Unsupported3DGeometry, geo
+        # validate_writable_geo rejects these before write (#350), so this is
+        # unreachable in practice — skip the (unrepresentable in 2D) indexable
+        # sidecar rather than raise or drop the z via a bbox. The full geometry
+        # is still preserved in the `.json` canonical written by promote_geo/3.
+        acc
 
       AshGeo.is_geo(geo.__struct__) ->
         [west, south, east, north] = AshNeo4j.GeoJson.bbox(geo)
