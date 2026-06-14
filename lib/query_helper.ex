@@ -31,9 +31,8 @@ defmodule AshNeo4j.QueryHelper do
     # A predicate we couldn't form (e.g. an unresolvable traverse, #342) is an
     # `{:error, _}` that doesn't match `%Query{}` — `with` passes it straight
     # through rather than running a fabricated query.
-    with %Query{} = base <- build_query(ash_query, mapping) do
-      {terms, sort_params} = sort_terms(ash_query, mapping)
-
+    with %Query{} = base <- build_query(ash_query, mapping),
+         {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
       query =
         base
         |> Query.merge_params(sort_params)
@@ -67,9 +66,8 @@ defmodule AshNeo4j.QueryHelper do
         build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
       end)
 
-    with nil <- Enum.find(branch_queries, &match?({:error, _}, &1)) do
-      {terms, sort_params} = sort_terms(ash_query, mapping)
-
+    with nil <- Enum.find(branch_queries, &match?({:error, _}, &1)),
+         {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
       query =
         branch_queries
         |> Query.combination_block(union_type: union_type)
@@ -102,16 +100,16 @@ defmodule AshNeo4j.QueryHelper do
         if keep_ids == [] do
           {:ok, []}
         else
-          {terms, sort_params} = sort_terms(ash_query, mapping)
+          with {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
+            final =
+              mapping.label_pair
+              |> Query.node_read_by_ids(keep_ids)
+              |> Query.merge_params(sort_params)
+              |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+              |> Query.add_order_by(terms)
 
-          final =
-            mapping.label_pair
-            |> Query.node_read_by_ids(keep_ids)
-            |> Query.merge_params(sort_params)
-            |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-            |> Query.add_order_by(terms)
-
-          run_cypher_query(final)
+            run_cypher_query(final)
+          end
         end
 
       {:error, reason} ->
@@ -582,15 +580,15 @@ defmodule AshNeo4j.QueryHelper do
 
       %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        {prop, :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          {property_name(mapping, ref), :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+        end
 
       %{operator: op, left: %AshNeo4j.Functions.VectorCosineDistance{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        {prop, :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          {property_name(mapping, ref), :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
+        end
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
@@ -726,15 +724,16 @@ defmodule AshNeo4j.QueryHelper do
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do
     case ash_query.sort do
       sort when sort in [nil, []] ->
-        {[], %{}}
+        {:ok, {[], %{}}}
 
       sort ->
         sort
         |> Enum.with_index()
-        |> Enum.reduce({[], %{}}, fn {{name, order}, index}, {terms, params} ->
+        |> Enum.reduce_while({:ok, {[], %{}}}, fn {{name, order}, index}, {:ok, {terms, params}} ->
           case sort_term(mapping, name, order, index) do
-            nil -> {terms, params}
-            {term, term_params} -> {terms ++ [term], Map.merge(params, term_params)}
+            nil -> {:cont, {:ok, {terms, params}}}
+            {:error, _} = error -> {:halt, error}
+            {term, term_params} -> {:cont, {:ok, {terms ++ [term], Map.merge(params, term_params)}}}
           end
         end)
     end
@@ -745,11 +744,12 @@ defmodule AshNeo4j.QueryHelper do
   defp sort_term(mapping, %Ash.Query.Calculation{module: Ash.Resource.Calculation.Expression, opts: opts}, order, index) do
     case Keyword.get(opts, :expr) do
       %Ash.Query.Call{name: fname, args: [ref, query_vec]} when fname in [:vector_similarity, :vector_cosine_distance] ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
-        expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
-        {{expr, order}, %{key => to_vector_param(query_vec)}}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          prop = property_name(mapping, ref)
+          key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
+          expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
+          {{expr, order}, %{key => to_vector_param(query_vec)}}
+        end
 
       _ ->
         nil

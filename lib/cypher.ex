@@ -411,13 +411,17 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
-  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
-  any function that emits Cypher 25-only syntax.
+  `:ok` when the connected server supports Cypher 25 (negotiated server version
+  ≥ 2025.06), else `{:error, %AshNeo4j.Error.RequiresCypher25{}}`. Use at the top
+  of any function that emits Cypher 25-only syntax and thread the error up — a
+  data layer returns it, never raises.
   """
-  def require_cypher25!() do
-    unless BoltyHelper.cypher25?() do
-      raise AshNeo4j.Error.RequiresCypher25
+  @spec require_cypher25() :: :ok | {:error, struct()}
+  def require_cypher25() do
+    if BoltyHelper.cypher25?() do
+      :ok
+    else
+      {:error, AshNeo4j.Error.RequiresCypher25.exception([])}
     end
   end
 

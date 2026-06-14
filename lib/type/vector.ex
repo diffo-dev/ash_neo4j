@@ -16,7 +16,7 @@ defmodule AshNeo4j.Type.Vector do
   > #### Cypher 25 required {: .warning}
   > Vector operations require Cypher 25 (Neo4j ≥ 2025.06) — not Bolt 6.0. With
   > list storage and list query params, similarity search works over Bolt 5.8.
-  > This is an AshNeo4j-level requirement — see `AshNeo4j.Cypher.require_cypher25!/0`.
+  > This is an AshNeo4j-level requirement — see `AshNeo4j.Cypher.require_cypher25/0`.
 
   ## Constraints
 
