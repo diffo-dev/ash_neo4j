@@ -51,4 +51,18 @@ defmodule AshNeo4j.TraverseUnresolvableTest do
     result = Post |> Ash.Query.filter(traverse(^chain, :not_a_field) == "x") |> Ash.read()
     assert reason_of(result) == :unmapped_property
   end
+
+  test "unresolved_hop (filter): a rel-name hop naming no relate edge errors, not silently matches nothing" do
+    # `:not_a_relationship` is not a declared `relate` edge, so it can't be an
+    # edge label. `exists`/`count` don't inspect the reached node, so before #342
+    # this rendered a bogus edge label and silently matched nothing.
+    chain = [{:forward, :not_a_relationship}]
+    result = Post |> Ash.Query.filter(traverse(^chain, :exists) == true) |> Ash.read()
+    assert reason_of(result) == :unresolved_hop
+  end
+
+  test "unresolved_hop (projection): an unresolvable hop yields AshNeo4j.Unknown, not a fabricated edge" do
+    projected = AshNeo4j.DataLayer.project_traversal(Post, [%Post{id: "p1"}], [{:forward, :not_a_relationship}])
+    assert %{"p1" => %AshNeo4j.Unknown{reason: :unresolved_hop}} = projected
+  end
 end

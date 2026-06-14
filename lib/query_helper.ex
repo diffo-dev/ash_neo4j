@@ -256,9 +256,10 @@ defmodule AshNeo4j.QueryHelper do
          right: value
        })
        when operator in [:==, :!=] and is_boolean(value) do
-    {segments, _reached} = resolve_chain(mapping.module, chain)
-    exists? = if operator == :==, do: value, else: not value
-    traversal_predicate(mapping, segments, {:exists, exists?})
+    with {:ok, {segments, _reached}} <- chain_segments(mapping, chain) do
+      exists? = if operator == :==, do: value, else: not value
+      traversal_predicate(mapping, segments, {:exists, exists?})
+    end
   end
 
   # Cardinality over the reached set (#334): `traverse(^chain, :count) <op> n`.
@@ -268,8 +269,9 @@ defmodule AshNeo4j.QueryHelper do
          right: value
        })
        when operator in [:==, :!=, :<, :<=, :>, :>=] and is_integer(value) do
-    {segments, _reached} = resolve_chain(mapping.module, chain)
-    traversal_predicate(mapping, segments, {:count, operator, value})
+    with {:ok, {segments, _reached}} <- chain_segments(mapping, chain) do
+      traversal_predicate(mapping, segments, {:count, operator, value})
+    end
   end
 
   # Field aggregate over the reached set (#338): `traverse(^chain, {:min, :field}) <op> value`.
@@ -282,8 +284,9 @@ defmodule AshNeo4j.QueryHelper do
          right: value
        })
        when agg in [:min, :max, :avg, :sum] and operator in [:==, :!=, :<, :<=, :>, :>=] do
-    {segments, reached} = resolve_chain(mapping.module, chain)
-    traversal_aggregate(mapping, segments, reached, agg, field, operator, value)
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      traversal_aggregate(mapping, segments, reached, agg, field, operator, value)
+    end
   end
 
   # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
@@ -292,18 +295,18 @@ defmodule AshNeo4j.QueryHelper do
          left: %AshNeo4j.Functions.Traverse{arguments: [chain, field]},
          right: value
        }) do
-    {segments, reached} = resolve_chain(mapping.module, chain)
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      cond do
+        is_nil(reached) ->
+          unresolvable(mapping, :unresolved_reached, %{chain: chain, field: field})
 
-    cond do
-      is_nil(reached) ->
-        unresolvable(mapping, :unresolved_reached, %{chain: chain, field: field})
+        not mapped_property?(reached, field) ->
+          unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
 
-      not mapped_property?(reached, field) ->
-        unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
-
-      true ->
-        condition = {property_name(ResourceInfo.mapping(reached), field), operator, to_param_value(value), false}
-        traversal_query(mapping, segments, [condition])
+        true ->
+          condition = {property_name(ResourceInfo.mapping(reached), field), operator, to_param_value(value), false}
+          traversal_query(mapping, segments, [condition])
+      end
     end
   end
 
@@ -353,16 +356,25 @@ defmodule AshNeo4j.QueryHelper do
   # Resolves the chain + reached resource, applies `condition_fn` against the
   # reached mapping (`nil` = not applicable), then builds the traversal read.
   defp spatial_traversal(%ResourceMapping{} = mapping, chain, condition_fn) do
-    {segments, reached} = resolve_chain(mapping.module, chain)
-
-    if is_nil(reached) do
-      unresolvable(mapping, :unresolved_reached, %{chain: chain})
-    else
-      case condition_fn.(ResourceInfo.mapping(reached)) do
-        nil -> unresolvable(mapping, :unmapped_property, %{reached: reached})
-        {:error, _} = error -> error
-        condition -> traversal_query(mapping, segments, [condition])
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      if is_nil(reached) do
+        unresolvable(mapping, :unresolved_reached, %{chain: chain})
+      else
+        case condition_fn.(ResourceInfo.mapping(reached)) do
+          nil -> unresolvable(mapping, :unmapped_property, %{reached: reached})
+          {:error, _} = error -> error
+          condition -> traversal_query(mapping, segments, [condition])
+        end
       end
+    end
+  end
+
+  # resolve_chain + map an unresolved hop to a returned `UnresolvableTraversal`
+  # (#342), so the filter path never runs a query with a fabricated edge label.
+  defp chain_segments(%ResourceMapping{} = mapping, chain) do
+    case resolve_chain(mapping.module, chain) do
+      {:ok, result} -> {:ok, result}
+      {:error, {:unresolved_hop, hop}} -> unresolvable(mapping, :unresolved_hop, %{hop: hop, chain: chain})
     end
   end
 
@@ -410,22 +422,28 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   @doc """
-  Resolves a hop chain to `{[{edge_label, direction, dest_label}], reached_resource}`,
+  Resolves a hop chain to `{:ok, {[{edge_label, direction, dest_label}], reached_resource}}`,
   threading the current resource so relationship-name hops resolve at each step.
   `reached_resource` is `nil` once an explicit-edge hop breaks the resource chain.
 
-  Public so read-time consumers (e.g. the projection calculation) can turn a
-  `chain` opt into Cypher path segments for `Cypher.Query.related_nodes/4`.
+  Returns `{:error, {:unresolved_hop, hop}}` when a relationship-name hop names no
+  declared `relate` edge (so it can't be a Cypher edge label) — instead of
+  silently using the name as the label (#342). Public so read-time consumers
+  (e.g. the projection calculation) can turn a `chain` opt into Cypher path
+  segments for `Cypher.Query.related_nodes/4`.
   """
-  @spec resolve_chain(module(), list()) :: {[{atom(), atom(), atom() | nil}], module() | nil}
+  @spec resolve_chain(module(), list()) ::
+          {:ok, {[{atom(), atom(), atom() | nil}], module() | nil}} | {:error, {:unresolved_hop, term()}}
   def resolve_chain(resource, chain) when is_list(chain) do
-    Enum.reduce(chain, {[], resource}, fn hop, {acc, current} ->
-      {segment, next} = resolve_hop(current, hop)
-      {acc ++ [segment], next}
+    Enum.reduce_while(chain, {:ok, {[], resource}}, fn hop, {:ok, {acc, current}} ->
+      case resolve_hop(current, hop) do
+        {:error, _} = error -> {:halt, error}
+        {segment, next} -> {:cont, {:ok, {acc ++ [segment], next}}}
+      end
     end)
   end
 
-  def resolve_chain(_resource, _), do: {[], nil}
+  def resolve_chain(_resource, _), do: {:ok, {[], nil}}
 
   # Relationship-name hop — resolve via `relate` on the current resource. `:forward`
   # walks the declared edge direction, `:reverse` flips it.
@@ -445,7 +463,10 @@ defmodule AshNeo4j.QueryHelper do
         {{edge_label, cypher_direction, dest}, next}
 
       _ ->
-        {{rel_name, hop_direction(direction), nil}, nil}
+        # `rel_name` is not a declared `relate` edge — it can't be an edge label,
+        # so refuse rather than fabricate one (#342). Use `{:edge, label}` to
+        # name a raw edge explicitly.
+        {:error, {:unresolved_hop, {direction, rel_name}}}
     end
   end
 
@@ -455,6 +476,10 @@ defmodule AshNeo4j.QueryHelper do
 
   defp resolve_hop(_resource, {direction, {:edge, label, dest}}),
     do: {{label, hop_direction(direction), dest}, AshNeo4j.resource_for_label(dest)}
+
+  # Any other hop shape — incl. a relationship-name hop once the resource chain
+  # has broken (`current` is nil) — is unresolvable.
+  defp resolve_hop(_resource, hop), do: {:error, {:unresolved_hop, hop}}
 
   defp relationship_destination(resource, rel_name) do
     case Ash.Resource.Info.relationship(resource, rel_name) do
