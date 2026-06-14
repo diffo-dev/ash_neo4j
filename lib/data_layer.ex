@@ -1352,22 +1352,28 @@ defmodule AshNeo4j.DataLayer do
     pk_field = hd(Ash.Resource.Info.primary_key(resource))
     neo4j_pk = Keyword.get(mapping.properties, pk_field, pk_field)
     ids = Enum.map(records, &Map.get(&1, pk_field))
-    {segments, _reached} = AshNeo4j.QueryHelper.resolve_chain(resource, chain)
 
-    if segments == [] do
-      Map.new(ids, &{&1, nil})
-    else
-      query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, segments)
+    case AshNeo4j.QueryHelper.resolve_chain(resource, chain) do
+      # A hop names no declared edge (#342) — can't project; surface Unknown.
+      {:error, {:unresolved_hop, hop}} ->
+        unknown = AshNeo4j.Unknown.new(resource, :unresolved_hop, %{hop: hop})
+        Map.new(ids, &{&1, unknown})
 
-      case Cypher.run(query) do
-        {:ok, %Bolty.Response{results: rows}} ->
-          rows
-          |> Enum.group_by(&Map.get(&1, "source_id"), &Map.get(&1, "dest_node"))
-          |> Map.new(fn {source_id, dest_nodes} -> {source_id, project_reached(resource, dest_nodes)} end)
+      {:ok, {[], _reached}} ->
+        Map.new(ids, &{&1, nil})
 
-        {:error, reason} ->
-          raise "AshNeo4j: traverse projection query failed: #{inspect(reason)}"
-      end
+      {:ok, {segments, _reached}} ->
+        query = CypherQuery.related_nodes(mapping.label_pair, neo4j_pk, ids, segments)
+
+        case Cypher.run(query) do
+          {:ok, %Bolty.Response{results: rows}} ->
+            rows
+            |> Enum.group_by(&Map.get(&1, "source_id"), &Map.get(&1, "dest_node"))
+            |> Map.new(fn {source_id, dest_nodes} -> {source_id, project_reached(resource, dest_nodes)} end)
+
+          {:error, reason} ->
+            raise "AshNeo4j: traverse projection query failed: #{inspect(reason)}"
+        end
     end
   end
 
