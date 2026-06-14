@@ -406,7 +406,7 @@ defmodule AshNeo4j.DataLayer do
             convert_node_to_resource(resource, node)
 
           {:error, error} ->
-            {:error, error}
+            {:error, AshNeo4j.Error.Neo4j.from_bolt(error)}
         end
       end
 
@@ -1072,7 +1072,7 @@ defmodule AshNeo4j.DataLayer do
         convert_node_to_resource(mapping.module, node)
 
       {:error, error} ->
-        {:error, error}
+        {:error, AshNeo4j.Error.Neo4j.from_bolt(error)}
     end
   end
 

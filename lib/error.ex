@@ -70,3 +70,49 @@ defmodule AshNeo4j.Error.UnresolvableTraversal do
   end
 end
 
+defmodule AshNeo4j.Error.Neo4j do
+  @moduledoc """
+  Wraps a Neo4j server error surfaced from `AshNeo4j.Cypher.run/1` (a
+  `%Bolty.Error{}`), preserving its Neo4j status code and message and classifying
+  it by `:category` (#358) — so a failure surfaces as the actual error, not a
+  generic string. The server-side complement to the returned-error work (#350).
+
+  `:category` is one of `:constraint` (a `ConstraintValidationFailed` — what
+  `identities` / primary-key constraints rely on), `:transient` (retryable, e.g.
+  a deadlock), `:statement` (a syntax/parameter error — our generated Cypher is
+  wrong), `:security`, or `:other`.
+  """
+  use Splode.Error, fields: [:neo4j_code, :neo4j_message, :category], class: :invalid
+
+  def message(%{neo4j_code: nil, neo4j_message: msg}), do: "Neo4j error: #{msg}"
+  def message(%{neo4j_code: code, neo4j_message: nil}), do: "Neo4j #{code}"
+  def message(%{neo4j_code: code, neo4j_message: msg}), do: "Neo4j #{code}: #{msg}"
+
+  @doc """
+  Maps an error surfaced from `Cypher.run/1` to a classified `AshNeo4j.Error.Neo4j`.
+  A `%Bolty.Error{}` with a Neo4j status code is classified by that code; any
+  other error term is wrapped with `category: :other`.
+  """
+  def from_bolt(%{bolt: %{code: code, message: msg}}) when is_binary(code) do
+    exception(neo4j_code: code, neo4j_message: msg, category: category(code))
+  end
+
+  def from_bolt(%{__exception__: true} = error) do
+    exception(neo4j_code: nil, neo4j_message: Exception.message(error), category: :other)
+  end
+
+  def from_bolt(other) do
+    exception(neo4j_code: nil, neo4j_message: if(is_binary(other), do: other, else: inspect(other)), category: :other)
+  end
+
+  @doc "True for a Neo4j constraint-violation error (drives `identities` / PK constraints)."
+  def constraint_violation?(%__MODULE__{category: :constraint}), do: true
+  def constraint_violation?(_), do: false
+
+  defp category("Neo.ClientError.Schema.ConstraintValidationFailed"), do: :constraint
+  defp category("Neo.TransientError." <> _), do: :transient
+  defp category("Neo.ClientError.Statement." <> _), do: :statement
+  defp category("Neo.ClientError.Security." <> _), do: :security
+  defp category(_), do: :other
+end
+

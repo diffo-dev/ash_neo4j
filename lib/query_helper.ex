@@ -139,8 +139,8 @@ defmodule AshNeo4j.QueryHelper do
       {:ok, %Bolty.Response{results: results}} ->
         {:ok, results}
 
-      {:error, _} ->
-        {:error, "Error running cypher query"}
+      {:error, error} ->
+        {:error, AshNeo4j.Error.Neo4j.from_bolt(error)}
     end
   end
 
