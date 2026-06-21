@@ -21,6 +21,11 @@ defmodule AshNeo4j.Test.Resource.Comment do
     update :update do
       primary? true
     end
+
+    update :increment_score do
+      require_atomic? true
+      change atomic_update(:score, expr(score + 1))
+    end
   end
 
   attributes do

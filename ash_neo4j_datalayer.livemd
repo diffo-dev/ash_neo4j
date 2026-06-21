@@ -1,4 +1,4 @@
-<!-- 
+<!--
 SPDX-FileCopyrightText: 2025 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
 
 SPDX-License-Identifier: MIT
@@ -9,7 +9,8 @@ SPDX-License-Identifier: MIT
 ```elixir
 Mix.install(
   [
-    {:ash_neo4j, "~> 0.9"}
+    {:ash_neo4j, "~> 0.9"},
+    {:kino, "~> 0.14"}
   ],
   consolidate_protocols: false
 )
@@ -27,17 +28,17 @@ If already familiar with the [Ash Framework](https://ash-hq.org) in this liveboo
 
 ## Why have an Ash Neo4j DataLayer?
 
-I've been using developing systems for about 30 years, often working with relational databases. I've been developing with graph databases for the last five years. I've found graph aligns naturally with the way I think about things and how they are related. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back. In fact life is too short, I won't go back...
+Graphs align naturally with the way many developers think about things and how they relate. Graphistas see graphs everywhere, because they are everywhere. Graph is similar to Elixir, in that once you start you don't want to go back.
 
-Similarly I've found [Ash](https://ash-hq.org) to be an exceptional framework for declarative application development. It has a learning curve, however the Ash way is to use and build abstractions for exceptional maintainability.
+[Ash](https://ash-hq.org) is an exceptional framework for declarative application development. It has a learning curve, however the Ash way is to use and build abstractions for exceptional maintainability.
 
 The Ash Framework contains some basic datalayers and the ecosystem already offers a choice of datalayer extensions, including the popular and feature rich [AshPostgres](https://github.com/ash-project/ash_postgres) above the open source [Postgres](https://github.com/postgres/postgres).
 
-I hitched my wagon to Ash Framework aware of the lack of graph datalayers, knowing that they could be built using an Ash Extension. Indeed Ash does a good job of abstracting SQL databases away and making refactorings easier, so arguably there is less demand for such a thing. However as you refactor your resources you still need to migrate database schemas - so the complexity doesn't go away, it is just better hidden.
+Before AshNeo4j the ecosystem lacked a graph datalayer, even though one can be built as an Ash Extension. Ash does a good job of abstracting SQL databases away and making refactorings easier, so arguably there is less demand for such a thing. However as you refactor your resources you still need to migrate database schemas — so the complexity doesn't go away, it is just better hidden.
 
-Neo4j is defacto in data science and well entrenched in security, fraud, logistics, network management and recommendation applications. Increasingly our applications need to work with both facts and knowledge and these are best represented using graphs.
+Neo4j is defacto in data science and well entrenched in security, fraud, logistics, network management and recommendation applications. Increasingly our applications need to work with both facts and knowledge, and these are best represented using graphs.
 
-So here we both are with Ash and graph. Enjoy the combination.
+So here Ash and graph come together. Enjoy the combination.
 
 ## Brief Introduction to Neo4j
 
@@ -51,13 +52,13 @@ We can relate them with the cypher `MATCH (s:Actor {name: 'Bill Nighy'}), (d:Mov
 
 Cypher is not meant as a graphical language, but has an ASCII art influence and is fairly expressive in that `(s) -[r:ACTED_IN]-> (d)`, which mirrors how these nodes could look related in a browser. Cypher influenced international standard [GQL](https://www.gqlstandards.org) and is being aligned, however to maintain back compatibility with Neo4j 4.x we use Cypher.
 
-We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/docs/bolt/current/bolt/). Ash Neo4j uses [bolty](https://github.com/diffo-dev/bolty) which is a fork of the inactive [bolt-sips](https://github.com/florinpatrascu/bolt_sips).
+We connect to the Neo4j database using the [Bolt protocol](https://neo4j.com/docs/bolt/current/bolt/). Ash Neo4j uses [bolty](https://github.com/diffo-dev/bolty) which is a fork of the inactive [boltx](https://github.com/sagastume/boltx).
 
 ## Installing Neo4j and Configuring Bolty
 
 While [Neo4j community edition](https://github.com/neo4j/neo4j) is open source and you can build from source it is likely that you'll use an installation.
 
-[AshNeo4j](https://github.com/diffo-dev/ash_neo4j) uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running. You can install latest major Neo4j versions from the community tab at [Neo4j Deployment Center](https://neo4j.com/deployment-center/?desktop-gdb), or use the [5.26.10 direct link](https://neo4j.com/download-thanks/?edition=community&release=5.26.10&flavour=unix)
+[AshNeo4j](https://github.com/diffo-dev/ash_neo4j) uses [neo4j](https://github.com/neo4j/neo4j) which must be installed and running. We recommend either the 5.26.x LTS release or the latest 2026.x release. You can install Neo4j from the community tab at [Neo4j Deployment Center](https://neo4j.com/deployment-center/?desktop-gdb).
 
 When you install neo4j you'll typically have a default username and password. Take note of this and any other non-standard config.
 
@@ -72,6 +73,13 @@ config = [
   max_overflow: 3,
   prefix: :default,
   name: Bolt,
+  # Pin negotiation to the Bolt protocol versions AshNeo4j is known to support.
+  # If the server (or a future Bolty) advertises something newer and untested,
+  # negotiation still settles within this known-good range rather than onto a
+  # version AshNeo4j hasn't been verified against. Entries are a single version
+  # (`6.0`) or a `{major, range}` tuple across the handshake's four slots; the
+  # two 5.x ranges span the gap where 5.5 was never a Bolt version.
+  versions: [6.0, {5, 6..8}, {5, 0..4}],
   log: false,
   log_hex: false
 ]
@@ -89,6 +97,12 @@ Now you should be able to verify that Ash Neo4j is connected to Neo4j using Bolt
 AshNeo4j.BoltyHelper.is_connected()
 ```
 
+Once connected, Bolty negotiates a `%Bolty.Policy{}` — the resolved set of capabilities for this connection, distilled from the negotiated Bolt version and the server's HELLO response. It's what AshNeo4j reads internally to decide, for example, whether to emit the `CYPHER 25` selector or use dynamic labels, and it's about as deep as most people ever need to go with Bolty:
+
+```elixir
+AshNeo4j.BoltyHelper.policy()
+```
+
 You can get all nodes related to other nodes the following query:
 
 ```elixir
@@ -102,6 +116,49 @@ http://localhost:7474/browser/
 Once you connect and issue a query like the one above you'll be able to explore the results interactively.
 
 <!-- livebook:{"break_markdown":true} -->
+
+### Rendering results as a Mermaid flowchart
+
+You don't need the browser to see the shape of a result. `AshNeo4j.Mermaid.flowchart/2` turns a query result — the `{:ok, response}` tuple returned by `AshNeo4j.Cypher.run/2` — into a [Mermaid](https://mermaid.js.org/syntax/flowchart.html) flowchart string. Pipe it into [`Kino.Mermaid`](https://hexdocs.pm/kino/Kino.Mermaid.html) (the `:kino` dependency added at the top of this livebook) to render the graph inline:
+
+```elixir
+"MATCH (n1)-[r]->(n2) RETURN n1, r, n2 LIMIT 25"
+|> AshNeo4j.Cypher.run()
+|> AshNeo4j.Mermaid.flowchart()
+|> Kino.Mermaid.new()
+```
+
+Nodes show their labels and stored properties. Use options to tune the output — `:direction` (`"TD"`, `"LR"`, …) and `:properties` (`true`, `false`, or a list of property names to keep):
+
+```elixir
+"MATCH (n1)-[r]->(n2) RETURN n1, r, n2 LIMIT 25"
+|> AshNeo4j.Cypher.run()
+|> AshNeo4j.Mermaid.flowchart(direction: "LR", properties: false)
+|> Kino.Mermaid.new()
+```
+
+### Keeping a chart in sync as you explore
+
+`AshNeo4j.Mermaid.tap/0` attaches a telemetry handler that remembers the most recent query result, so any later query can be re-rendered with `AshNeo4j.Mermaid.last/1` without threading the result through by hand. Wire it to a `Kino.Frame` to keep a chart live:
+
+```elixir
+frame = Kino.Frame.new()
+AshNeo4j.Mermaid.tap()
+frame
+```
+
+Now each time you run a query, refresh the frame from the captured result:
+
+```elixir
+AshNeo4j.Cypher.run("MATCH (n1)-[r]->(n2) RETURN n1, r, n2 LIMIT 25")
+Kino.Frame.render(frame, Kino.Mermaid.new(AshNeo4j.Mermaid.last()))
+```
+
+When you're done, detach the handler:
+
+```elixir
+AshNeo4j.Mermaid.untap()
+```
 
 **OPTIONAL** If you want to clear your database you can evaluate:
 

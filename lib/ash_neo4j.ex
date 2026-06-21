@@ -64,7 +64,9 @@ defmodule AshNeo4j do
   > construction; if real use shows otherwise, a supervised ETS index is the
   > follow-up.
   """
-  @spec worlds(Ash.Resource.record()) :: [world()]
+  # Total over any term: a read record (or a synthetic `%{__metadata__: %{labels:
+  # …}}` map in tests) resolves; anything else yields `[]`.
+  @spec worlds(term()) :: [world()]
   def worlds(record)
 
   def worlds(%{__metadata__: %{labels: labels}}) when is_list(labels) do
@@ -104,6 +106,27 @@ defmodule AshNeo4j do
     end)
     |> MapSet.new()
   end
+
+  @doc """
+  Resolves a node `label` (a resource's module label, e.g. `:Author`) to the
+  loaded `AshNeo4j.DataLayer` resource that owns it, or `nil` when there is no
+  unique match (none loaded, or the label is shared across resources).
+
+  Static `label -> resource`, the build-time counterpart to the read-time
+  `worlds/1` resolver — used to type a traversal's reached node from a known
+  dest label so reached-node access introspects the real mapping.
+  """
+  @spec resource_for_label(atom()) :: module() | nil
+  def resource_for_label(label) when is_atom(label) and not is_nil(label) do
+    case Enum.filter(ashneo4j_resources(), fn {_labels, resource} ->
+           ResourceInfo.module_label(resource) == label
+         end) do
+      [{_labels, resource}] -> resource
+      _ -> nil
+    end
+  end
+
+  def resource_for_label(_), do: nil
 
   # `{label_set, resource}` for every loaded resource using AshNeo4j.DataLayer.
   # Scanned fresh each call — no cache, no global state. worlds/1 is

@@ -37,6 +37,17 @@ defmodule AshNeo4j.BoltyHelper do
     end
   end
 
+  @doc """
+  Starts the BoltApoc pool (Neo4j 5.x Community + APOC, #386). Returns :ok,
+  {:error, error}, or {:error, :not_configured} when no BoltApoc config is present.
+  """
+  def start_bolt_apoc() do
+    case Application.get_env(:bolty, BoltApoc) do
+      nil -> {:error, :not_configured}
+      config -> start(config)
+    end
+  end
+
   @default_pool Bolt
 
   @doc """
@@ -102,41 +113,74 @@ defmodule AshNeo4j.BoltyHelper do
 
   @doc """
   Returns `true` when the current pool (see `current_pool/0`) is connected to a
-  Neo4j server that supports Cypher 25 (date-versioned Neo4j ≥ 2025.06).
+  Neo4j server that supports the `CYPHER 25` language selector (date-versioned
+  Neo4j ≥ 2025.06).
 
-  Derived from the `server_version` string in `Bolty.connection_info/1` and
-  cached per pool in `:persistent_term`. Once diffo-dev/bolty#47 lands this can
-  be simplified to reading `policy().cypher25` directly.
+  Read from the negotiated `policy().cypher_25` flag (bolty ≥ 0.2.0); `false`
+  when the pool is not started.
   """
   def cypher25?(), do: cypher25?(current_pool())
 
   @doc "Cypher 25 support for an explicit `pool`."
   def cypher25?(pool) do
-    case :persistent_term.get({__MODULE__, :cypher25, pool}, :not_cached) do
+    case policy(pool) do
+      %{cypher_25: cypher_25} -> cypher_25
+      nil -> false
+    end
+  end
+
+  @doc """
+  Returns `true` when the current pool (see `current_pool/0`) is connected to a
+  Neo4j server that supports dynamic labels/types (`MATCH (n:$(expr))`,
+  `-[r:$(expr)]->`), which landed in Neo4j 5.26.
+
+  This is the **server-feature axis**, distinct from `cypher25?/0`: dynamic
+  labels run under plain `CYPHER 5` and need no `CYPHER 25` selector, so a
+  5.26 server reports `dynamic_labels: true` but `cypher_25: false`. Read from
+  the negotiated `policy().dynamic_labels` flag (bolty ≥ 0.2.0); `false` when the
+  pool is not started.
+  """
+  def dynamic_labels?(), do: dynamic_labels?(current_pool())
+
+  @doc "Dynamic label/type support for an explicit `pool`."
+  def dynamic_labels?(pool) do
+    case policy(pool) do
+      %{dynamic_labels: dynamic_labels} -> dynamic_labels
+      nil -> false
+    end
+  end
+
+  @doc """
+  Returns `true` when the current pool (see `current_pool/0`) is connected to a
+  Neo4j server with **APOC** installed (#386) — useful as a deploy/start-up
+  healthcheck before relying on an `apoc.*` `fragment(...)`.
+
+  Unlike `cypher25?/0` / `dynamic_labels?/0` (negotiated server features), APOC is
+  a plugin, so this introspects the server with `SHOW PROCEDURES`. Cached in
+  `:persistent_term` per pool after the first call. `false` when the pool is not
+  started. Installing APOC is the operator's job — this only reports it.
+  """
+  def apoc_available?(), do: apoc_available?(current_pool())
+
+  @doc "APOC availability for an explicit `pool`."
+  def apoc_available?(pool) do
+    case :persistent_term.get({__MODULE__, :apoc, pool}, :not_cached) do
       :not_cached ->
-        try do
-          %{server_version: server_version} = Bolty.connection_info(pool)
-          result = cypher25_from_server_version(server_version)
-          :persistent_term.put({__MODULE__, :cypher25, pool}, result)
-          result
-        catch
-          :exit, _ -> false
-        end
+        available = query_apoc_available?(pool)
+        :persistent_term.put({__MODULE__, :apoc, pool}, available)
+        available
 
       cached ->
         cached
     end
   end
 
-  defp cypher25_from_server_version("Neo4j/" <> rest) do
-    case Regex.run(~r/^(\d{4})\.(\d{2})\./, rest) do
-      [_, year, month] ->
-        String.to_integer(year) * 100 + String.to_integer(month) >= 202_506
-
-      nil ->
-        false
+  defp query_apoc_available?(pool) do
+    case Bolty.query(pool, "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN count(name) > 0 AS available") do
+      {:ok, %Bolty.Response{results: [%{"available" => available} | _]}} -> available == true
+      _ -> false
     end
+  rescue
+    _ -> false
   end
-
-  defp cypher25_from_server_version(_), do: false
 end

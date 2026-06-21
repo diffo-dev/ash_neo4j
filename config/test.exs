@@ -37,6 +37,20 @@ config :bolty, Bolt6,
   log_hex: true,
   level: level
 
+# Neo4j 5.x Community + APOC — the `:apoc` round-trip fragment test (#386).
+config :bolty, BoltApoc,
+  uri: "bolt://localhost:7691",
+  auth: [username: "neo4j", password: "password"],
+  versions: [5.8],
+  user_agent: "boltyTest/1",
+  pool_size: 5,
+  max_overflow: 1,
+  prefix: :default,
+  name: BoltApoc,
+  log: true,
+  log_hex: true,
+  level: level
+
 config :logger, :console,
   level: level,
   format: "$date $time [$level] $metadata$message\n"

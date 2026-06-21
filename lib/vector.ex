@@ -5,10 +5,10 @@
 defmodule AshNeo4j.Vector do
   @moduledoc """
   Convenience helpers for creating the Neo4j VECTOR indexes that back
-  `AshNeo4j.Types.Vector` attributes.
+  `AshNeo4j.Type.Vector` attributes.
 
   Requires Cypher 25 (Neo4j ≥ 2025.06). Operations against an older server
-  raise `AshNeo4j.Error.RequiresCypher25`.
+  return `{:error, %AshNeo4j.Error.RequiresCypher25{}}`.
 
       # Create the index for a vector attribute
       AshNeo4j.Vector.create_index(Item, :embedding)
@@ -53,9 +53,8 @@ defmodule AshNeo4j.Vector do
   @spec create_index(Ash.Resource.t(), atom(), keyword()) ::
           {:ok, Bolty.Response.t()} | {:error, term()}
   def create_index(resource, attr, opts \\ []) do
-    Cypher.require_cypher25!()
-
-    with {:ok, spec} <- resolve_spec(resource, attr, opts) do
+    with :ok <- Cypher.require_cypher25(),
+         {:ok, spec} <- resolve_spec(resource, attr, opts) do
       if Keyword.get(opts, :recreate, false) do
         with {:ok, _} <- Cypher.run(drop_cypher(spec)), do: Cypher.run(create_cypher(spec))
       else
@@ -70,9 +69,8 @@ defmodule AshNeo4j.Vector do
   @spec drop_index(Ash.Resource.t(), atom(), keyword()) ::
           {:ok, Bolty.Response.t()} | {:error, term()}
   def drop_index(resource, attr, opts \\ []) do
-    Cypher.require_cypher25!()
-
-    with {:ok, spec} <- resolve_spec(resource, attr, opts) do
+    with :ok <- Cypher.require_cypher25(),
+         {:ok, spec} <- resolve_spec(resource, attr, opts) do
       Cypher.run(drop_cypher(spec))
     end
   end
@@ -137,8 +135,8 @@ defmodule AshNeo4j.Vector do
 
   defp resolve_dimensions(attribute, attr) do
     case attribute.type do
-      AshNeo4j.Types.Vector ->
-        case Keyword.get(attribute.constraints || [], :dimensions) do
+      AshNeo4j.Type.Vector ->
+        case Keyword.get(attribute.constraints, :dimensions) do
           nil ->
             {:error,
              "AshNeo4j.Vector: attribute #{inspect(attr)} has no :dimensions constraint — " <>
@@ -150,7 +148,7 @@ defmodule AshNeo4j.Vector do
 
       other ->
         {:error,
-         "AshNeo4j.Vector: attribute #{inspect(attr)} is #{inspect(other)}, not AshNeo4j.Types.Vector"}
+         "AshNeo4j.Vector: attribute #{inspect(attr)} is #{inspect(other)}, not AshNeo4j.Type.Vector"}
     end
   end
 

@@ -9,8 +9,13 @@
 # excluded by default.
 AshNeo4j.BoltyHelper.start_bolt6()
 
+# Start the BoltApoc pool (Neo4j 5.x Community + APOC) for the :apoc round-trip
+# fragment test (#386). Harmless when absent — `:apoc` tests are excluded by default.
+AshNeo4j.BoltyHelper.start_bolt_apoc()
+
 # `:cypher25` — needs a Neo4j ≥ 2025.06 server (the Bolt6 pool / 2026.05).
 # `:bolt6` — reserved for tests that genuinely require the Bolt 6.0 protocol.
+# `:apoc` — needs the BoltApoc pool (Neo4j + APOC).
 #
 # Cap test concurrency to the Bolt pool (#304). Each async test holds one sandbox
 # connection (an open transaction) for its whole duration, so concurrency must
@@ -21,4 +26,4 @@ AshNeo4j.BoltyHelper.start_bolt6()
 # `connection_info` checkouts).
 bolt_pool_size = Application.get_env(:bolty, Bolt)[:pool_size] || 15
 
-ExUnit.start(exclude: [:show_neo4j, :bolt6, :cypher25], max_cases: bolt_pool_size)
+ExUnit.start(exclude: [:show_neo4j, :bolt6, :cypher25, :apoc], max_cases: bolt_pool_size)

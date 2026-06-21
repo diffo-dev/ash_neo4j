@@ -23,6 +23,8 @@ defmodule AshNeo4j.Cypher do
     Where,
     With,
     Set,
+    OnCreateSet,
+    OnMatchSet,
     Remove,
     Delete,
     DetachDelete,
@@ -374,7 +376,44 @@ defmodule AshNeo4j.Cypher do
     {prefix <> Enum.map_join(clauses, " ", &render_clause/1), params}
   end
 
-  defp cypher25_prefix, do: if(BoltyHelper.cypher25?(), do: "CYPHER 25 ", else: "")
+  # Dialect posture (#363): Cypher 25 is the target dialect — we emit the
+  # `CYPHER 25 ` selector explicitly on every server that supports it, so our
+  # (audited Cypher-25-clean) output runs under Cypher 25 there. The bare /
+  # no-selector branch is purely the Neo4j 5.26-LTS fallback, which relies on the
+  # server defaulting to CYPHER 5.
+  defp cypher25_prefix do
+    if BoltyHelper.cypher25?() do
+      "CYPHER 25 "
+    else
+      warn_cypher5_sunset()
+      ""
+    end
+  end
+
+  # Sunset tripwire (#363): the bare fallback above assumes the server defaults to
+  # CYPHER 5. CYPHER 5 is feature-capped from Neo4j 2026.06 and slated for removal
+  # (late-2026.x / 2027.x TBD); a server that no longer speaks it reports
+  # `policy.cypher_5 == false`. Reaching this with cypher_5 false means our
+  # unprefixed Cypher now runs under an unknown server default — flag it once per
+  # pool rather than emit silently. (Near-unreachable on real servers, since a
+  # post-CYPHER-5 server is a Cypher 25 server and takes the prefixed branch.)
+  defp warn_cypher5_sunset do
+    pool = BoltyHelper.current_pool()
+
+    with false <- :persistent_term.get({__MODULE__, :cypher5_warned, pool}, false),
+         %{cypher_5: false} <- BoltyHelper.policy(pool) do
+      Logger.warning(
+        "AshNeo4j is emitting unprefixed Cypher (CYPHER 5 fallback) to pool #{inspect(pool)}, " <>
+          "but the server reports no CYPHER 5 support (policy.cypher_5 == false). CYPHER 5 is " <>
+          "being sunset (Neo4j 2026.06 feature-cap; removal TBD) — these queries now run under the " <>
+          "server's default language. See AshNeo4j #363."
+      )
+
+      :persistent_term.put({__MODULE__, :cypher5_warned, pool}, true)
+    end
+
+    :ok
+  end
 
   defp render_clause(%Match{pattern: p}), do: "MATCH #{p}"
   defp render_clause(%OptionalMatch{pattern: p}), do: "OPTIONAL MATCH #{p}"
@@ -383,6 +422,8 @@ defmodule AshNeo4j.Cypher do
   defp render_clause(%Where{conditions: conds}), do: "WHERE #{Enum.join(conds, " AND ")}"
   defp render_clause(%With{items: items}), do: "WITH #{Enum.join(items, ", ")}"
   defp render_clause(%Set{expression: e}), do: "SET #{e}"
+  defp render_clause(%OnCreateSet{expression: e}), do: "ON CREATE SET #{e}"
+  defp render_clause(%OnMatchSet{expression: e}), do: "ON MATCH SET #{e}"
   defp render_clause(%Remove{items: items}), do: "REMOVE #{Enum.join(items, ", ")}"
   defp render_clause(%Delete{items: items}), do: "DELETE #{Enum.join(items, ", ")}"
   defp render_clause(%DetachDelete{items: items}), do: "DETACH DELETE #{Enum.join(items, ", ")}"
@@ -400,6 +441,8 @@ defmodule AshNeo4j.Cypher do
     "CALL { #{Enum.join(branches, joiner)} }"
   end
 
+  defp render_clause(%AshNeo4j.Cypher.CallSubquery{body: body}), do: "CALL { #{body} }"
+
   defp render_clause(%OrderBy{terms: terms}) do
     "ORDER BY " <>
       Enum.map_join(terms, ", ", fn
@@ -409,13 +452,65 @@ defmodule AshNeo4j.Cypher do
   end
 
   @doc """
-  Raises `AshNeo4j.Error.RequiresCypher25` when the connected server does not
-  support Cypher 25 (negotiated server version < 2025.06). Call at the top of
-  any function that emits Cypher 25-only syntax.
+  `:ok` when the connected server supports Cypher 25 (negotiated server version
+  ≥ 2025.06), else `{:error, %AshNeo4j.Error.RequiresCypher25{}}`. Use at the top
+  of any function that emits Cypher 25-only syntax and thread the error up — a
+  data layer returns it, never raises.
   """
-  def require_cypher25!() do
-    unless BoltyHelper.cypher25?() do
-      raise AshNeo4j.Error.RequiresCypher25
+  @spec require_cypher25() :: :ok | {:error, struct()}
+  def require_cypher25() do
+    if BoltyHelper.cypher25?() do
+      :ok
+    else
+      {:error, AshNeo4j.Error.RequiresCypher25.exception([])}
+    end
+  end
+
+  @doc """
+  A **dynamic label/type** fragment `:$(expr)` (Neo4j ≥ 5.26) — the runtime-resolved
+  counterpart to a static `:Label` in a node pattern `(n:$(expr))` or a relationship
+  pattern `-[r:$(expr)]->` (#339). `expr` is any Cypher expression yielding the
+  label/type: a parameter token (`"$label"`), a property (`"n.kind"`), or — for
+  multiple labels in `CREATE` — a list-valued parameter (`"$labels"`).
+
+  `expr` must be a server-side Cypher expression, never an interpolated literal —
+  that is the injection-safe form (the value is bound, not string-built). Gate
+  emission with `require_dynamic_labels/0`.
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Cypher.dynamic_label("$label")
+  ":$($label)"
+  iex> AshNeo4j.Cypher.dynamic_label("n.kind")
+  ":$(n.kind)"
+  ```
+  """
+  @spec dynamic_label(binary()) :: binary()
+  def dynamic_label(expr) when is_binary(expr), do: ":$(#{expr})"
+
+  @doc """
+  `:ok` when the connected server supports dynamic labels/types in **pattern
+  position** (`(n:$(expr))`, `-[r:$(expr)]->` in `MATCH`/`CREATE`/`MERGE`;
+  negotiated server version ≥ 5.26), else
+  `{:error, %AshNeo4j.Error.RequiresDynamicLabels{}}`. This is the **server-feature
+  axis** (plain `CYPHER 5`), distinct from `require_cypher25/0`. Use at the top of
+  any function that emits `dynamic_label/1` and thread the error up — a data layer
+  returns it, never raises.
+
+  > #### WHERE-predicate label filtering is a *finer* gate {: .warning}
+  > The `WHERE n:$(expr)` predicate form is **not** covered by this check: it
+  > fails on 5.26 (`dynamic_labels: true`) and only works on later servers
+  > (verified ≥ 2026.05). `dynamic_labels?/0` / `policy().dynamic_labels` guarantee
+  > the pattern form only — matching bolty's flag semantics. A label-filter
+  > consumer must establish its own server gate (#339; capability-granularity
+  > question raised as diffo-dev/bolty#53).
+  """
+  @spec require_dynamic_labels() :: :ok | {:error, struct()}
+  def require_dynamic_labels() do
+    if BoltyHelper.dynamic_labels?() do
+      :ok
+    else
+      {:error, AshNeo4j.Error.RequiresDynamicLabels.exception([])}
     end
   end
 
@@ -443,16 +538,23 @@ defmodule AshNeo4j.Cypher do
   def run(cypher, params \\ %{}) when is_bitstring(cypher) do
     cypher = cypher25_prefix() <> cypher
 
-    Logger.debug("""
-    AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})
-    """)
+    Logger.debug("AshNeo4j.Cypher: run(#{cypher}, #{inspect(params)})")
 
+    start = System.monotonic_time()
     bolty_result = sandboxed_query(cypher, params)
 
+    # Telemetry seam (#60): emit every query with its rendered Cypher, params and
+    # raw bolty result. No handlers are attached by default, so this is ~free; it
+    # lets opt-in tooling (e.g. `AshNeo4j.Mermaid.tap/0`) observe the last result
+    # without `Cypher.run` knowing anything about its consumers.
+    :telemetry.execute(
+      [:ash_neo4j, :query],
+      %{duration: System.monotonic_time() - start},
+      %{cypher: cypher, params: params, result: bolty_result}
+    )
+
     if elem(bolty_result, 0) == :ok do
-      Logger.debug("""
-      AshNeo4j.Cypher: run result #{inspect(elem(bolty_result, 1).results)}
-      """)
+      Logger.debug("AshNeo4j.Cypher: run result #{inspect(elem(bolty_result, 1).results)}")
     end
 
     bolty_result
@@ -465,7 +567,7 @@ defmodule AshNeo4j.Cypher do
 
   def run_expecting_deletions(cypher, params \\ %{}) when is_bitstring(cypher) do
     cypher = cypher25_prefix() <> cypher
-    Logger.debug("AshNeo4.Cypher: run_expecting_deletions(#{cypher})")
+    Logger.debug("AshNeo4j.Cypher: run_expecting_deletions(#{cypher})")
 
     bolty_result = sandboxed_query(cypher, params)
 
@@ -482,8 +584,12 @@ defmodule AshNeo4j.Cypher do
         end
 
       if deleted_nodes == 0 do
-        Logger.error("AshNeo4j.Cypher: nothing deleted")
-        {:error, "nothing deleted"}
+        # Expected control flow, not an error: a preservation guard held the node,
+        # or an optimistic-lock destroy missed. The caller disambiguates this into
+        # StaleRecord / Unavailable, so trace it at :debug rather than :error (#373).
+        # `:nothing_deleted` is an internal sentinel (never escapes to Ash), #372.
+        Logger.debug("AshNeo4j.Cypher: nothing deleted")
+        {:error, :nothing_deleted}
       else
         Logger.debug("AshNeo4j.Cypher: run_expecting_deletions deleted #{deleted_nodes} nodes")
         bolty_result

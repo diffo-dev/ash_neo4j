@@ -69,15 +69,25 @@ lib/
   bolty_helper.ex              — Pool lifecycle + capability detection: current_pool/0,
                                  with_pool/2, policy/1, cypher25?/1 (cached per pool)
   error.ex                     — AshNeo4j.Error.{RequiresCypher25, GeoDimensionMismatch,
-                                 Unsupported3DGeometry}
+                                 Unsupported3DGeometry, UnresolvableTraversal,
+                                 UnsupportedFilterFragment} + typed data-layer errors (#372).
+                                 Data-layer paths return {:error, Splode}, never raise
+  unknown.ex                   — AshNeo4j.Unknown: the "reached but couldn't determine" value
+                                 (NotLoaded-tradition); never collapse into nil (#329)
   spatial.ex                   — AshNeo4j.Spatial: POINT index lifecycle (operator-invoked)
   vector.ex                    — AshNeo4j.Vector: VECTOR index lifecycle (operator-invoked)
-  types/vector.ex              — AshNeo4j.Types.Vector: embedding attribute (LIST<FLOAT>)
+  constraint.ex                — AshNeo4j.Constraint: identity + PK uniqueness constraint
+                                 lifecycle (operator-invoked, #20/#32)
+  mermaid.ex                   — AshNeo4j.Mermaid: render a query result as a Mermaid graph (#60)
+  type/vector.ex               — AshNeo4j.Type.Vector: embedding attribute (LIST<FLOAT>)
+  type/nx_tensor.ex            — AshNeo4j.Type.NxTensor: rank-generic tensor, Nx-backed (#309)
   geo.ex                       — AshNeo4j.Geo: haversine_meters/2 + 3D variant (match
                                  Neo4j point.distance), force_2d/1 (3D→2D projection)
   functions/                   — Ash.Query.Function modules pushed down to Cypher:
                                  st_* (spatial), vector_similarity / vector_cosine_distance,
+                                 traverse (multi-hop path expression, #321; pushdown-only),
                                  and vector_math.ex (shared in-memory cosine for evaluate/1)
+  calculations/projected_traversal.ex — read-time polymorphic traverse projection (#329)
   resource/info.ex             — All DSL introspection: label/1, module_label/1, domain_label/1,
                                  domain_fragment_label/1, all_labels/1, label_pair/1,
                                  mapping/1, relate/1, translations/1, and relationship helpers
@@ -323,6 +333,25 @@ as a follow-up comment, then leave it with the upstream maintainers.
 
 ## Common agent mistakes
 
+- **Fabricating a definite where a reached/related resource can't be resolved.** When a reached
+  node's labels resolve to no loaded world (`AshNeo4j.worlds/1` returns `[]`), or a property/edge
+  name can't be introspected from `ResourceInfo.mapping/1`, return `AshNeo4j.Unknown` (stamped with
+  the original query's resource as `:world`, a structural `:reason` atom, and diagnostic
+  `:context`) — never synthesise a `nil`/`0`/camelCased guess. A silently-wrong definite is the
+  worst outcome; `Unknown` is the honest "couldn't determine", complementary to `Ash.NotLoaded`'s
+  "not fetched yet". See `AshNeo4j.Calculations.ProjectedTraversal` for the producing path.
+
+- **Raising from the data-layer read/write path.** An Ash data layer must **return `{:error, error}`**,
+  never `raise`, from `run_query` / `create` / `update` / `destroy` and the query-build helpers they
+  call. Raising bypasses Ash's `{:ok | :error}` contract and Splode's error accumulation, so the
+  caller gets an exception instead of a classifiable, accumulable error. Use a **Splode error**
+  (`use Splode.Error`, classed `:invalid` / `:unsupported` / …), returned and threaded up through the
+  build path. This is the filter-context counterpart to returning `AshNeo4j.Unknown` in the value
+  context — same "couldn't determine", correct form for each context. The **only** places that
+  correctly raise are *not* the runtime data path: compile-time DSL verifiers (`Spark.Error.DslError`)
+  and test-infra guards (e.g. `AshNeo4j.Sandbox`). (Past regressions: the Geo / Cypher-25 raises
+  tracked in the data-layer-raises bug.)
+
 - **Not using `mapping.label_pair` for MATCH.** All read, update, delete, and aggregate queries
   must use `mapping.label_pair` (`[domain_label, module_label]`) as the source node pattern.
   Using `mapping.label` alone matches every resource that extends the same fragment. Using
@@ -383,7 +412,7 @@ as a follow-up comment, then leave it with the upstream maintainers.
 
 - **Storing a native `%Bolty.Types.Vector{}` as a node property.** Neo4j cannot persist the
   Bolt 6.0 VECTOR type as a property — `CREATE (n {embedding: $vector})` errors. Embeddings are
-  stored as `LIST<FLOAT>` (`AshNeo4j.Types.Vector.dump_to_native/2`), which is what
+  stored as `LIST<FLOAT>` (`AshNeo4j.Type.Vector.dump_to_native/2`), which is what
   `vector.similarity.cosine/2` operates on and what the vector index indexes. The native VECTOR
   type is a query-parameter wire type only. Consequently vector search is gated on **Cypher 25
   (≥ 2025.06)**, not Bolt 6.0 — it works over Bolt 5.8.

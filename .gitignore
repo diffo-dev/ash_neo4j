@@ -112,8 +112,8 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/elixir,windows,macos,linux,visualstudiocode
 
-# spark generated
-/documentation
+# spark generated (only dsls/ is generated; how_to/ etc. are authored docs)
+/documentation/dsls
 
 /.notes
 

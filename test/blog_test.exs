@@ -626,58 +626,28 @@ defmodule AshNeo4j.BlogTest do
   end
 
   describe "many-to-many relationship tests" do
-    @tag :skip
-    @tag bugged: "fails with Ash.Error.Unknown couldn't relate notes, despite attributes containing post_id"
-    test "many posts can be tagged with each tag" do
+    # #127: Post↔Tag is modelled as back-to-back has_many (Post.tags ⇆ Tag.posts)
+    # over one TAGS edge — a has_many on both sides, with no to-one side to anchor
+    # the connect, so the data layer can't resolve which node to relate. It now
+    # fails fast with AshNeo4j.Error.UnsupportedManyToMany pointing at the joiner
+    # node pattern (see Party → PlaceRef → Place), rather than the old cryptic
+    # "couldn't relate nodes". Native many_to_many is tracked in #370.
+    test "tagging via back-to-back has_many fails fast with UnsupportedManyToMany guidance" do
       {:ok, author} = Author |> Ash.Changeset.for_create(:create, %{name: "author"}) |> Ash.create()
-      {:ok, post1} = Post |> Ash.create(%{title: "post1", written_by: author.id})
-      {:ok, post2} = Post |> Ash.create(%{title: "post2", written_by: author.id})
+      {:ok, post} = Post |> Ash.create(%{title: "post1", written_by: author.id})
       {:ok, tag1} = Tag |> Ash.create(%{value: "tag1"})
       {:ok, tag2} = Tag |> Ash.create(%{value: "tag2"})
-      posts = [post1, post2]
-      tag_ids = [tag1.id, tag2.id]
 
-      # tag posts
-      Enum.into(posts, [], fn post ->
-        {:ok, post} =
-          post
-          |> Ash.Changeset.new()
-          |> Ash.Changeset.for_update(:manage_tags, tags: tag_ids)
-          |> Ash.update()
+      assert {:error, error} =
+               post
+               |> Ash.Changeset.for_update(:manage_tags, tags: [tag1.id, tag2.id])
+               |> Ash.update()
 
-        post
-      end)
+      errors = error |> Map.get(:errors, [error]) |> List.flatten()
+      assert Enum.any?(errors, &match?(%AshNeo4j.Error.UnsupportedManyToMany{}, &1))
 
-      # check relationships in neo4j
-      for post <- posts, tag_id <- tag_ids do
-        assert Neo4jHelper.nodes_relate_how?(
-                 [:SRM, :Post],
-                 %{title: post.title},
-                 [:SRM, :Tag],
-                 %{uuid: tag_id},
-                 :TAGS,
-                 :incoming
-               )
-      end
-
-      # retrieve posts and check they have tags
-      for post <- posts do
-        retrieved_post =
-          Post
-          |> Ash.Query.for_read(:read)
-          |> Ash.Query.filter(id: post.id)
-          |> Ash.read_one!()
-
-        assert length(retrieved_post.tags) == length(tag_ids)
-      end
-
-      # retrieve tags and check they are related to posts
-      for tag_id <- tag_ids do
-        tag =
-          Tag |> Ash.Query.for_read(:read) |> Ash.Query.filter(id: tag_id) |> Ash.read_one!()
-
-        assert length(tag.posts) == length(posts)
-      end
+      # The cryptic legacy string must not surface.
+      refute Enum.any?(errors, &match?(%{error: "couldn't relate nodes"}, &1))
     end
   end
 

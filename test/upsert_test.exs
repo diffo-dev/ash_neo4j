@@ -18,6 +18,36 @@ defmodule AshNeo4j.UpsertTest do
     on_exit(&Sandbox.rollback/0)
   end
 
+  describe "upsert_node render (#379)" do
+    test "MERGE on the identity, ON CREATE/ON MATCH SET, distinct param prefixes" do
+      query =
+        AshNeo4j.Cypher.Query.upsert_node(
+          :Upsert,
+          %{firstName: "Donald"},
+          %{field: "one"},
+          %{field: "two"}
+        )
+
+      {cypher, params} = AshNeo4j.Cypher.render(query)
+
+      assert cypher ==
+               "MERGE (n:Upsert {firstName: $n_firstName}) " <>
+                 "ON CREATE SET n += {field: $nc_field} " <>
+                 "ON MATCH SET n += {field: $nm_field} RETURN n"
+
+      # Distinct prefixes (n_/nc_/nm_) so the three property sets don't collide.
+      assert params == %{"n_firstName" => "Donald", "nc_field" => "one", "nm_field" => "two"}
+    end
+
+    test "omits ON CREATE / ON MATCH when their property sets are empty" do
+      {cypher, _} =
+        AshNeo4j.Cypher.Query.upsert_node(:Upsert, %{firstName: "Donald"}, %{}, %{})
+        |> AshNeo4j.Cypher.render()
+
+      assert cypher == "MERGE (n:Upsert {firstName: $n_firstName}) RETURN n"
+    end
+  end
+
   describe "Ash Upsert tests" do
     test "upsert node can be upserted using ash" do
       {:ok, upsert} =

@@ -28,10 +28,12 @@ defmodule AshNeo4j.Test.Resource.StateMachine do
     end
 
     update :start do
+      require_atomic? false
       change transition_state(:started)
     end
 
     update :stop do
+      require_atomic? false
       change transition_state(:stopped)
     end
   end

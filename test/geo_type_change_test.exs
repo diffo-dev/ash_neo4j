@@ -19,7 +19,6 @@ defmodule AshNeo4j.GeoTypeChangeTest do
   alias AshNeo4j.Cypher
   alias AshNeo4j.Sandbox
   alias AshNeo4j.Test.Resource.Place
-  require Ash.Query
 
   setup_all do
     BoltyHelper.start()

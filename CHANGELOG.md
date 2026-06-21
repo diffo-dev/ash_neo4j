@@ -11,6 +11,59 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.10.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.9.0...v0.10.0) (2026-06-21)
+
+This release opened on functionality and pivoted to industrialisation and integrity: the write path is now atomic and constraint-backed, the read path gains a graph-native traversal expression, and the whole data layer returns typed errors rather than raising. The headline is **graph traversal as a first-class Ash expression** — a multi-hop path that pushes down to Cypher and composes with the rest of your filter, which a relational data layer structurally cannot offer.
+
+### Breaking Changes
+
+* **`AshNeo4j.Types.*` → `AshNeo4j.Type.*`** (#323) — the type namespace is renamed to singular, matching `Ash.Type`. Update `AshNeo4j.Types.Vector` → `AshNeo4j.Type.Vector` (and any other `AshNeo4j.Types.*` reference) in your attribute declarations. No storage or behaviour change.
+
+### Features
+
+* **Graph traversal as an Ash expression** (#321) — `traverse(^hop_chain, projection)` expresses a multi-hop, direction-and-type-selected path *inside* an `Ash.Expr`, and the data layer pushes it down to a Cypher path pattern instead of an imperative load-time Elixir walk. `hop_chain` is a list of `{:forward | :reverse, edge_selector}` hops; `edge_selector` is an Ash relationship name or an explicit `{:edge, label}` / `{:edge, label, dest}`. The reached node composes as a value in a `filter`:
+  - reached-node field comparison — `filter(traverse(^chain, :status) == "active")`
+  - spatial composition (#330, #332) — `filter(st_dwithin(traverse(^chain, :location), ^point, 5_000))` ("services whose site is within 5 km of a point") in one query
+  - membership / cardinality (#334) — `traverse(^chain, :exists) == true`, `traverse(^chain, :count) > 0`
+  - field aggregates (#338) — `traverse(^chain, {:min | :max | :avg | :sum, :field}) <op> value`
+  - reverse-terminal node typing (#336)
+
+  This is radical for Ash: relational data layers model relationships as joins and have no notion of a path as an expression value — so this isn't parity work, it's a graph-native differentiator. The filter context ships now; `sort` (#335), `calculate`/policy, and variable-length are tracked on the open epic #321. See `usage-rules/traverse.md`.
+
+* **Read-time polymorphic projection — `AshNeo4j.Calculations.ProjectedTraversal` + `AshNeo4j.Unknown`** (#329) — a calculation that follows a hop chain and returns the reached node, late-binding its concrete type at read time. Introduces `AshNeo4j.Unknown`, a first-class value complementary to `Ash.NotLoaded`: `NotLoaded` means "not fetched yet"; `Unknown` means "reached, but couldn't be determined in the current view of the graph". Never collapse it into `nil`.
+
+* **Atomic & bulk writes** (#361) — atomic updates render `changeset.atomics` straight to a Cypher `SET` (numeric, string `concat`/`trim`, and enum/atom forms); bulk update and destroy run as a single `update_query/4` / `destroy_query/4` via `Ash.bulk_update` / `Ash.bulk_destroy` with `strategy: :atomic`; a single filtered (optimistic-lock) update or destroy whose guard no longer holds returns `Ash.Error.Changes.StaleRecord` rather than a silent no-op.
+
+* **Atomic upsert** (#379) — create-or-update keyed on an identity renders an atomic Cypher `MERGE`, so concurrent upserts converge on one node instead of racing to duplicates.
+
+* **Identities & primary keys as Neo4j uniqueness constraints** (#20, #32) — `AshNeo4j.Constraint.create_constraints/1` builds `CREATE CONSTRAINT … IS UNIQUE` for every enforceable identity and for the primary key (single and composite, Community Edition). A conflict surfaces as Ash's own `Ash.Error.Changes.InvalidAttribute` ("has already been taken"), so `pre_check?` and its race window are no longer needed. Identities Neo4j can't enforce (`nils_distinct?: false`, filtered `where:`) are refused rather than silently unenforced. Like indexes, AshNeo4j runs no migrations on boot — you invoke the helper. See `usage-rules/identities.md`.
+
+* **Typed tensor attribute — `AshNeo4j.Type.NxTensor`** (#309) — a shape-and-element-typed tensor backed by `Nx.Tensor`, rank 1 to 3 (vector / matrix / 3-tensor), stored row-major as a native property `LIST` (`:property`, default) or a base64 binary blob (`:packed`); neither type nor shape is stored — both are declared constraints recovered on read. Foundation slice of the hybrid tensor/compute epic (#308); structural ops are `Nx`'s own (the value is an `Nx.Tensor`).
+
+* **Dynamic node labels** (#339) — a capability + pattern-position render primitive letting a label be supplied at query time (Cypher 5 ≥ 5.26), groundwork for polymorphic-label reads.
+
+* **Cypher fragment filter escape hatch** (#33) — `cypher_fragment(...)` drops a raw, parameterised Cypher predicate into a `filter` for the rare case the expression surface can't reach, without abandoning the data layer. A caveated last resort, not a default. See `usage-rules/cypher-fragments.md`.
+
+* **Query results as Mermaid flowcharts** (#60) — `AshNeo4j.Mermaid` renders a graph-level query result as a Mermaid diagram for docs and Livebooks.
+
+* **APOC availability healthcheck** (#386) — detects whether APOC procedures are installed on the connected server, so APOC-dependent paths can degrade explicitly.
+
+* **Nested arrays** (#317) — `{:array, {:array, _}}` round-trips via an outer native `LIST` with inner JSON.
+
+### Improvements
+
+* **The data layer returns typed errors, never raises** (#342, #350, #358, #372) — every read/write-path failure is a returned `{:error, Splode}` with a class, not a raised string. New errors: `UnresolvableTraversal` (a traverse filter that can't be formed — never a fabricated edge), `GeoDimensionMismatch`, `Unsupported3DGeometry`, `RequiresCypher25`. Neo4j server errors are surfaced and classified rather than flattened. Bare-string errors throughout the data layer are now typed (#372).
+
+* **Many-to-many modelled as back-to-back `has_many` fails fast** (#127) — with a clear error pointing at a joiner resource node, instead of silently mis-relating.
+
+* **Guarded relationship attach/detach honours `changeset.filter`** (#368) — a `StaleRecord` on miss, consistent with the guarded update/destroy path.
+
+* **Type-check gate** (#347) — CI compiles `--warnings-as-errors` and runs Dialyzer on a clean baseline; the test suite compiles warning-free.
+
+* **Logging unified** (#373, #374) — one data-layer log format; "nothing deleted" demoted from error to debug.
+
+* **CYPHER 5 sunset tripwire** (#363) and **`bolty` 0.2.0** (#362); toolchain bumped to Elixir 1.20 / OTP 29 and Neo4j 5 to 5.26.27 (#318, #320).
+
 ## [v0.9.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.8.1...v0.9.0) (2026-06-09)
 
 ### Breaking Changes
@@ -108,7 +161,7 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ### Bug Fixes
 
-* **`belongs_to` FK always nil after read** (#258) — `belongs_to` source attributes (e.g. `specification_id`) were correctly populated on create but lost on any subsequent read. The enrichment step now correctly extracts the FK from the destination node returned by the OPTIONAL MATCH traversal when the source resource uses a fragment-inherited relationship whose destination lives in a different domain.
+* **`belongs_to` source attribute always nil after read** (#258) — `belongs_to` source attributes (e.g. `specification_id`) were correctly populated on create but lost on any subsequent read. The enrichment step now correctly extracts the relationship attribute from the destination node returned by the OPTIONAL MATCH traversal when the source resource uses a fragment-inherited relationship whose destination lives in a different domain.
 
 * **Domain fragment label dropped on Ash 3.25+** — `ResourceInfo.all_labels/1` was returning the compile-time persisted label list, which is baked before the domain extension compiles under Ash 3.25's updated compilation order, causing the domain fragment label to be silently omitted. `all_labels/1` now always computes dynamically from the individual label accessors, consistent with how `mapping/1` already worked.
 

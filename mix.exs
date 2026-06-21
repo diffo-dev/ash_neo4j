@@ -6,7 +6,7 @@ defmodule AshNeo4j.MixProject do
   @moduledoc false
   use Mix.Project
 
-  @version "0.9.0"
+  @version "0.10.0"
   @name "AshNeo4j"
   @description "Ash DataLayer for Neo4j"
   @github_url "https://github.com/diffo-dev/ash_neo4j"
@@ -40,12 +40,12 @@ defmodule AshNeo4j.MixProject do
 
   defp usage_rules do
     [
-    skills: [
-      location: ".claude/skills",
-      # Pull in pre-built skills shipped directly by packages
-      package_skills: [:bolty, ~r/^bolty/]
+      skills: [
+        location: ".claude/skills",
+        # Pull in pre-built skills shipped directly by packages
+        package_skills: [:bolty, ~r/^bolty/]
+      ]
     ]
-  ]
   end
 
   def cli do
@@ -70,6 +70,7 @@ defmodule AshNeo4j.MixProject do
         {"README.md", title: "Home"},
         {"LICENSES/MIT.md", title: "License"},
         {"ash_neo4j_datalayer.livemd", title: "AshNeo4j Livebook"},
+        {"documentation/how_to/managing_schema.livemd", title: "Managing Neo4j Schema"},
         {"documentation/dsls/DSL-AshNeo4j.DataLayer.md", search_data: Spark.Docs.search_data_for(AshNeo4j.DataLayer)},
         "CHANGELOG.md"
       ],
@@ -99,6 +100,7 @@ defmodule AshNeo4j.MixProject do
         Utilities: [
           AshNeo4j.BoltyHelper,
           AshNeo4j.Neo4jHelper,
+          AshNeo4j.Mermaid,
           AshNeo4j.QueryHelper,
           AshNeo4j.Util
         ],
@@ -137,11 +139,13 @@ defmodule AshNeo4j.MixProject do
       {:ash, ash_version("~> 3.0 and >= 3.24.2")},
       {:spark, ">= 2.7.0"},
       {:ash_state_machine, "~> 0.2.12", only: [:dev, :test]},
-      {:bolty, bolty_version("~> 0.1.0")},
+      {:bolty, bolty_version("~> 0.2.0")},
       {:geo, "~> 3.6"},
       {:ash_geo, "~> 0.3"},
       {:topo, "~> 1.0"},
+      {:nx, "~> 0.9"},
       {:jason, "~> 1.4"},
+      {:telemetry, "~> 1.0"},
       {:igniter, ">= 0.6.29 and < 1.0.0-0", [env: :prod, hex: "igniter", repo: "hexpm", optional: true]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},

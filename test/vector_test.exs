@@ -29,9 +29,9 @@ defmodule AshNeo4j.VectorTest do
       assert cypher =~ "'euclidean'"
     end
 
-    test "errors when the attribute is not AshNeo4j.Types.Vector" do
+    test "errors when the attribute is not AshNeo4j.Type.Vector" do
       assert {:error, msg} = Vector.index_statements(ThingNote, :body)
-      assert msg =~ "not AshNeo4j.Types.Vector"
+      assert msg =~ "not AshNeo4j.Type.Vector"
     end
   end
 end

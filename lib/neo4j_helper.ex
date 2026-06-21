@@ -88,6 +88,40 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run_expecting_deletions()
   end
 
+  @doc """
+  Single filtered + guarded destroy (#361): deletes the `id`-matched node when it
+  satisfies `filter_conditions` (optimistic lock) and isn't `guard`-protected.
+  `{:ok, _}` when deleted, `{:error, :nothing_deleted}` otherwise.
+  """
+  def delete_node_filtered(label, id_props, filter_conditions, guards)
+      when (is_atom(label) or is_list(label)) and is_map(id_props) and is_list(filter_conditions) and
+             is_list(guards) do
+    Query.delete_node_filtered(label, id_props, filter_conditions, guards)
+    |> Cypher.run_expecting_deletions()
+  end
+
+  @doc """
+  The optimistic-lock existence check (#361): does the `id`-matched node satisfy
+  `filter_conditions`? Returns `{:ok, %Bolty.Response{}}`.
+  """
+  def node_matching(label, id_props, filter_conditions)
+      when (is_atom(label) or is_list(label)) and is_map(id_props) and is_list(filter_conditions) do
+    Query.node_matching(label, id_props, filter_conditions)
+    |> Cypher.run()
+  end
+
+  @doc """
+  Bulk destroy (#361): deletes every node of `label` matching `conditions` that
+  isn't protected by a preservation `guard`. Returns `{:ok, %Bolty.Response{}}` —
+  with captured pre-delete node data when `return?`.
+  """
+  def bulk_detach_delete(label, conditions, guards, return?)
+      when (is_atom(label) or is_list(label)) and is_list(conditions) and is_list(guards) and
+             is_boolean(return?) do
+    Query.bulk_detach_delete(label, conditions, guards, return?)
+    |> Cypher.run()
+  end
+
   @spec merge_node(atom(), map()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
@@ -106,7 +140,20 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec update_node(atom(), map(), map(), list()) ::
+  @spec upsert_node(atom() | [atom()], map(), map(), map()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  @doc """
+  Atomic upsert (#379): MERGE on `merge_props` (the identity), `ON CREATE SET` the
+  rest (`create_props`), `ON MATCH SET` the `set_on_upsert` fields (`match_props`).
+  """
+  def upsert_node(label, merge_props, create_props, match_props)
+      when (is_atom(label) or is_list(label)) and is_map(merge_props) and is_map(create_props) and is_map(match_props) do
+    Query.upsert_node(label, merge_props, create_props, match_props)
+    |> Cypher.run()
+  end
+
+  @spec update_node(atom() | [atom()], map(), map(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -120,13 +167,38 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def update_node(label, match_properties, set_properties, remove_properties \\ [])
-      when (is_atom(label) or is_list(label)) and is_map(set_properties) do
-    Query.update_node(label, match_properties, set_properties, remove_properties)
+  def update_node(label, match_properties, set_properties, remove_properties \\ [], opts \\ [])
+      when (is_atom(label) or is_list(label)) and is_map(set_properties) and is_list(opts) do
+    Query.update_node(label, match_properties, set_properties, remove_properties, opts)
     |> Cypher.run()
   end
 
-  @spec relate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec update_node_labels(atom() | [atom()], map(), [atom()], [atom()]) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  @doc """
+  Adds and/or removes labels on an existing node (matched by label + properties).
+
+  A node's label set drives `AshNeo4j.worlds/1`, so this places a node in — or
+  strips it of — a resolvable world. Useful in tests: create a node via Ash,
+  then mutate its labels to set up a chosen world (or an unresolvable one).
+
+  ## Examples
+  ```
+  iex> AshNeo4j.Neo4jHelper.create_node([:SRM, :Place], %{name: "Sydney"})
+  iex> {result, _} = AshNeo4j.Neo4jHelper.update_node_labels(:Place, %{name: "Sydney"}, [], [:SRM])
+  iex> result
+  :ok
+  ```
+  """
+  def update_node_labels(label, match_properties, add_labels, remove_labels \\ [])
+      when (is_atom(label) or is_list(label)) and is_map(match_properties) and
+             is_list(add_labels) and is_list(remove_labels) do
+    Query.update_node_labels(label, match_properties, add_labels, remove_labels)
+    |> Cypher.run()
+  end
+
+  @spec relate_nodes(atom() | [atom()], map(), atom() | [atom()], map(), atom(), atom()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -148,7 +220,7 @@ defmodule AshNeo4j.Neo4jHelper do
     |> Cypher.run()
   end
 
-  @spec unrelate_nodes(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec unrelate_nodes(atom() | [atom()], map(), atom() | [atom()], map(), atom(), atom(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -163,15 +235,15 @@ defmodule AshNeo4j.Neo4jHelper do
   :ok
   ```
   """
-  def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+  def unrelate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, guard \\ [])
       when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
              is_atom(dest_label) and is_map(dest_properties) and
-             is_atom(edge_label) and is_atom(edge_direction) do
-    Query.unrelate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+             is_atom(edge_label) and is_atom(edge_direction) and is_list(guard) do
+    Query.unrelate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, guard: guard)
     |> Cypher.run()
   end
 
-  @spec relate_nodes_unrelating_source(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec relate_nodes_unrelating_source(atom(), map(), atom(), map(), atom(), atom(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -193,23 +265,25 @@ defmodule AshNeo4j.Neo4jHelper do
         dest_label,
         dest_properties,
         edge_label,
-        edge_direction
+        edge_direction,
+        guard \\ []
       )
       when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
              is_atom(dest_label) and is_map(dest_properties) and
-             is_atom(edge_label) and is_atom(edge_direction) do
+             is_atom(edge_label) and is_atom(edge_direction) and is_list(guard) do
     Query.relate_unrelating_source(
       source_label,
       source_properties,
       dest_label,
       dest_properties,
       edge_label,
-      edge_direction
+      edge_direction,
+      guard: guard
     )
     |> Cypher.run()
   end
 
-  @spec relate_nodes_unrelating_destination(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec relate_nodes_unrelating_destination(atom(), map(), atom(), map(), atom(), atom(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -231,23 +305,25 @@ defmodule AshNeo4j.Neo4jHelper do
         dest_label,
         dest_properties,
         edge_label,
-        edge_direction
+        edge_direction,
+        guard \\ []
       )
       when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
              is_atom(dest_label) and is_map(dest_properties) and
-             is_atom(edge_label) and is_atom(edge_direction) do
+             is_atom(edge_label) and is_atom(edge_direction) and is_list(guard) do
     Query.relate_unrelating_destination(
       source_label,
       source_properties,
       dest_label,
       dest_properties,
       edge_label,
-      edge_direction
+      edge_direction,
+      guard: guard
     )
     |> Cypher.run()
   end
 
-  @spec relate_nodes_unrelating_source_and_destination(atom(), map(), atom(), map(), atom(), atom()) ::
+  @spec relate_nodes_unrelating_source_and_destination(atom(), map(), atom(), map(), atom(), atom(), list()) ::
           {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
           | {:ok, any()}
   @doc """
@@ -271,29 +347,46 @@ defmodule AshNeo4j.Neo4jHelper do
         dest_label,
         dest_properties,
         edge_label,
-        edge_direction
+        edge_direction,
+        guard \\ []
       )
       when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
              is_atom(dest_label) and is_map(dest_properties) and
-             is_atom(edge_label) and is_atom(edge_direction) do
+             is_atom(edge_label) and is_atom(edge_direction) and is_list(guard) do
     Query.relate_unrelating_both(
       source_label,
       source_properties,
       dest_label,
       dest_properties,
       edge_label,
-      edge_direction
+      edge_direction,
+      guard: guard
     )
     |> Cypher.run()
   end
 
-  def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, options)
+  @doc """
+  Relates two nodes, honouring exclusivity and an optional `changeset.filter` guard.
+
+  `opts`:
+    * `:exclusive` — `{source_exclusive?, destination_exclusive?}` (default `{false, false}`),
+      selecting the plain / unrelate-source / unrelate-destination / unrelate-both render.
+    * `:guard` — a `changeset.filter` condition list (#368) gating the attach on the
+      live source node; a guard miss yields zero rows ⇒ the caller raises `StaleRecord`.
+  """
+  @spec relate_nodes(atom() | [atom()], map(), atom() | [atom()], map(), atom(), atom(), keyword()) ::
+          {:error, %{:__exception__ => true, :__struct__ => atom(), optional(atom()) => any()}}
+          | {:ok, any()}
+  def relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, opts)
       when (is_atom(source_label) or is_list(source_label)) and is_map(source_properties) and
              (is_atom(dest_label) or is_list(dest_label)) and is_map(dest_properties) and
-             is_atom(edge_label) and is_atom(edge_direction) and is_tuple(options) do
-    case options do
+             is_atom(edge_label) and is_atom(edge_direction) and is_list(opts) do
+    guard = Keyword.get(opts, :guard, [])
+
+    case Keyword.get(opts, :exclusive, {false, false}) do
       {false, false} ->
-        relate_nodes(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction)
+        Query.relate(source_label, source_properties, dest_label, dest_properties, edge_label, edge_direction, guard: guard)
+        |> Cypher.run()
 
       {true, false} ->
         relate_nodes_unrelating_source(
@@ -302,7 +395,8 @@ defmodule AshNeo4j.Neo4jHelper do
           dest_label,
           dest_properties,
           edge_label,
-          edge_direction
+          edge_direction,
+          guard
         )
 
       {false, true} ->
@@ -312,7 +406,8 @@ defmodule AshNeo4j.Neo4jHelper do
           dest_label,
           dest_properties,
           edge_label,
-          edge_direction
+          edge_direction,
+          guard
         )
 
       {true, true} ->
@@ -322,13 +417,14 @@ defmodule AshNeo4j.Neo4jHelper do
           dest_label,
           dest_properties,
           edge_label,
-          edge_direction
+          edge_direction,
+          guard
         )
     end
   end
 
-  @spec relate_nodes(atom(), map(), list()) ::
-          {:error, bitstring()}
+  @spec relate_nodes(atom() | [atom()], map(), list()) ::
+          {:error, Exception.t()}
           | :ok
   @doc """
   Creates source neo4j node with label, properties and relationships to existing nodes
@@ -371,8 +467,8 @@ defmodule AshNeo4j.Neo4jHelper do
       end)
 
     case results do
-      :error -> {:error, "error relating nodes"}
-      [] -> {:error, "unexpected empty result relating nodes"}
+      :error -> {:error, AshNeo4j.Error.Internal.exception(detail: "error relating nodes during create")}
+      [] -> {:error, AshNeo4j.Error.Internal.exception(detail: "unexpected empty result relating nodes during create")}
       _ -> :ok
     end
   end
@@ -403,7 +499,7 @@ defmodule AshNeo4j.Neo4jHelper do
         length(records) > 0
 
       {:error, error} ->
-        Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
+        Logger.error("AshNeo4j.Neo4jHelper: error running query: #{inspect(error)}")
         :error
     end
   end
@@ -445,7 +541,7 @@ defmodule AshNeo4j.Neo4jHelper do
         length(records) > 0
 
       {:error, error} ->
-        Logger.error("AshNeo4j.Neo4jHelper.Error running query: #{inspect(error)}")
+        Logger.error("AshNeo4j.Neo4jHelper: error running query: #{inspect(error)}")
         :error
     end
   end

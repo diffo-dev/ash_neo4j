@@ -20,6 +20,9 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
         array?(type) ->
           {:ok, :array, classify(elem(type, 1))}
 
+        tensor?(type) ->
+          {:ok, :tensor, type}
+
         neo4j_native?(type) ->
           {:ok, :native, type}
 
@@ -105,6 +108,14 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
     end
   end
 
+  # A tensor type (`AshNeo4j.Type.NxTensor`, or any type/NewType exposing the
+  # marker) — routed through the data layer's `:tensor` storage path.
+  defp tensor?(type) do
+    is_atom(type) and function_exported?(type, :ash_neo4j_tensor?, 0) and type.ash_neo4j_tensor?()
+  rescue
+    _ -> false
+  end
+
   defp ash_type_other_map?(type) do
     Ash.Type.ash_type?(type) and !Ash.Type.builtin?(type) and
       Ash.Type.storage_type(type) == :map
@@ -186,5 +197,12 @@ defmodule AshNeo4j.DataLayer.TypeClassifier do
       (Ash.Type.NewType.new_type?(inner_type) && inner_type.subtype_constraints()) || []
 
     Keyword.merge(subtype, explicit_items)
+  end
+
+  # Nested array (`{:array, {:array, _}}`): the constraints for the next level
+  # down live under `:items`. Without this clause an array-of-array raises here
+  # (the `is_atom/1` clause never matches a tuple inner type).
+  def item_constraints({:array, _}, constraints) when is_list(constraints) do
+    constraints[:items] || []
   end
 end

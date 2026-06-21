@@ -36,6 +36,7 @@ defmodule AshNeo4j.Test.Resource.Chain do
 
     update :update do
       primary? true
+      require_atomic? false
       accept [:name]
       argument :head_id, :uuid
       argument :tail_id, :uuid

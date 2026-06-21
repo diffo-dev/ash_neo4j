@@ -16,6 +16,9 @@ defmodule AshNeo4j.Test.Resource.Place do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
+    # #338 — a plain numeric attribute so traverse field aggregates
+    # ({:min|:max|:avg|:sum, :population}) have something to aggregate.
+    attribute :population, :integer, public?: true
 
     attribute :location, AshGeo.GeoJson,
       public?: true,

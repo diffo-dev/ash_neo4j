@@ -156,6 +156,7 @@ The DSL is verified against misconfiguration and violation of accepted neo4j con
 * relate: relationship_name must match the name of a relationship
 * relate: relationship enrichment not possible, edge_label, edge_direction and destination_label must be unique
 * attribute type requires unsupported term
+* identity cannot be enforced as a uniqueness constraint (`nils_distinct?: false`, or a filtered `where:`)
 
 ## Testing
 
@@ -178,6 +179,18 @@ end
 
 The `on_exit` call is optional — the transaction is rolled back automatically when the test process exits — but is recommended for clarity.
 
+### Placing a node in a world
+
+A node's **label set** is what `AshNeo4j.worlds/1` resolves to a `(domain, resource)` world, so polymorphic / open-world tests sometimes need a node whose labels differ from what an Ash create produces. `AshNeo4j.Neo4jHelper.update_node_labels/4` adds and/or removes labels on an existing node — create the node normally via Ash, then mutate its labels:
+
+```elixir
+place = Ash.create!(Place, %{name: "Sydney"})
+# strip the domain label so worlds/1 can no longer resolve this node to a world
+AshNeo4j.Neo4jHelper.update_node_labels(:Place, %{name: "Sydney"}, [], [:SRM])
+```
+
+This is a **test/maintenance** helper — the data layer sets labels at create time and never mutates them on the normal CRUD path — so it lives in `Neo4jHelper` alongside the other raw-Cypher helpers (`create_node/2`, `relate_nodes/6`, …) rather than on a resource action.
+
 ### Parallel tests
 
 Because each test's writes are confined to an uncommitted transaction, tests can run concurrently without interfering:
@@ -194,6 +207,19 @@ end
 ### Targeting a second Neo4j (pool routing)
 
 The data layer talks to a configurable Bolty pool — `AshNeo4j.BoltyHelper.current_pool/0`, defaulting to `Bolt`. Override it per-process with `with_pool/2` (or `Process.put(:ash_neo4j_pool, Pool)`) to route a test's queries — and the `cypher25?/1` / `policy/1` capability checks — to a different server. AshNeo4j's own suite uses this to run Cypher-25 vector tests against a Neo4j 2026.05 pool (`Bolt6`) while the rest of the suite stays on a 5.x pool; those tests are tagged `:cypher25` and excluded by default. Start a long-lived pool from `test_helper.exs` (not a per-test `setup`) — `Bolty.start_link/1` links the pool to the calling process, so starting it inside a test ties the pool's lifetime to that one test. See `usage-rules/vectors.md`.
+
+### Running the suite
+
+The suite needs a Neo4j at `bolt://localhost:7687` (`neo4j` / `password`, the `Bolt` block in `config/test.exs`). The `:cypher25` / `:bolt6` tests — excluded by default — additionally need a Neo4j ≥ 2025.06 at `bolt://localhost:7689` (the `Bolt6` block), and the `:apoc` test needs a Neo4j + APOC at `bolt://localhost:7691` (the `BoltApoc` block). The bundled `docker-compose.yml` brings all three up (community edition is deliberate — it runs everything the suite needs, including vector search and Cypher 25; APOC is on its own opt-in server since it's not part of the default surface):
+
+```sh
+docker compose up -d --wait                          # bolt5 → 7687, bolt6 → 7689, apoc → 7691
+mix test                                              # default suite (7687 only)
+mix test --include cypher25 --include bolt6 --include apoc   # full suite
+docker compose down                                   # tear down
+```
+
+Elixir/Erlang versions are pinned in `.tool-versions` (read by [mise](https://mise.jdx.dev) or asdf): `mise install` (or `asdf install`).
 
 ## Installing Neo4j and Configuring Bolty
 
@@ -250,7 +276,7 @@ We've made some decisions around how Ash/Elixir types are used to persist attrib
 | :utc_datetime_usec   | Ash.Type.UtcDatetimeUsec             | DateTime           | ~U[2025-05-11 07:45:41.429903Z]                         | 2025-05-11T07:45:41.429903000Z.                        | DATETIME       |
 | :uuid                | Ash.Type.UUID                        | BitString          | "0274972c-161c-4dc9-882f-6851704c2af9"                  | "0274972c-161c-4dc9-882f-6851704c2af9"                 | STRING         |
 | :uuid7               | Ash.Type.UUIDv7                      | BitString          | "019d85f7-8450-7695-9426-4ede74026140"                  | "019d85f7-8450-7695-9426-4ede74026140"                 | STRING         |
-| (vector embedding)   | AshNeo4j.Types.Vector                | List               | [0.12, -0.04, 0.98]                                     | [0.12, -0.04, 0.98]                                    | LIST<FLOAT>    |
+| (vector embedding)   | AshNeo4j.Type.Vector                | List               | [0.12, -0.04, 0.98]                                     | [0.12, -0.04, 0.98]                                    | LIST<FLOAT>    |
 
 Ash :date, :datetime, :time and :naive_datetime are second precision, whereas :utc_datetime_usec and :time_usec are microsecond precision. Neo4j is capable of nanoseconds however Ash/Elixir is not. 
 
@@ -258,7 +284,7 @@ Struct is supported, however must implement Ash.Type. Ash arrays are supported a
 
 Ash.Type.NewType including Ash.TypedStruct are supported, as are embedded resources.
 
-Ash.Type.File and Ash.Type.Term are not supported. The built-in `Ash.Type.Vector` is also not supported — AshNeo4j ships its own `AshNeo4j.Types.Vector` for embeddings (stored as a Neo4j `LIST<FLOAT>`), with `vector_similarity` / `vector_cosine_distance` search expressions. See `usage-rules/vectors.md`.
+Ash.Type.File and Ash.Type.Term are not supported. The built-in `Ash.Type.Vector` is also not supported — AshNeo4j ships its own `AshNeo4j.Type.Vector` for embeddings (stored as a Neo4j `LIST<FLOAT>`), with `vector_similarity` / `vector_cosine_distance` search expressions. See `usage-rules/vectors.md`.
 
 ## Storage Types
 
@@ -272,12 +298,16 @@ JSON types are stored as maps. We encode with AshNeo4j.Util.json_encode, which e
 Interestingly many Ash.Types have identical JSON representations (e.g. Map, Struct, Tuple, Keyword). Neo4j lists are used for arrays since JSON and Base64 are strings.
 
 A few things to note:
-* Ash.Type.UUID, Ash.Type.UUIDv7 - we persist in the 'cast_input' format rather than as compacted binary for readability, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. However foreign keys aren't persisted using properties, we of course use relationships.
+* Ash.Type.UUID, Ash.Type.UUIDv7 - we persist in the 'cast_input' format rather than as compacted binary for readability, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. However relationship attributes aren't persisted as properties, we of course use relationships (edges).
 * Ash.Type.Function - we persist external functions as a string MFA, rather than binary, so we don't use Ash.Type.dump_to_native and Ash.Type.cast_stored at all. Persisting local functions is not supported.
 
 ## Keys
 
 We've generally used :uuid_primary_key, which Ash creates. While it *may* be possible to use other types for primary keys, we haven't done so yet.
+
+## Identities
+
+An Ash `identity` is enforced at the database level with a Neo4j uniqueness constraint, so you don't need `pre_check?` (and its race window). Create the constraints yourself — like vector indexes, AshNeo4j runs no migrations on boot — with `AshNeo4j.Constraint.create_constraints/1` (single and composite identities are both supported on Community Edition). A conflicting create surfaces as Ash's own `Ash.Error.Changes.InvalidAttribute` ("has already been taken"), in Ash terms. Identities Neo4j can't enforce (`nils_distinct?: false`, or a filtered `where:`) are refused — at compile time and by the helper — rather than silently left unenforced. See `usage-rules/identities.md`.
 
 ## Elixir nil and Neo4j Null
 
@@ -348,9 +378,40 @@ Calculations can be:
 
 Only `expr(...)` calculations are currently supported. Custom `:calculate` callback modules are not.
 
+## Graph Traversal Expressions
+
+`traverse(^hop_chain, projection)` expresses a multi-hop graph traversal as an `Ash.Expr` value and pushes it down to a single Cypher path pattern — so a multi-hop reach composes inside a `filter` instead of being an imperative load-time walk. A relational data layer models relationships as joins and has no notion of a path as an expression value; this is something a graph data layer can offer that the relational ones structurally cannot.
+
+```elixir
+require Ash.Query
+import Ash.Expr
+
+chain = [{:forward, :posts}]                 # {:forward | :reverse, relationship_or_edge}
+
+# reached-node field comparison
+Author |> Ash.Query.filter(traverse(^chain, :score) > 50) |> Ash.read!()
+
+# compose with spatial — "services within 5 km of their site", one query
+Service |> Ash.Query.filter(st_dwithin(traverse(^chain, :location), ^point, 5_000)) |> Ash.read!()
+
+# membership / cardinality / aggregate over the reached set
+Service |> Ash.Query.filter(traverse(^chain, :exists) == true)
+Party   |> Ash.Query.filter(traverse(^chain, {:max, :population}) <= 5_200_000)
+```
+
+`traverse` is pushdown-only (it needs the graph) and lands in `filter` first — `sort`, `calculate`/policy and variable-length are tracked on epic [#321](https://github.com/diffo-dev/ash_neo4j/issues/321). To *return* a reached value rather than filter on it, use `AshNeo4j.Calculations.ProjectedTraversal`, which late-binds the reached node's type and yields `AshNeo4j.Unknown` when it can't be determined. See `usage-rules/traverse.md`.
+
+## Atomic and Bulk Writes
+
+AshNeo4j renders Ash atomics straight to Cypher — the new value is computed by the database in a `SET`, with no read-modify-write round trip. `Ash.bulk_update` / `Ash.bulk_destroy` with `strategy: :atomic` run as a single `update_query` / `destroy_query`; a create-or-update keyed on an identity renders an atomic `MERGE` so concurrent upserts converge on one node. A single filtered (optimistic-lock) update or destroy whose guard no longer holds returns `Ash.Error.Changes.StaleRecord` rather than a silent no-op, so lost updates are observable. See `usage-rules/atomics.md`.
+
+## Cypher Fragments
+
+`fragment(...)` is a filter escape hatch — embed a snippet of raw Cypher in a filter for a condition AshNeo4j doesn't push down (e.g. an APOC function), so the read stays a normal Ash query instead of being hand-written as a raw Cypher query (and losing authorization, the resource model and composability). `?` arguments are bound safely: an attribute reference renders to `s.<property>`, a literal to a `$param`. The fragment must be the whole filter, and arguments must be attribute references or literals — anything else is refused (`AshNeo4j.Error.UnsupportedFilterFragment`), never silently dropped. (This is the *expression* `fragment/N`, not an Ash *resource* fragment.) See `usage-rules/cypher-fragments.md`.
+
 ## Limitations and Future Work
 
-Ash Neo4j has support for Ash create, update, read, destroy actions, aggregates, expression calculations, spatial types, and vector embeddings. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
+Ash Neo4j has support for Ash create, update, read, destroy actions (including atomic and bulk writes with optimistic locking), aggregates, expression calculations, graph traversal expressions, spatial types, and vector embeddings. The cypher is now parameterised but is by no means optimised. The DSL is likely to evolve further and this may break back compatibility. Storage formats are subject to infrequent change so upgrade *may* require data migration (not included).
 
 Vector similarity search is currently a full scan — Neo4j does not use the HNSW vector index for `vector.similarity.cosine` in a `WHERE`/`ORDER BY`. Indexed top-K (via `db.index.vector.queryNodes` / the Cypher 25 `SEARCH` clause) is tracked in [#297](https://github.com/diffo-dev/ash_neo4j/issues/297).
 

@@ -32,13 +32,12 @@ defmodule AshNeo4j.Wgs84_3DTest do
   defp pz(lng, lat, h), do: %Geo.PointZ{coordinates: {lng, lat, h}, srid: 4979}
   defp p2(lng, lat), do: %Geo.Point{coordinates: {lng, lat}, srid: 4326}
 
-  # The data layer raises during query-build / dump; Ash wraps it (Ash.Error.*),
-  # but the original message is preserved — assert on that.
-  defp assert_message(expected, fun) do
-    fun.()
-    flunk("expected an exception, got none")
-  rescue
-    e -> assert Exception.message(e) =~ expected
+  # The data layer returns (never raises) a Splode error for an unformable query
+  # or unsupported write (#350); Ash wraps it but preserves the message — assert
+  # on the returned error.
+  defp assert_error_message(expected, fun) do
+    assert {:error, error} = fun.()
+    assert Exception.message(error) =~ expected
   end
 
   describe "GeoJson dimension-aware srid" do
@@ -107,14 +106,14 @@ defmodule AshNeo4j.Wgs84_3DTest do
   end
 
   describe "strict dimension policy (#270)" do
-    test "3D value against a 2D attribute raises GeoDimensionMismatch" do
-      assert_message "dimension mismatch: a 3D value against a 2D attribute", fn ->
+    test "3D value against a 2D attribute returns a GeoDimensionMismatch error" do
+      assert_error_message "dimension mismatch: a 3D value against a 2D attribute", fn ->
         Place |> Ash.Query.filter(st_distance(location, ^pz(151.0, -33.0, 5.0)) < 1000) |> Ash.read()
       end
     end
 
-    test "2D value against a 3D attribute raises GeoDimensionMismatch" do
-      assert_message "dimension mismatch: a 2D value against a 3D attribute", fn ->
+    test "2D value against a 3D attribute returns a GeoDimensionMismatch error" do
+      assert_error_message "dimension mismatch: a 2D value against a 3D attribute", fn ->
         Place |> Ash.Query.filter(st_distance(tower, ^p2(151.0, -33.0)) < 1000) |> Ash.read()
       end
     end
@@ -136,14 +135,14 @@ defmodule AshNeo4j.Wgs84_3DTest do
   end
 
   describe "3D areal/linear deferred to Phase 2" do
-    test "storing a PolygonZ raises Unsupported3DGeometry" do
+    test "storing a PolygonZ returns an Unsupported3DGeometry error" do
       polyz = %Geo.PolygonZ{
         coordinates: [[{151.0, -34.0, 0.0}, {151.5, -34.0, 0.0}, {151.5, -33.0, 0.0}, {151.0, -34.0, 0.0}]],
         srid: 4979
       }
 
-      assert_message "3D areal/linear geometry) is not supported yet", fn ->
-        Place |> Ash.create!(%{name: "bad", shape: polyz})
+      assert_error_message "3D areal/linear geometry) is not supported yet", fn ->
+        Place |> Ash.create(%{name: "bad", shape: polyz})
       end
     end
   end

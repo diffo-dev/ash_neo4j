@@ -1,0 +1,232 @@
+<!--
+SPDX-FileCopyrightText: 2026 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+
+SPDX-License-Identifier: MIT
+-->
+
+# Managing Neo4j Schema
+
+```elixir
+Mix.install(
+  [
+    {:ash_neo4j, "~> 0.10"},
+    {:kino, "~> 0.14"}
+  ],
+  consolidate_protocols: false
+)
+```
+
+## What this guide covers
+
+AshNeo4j has three manual DDL surfaces and a deliberate **no-migrations-on-boot** stance:
+
+* **identity uniqueness constraints** and **primary-key constraints** — `AshNeo4j.Constraint` (#20, #32)
+* **vector indexes** — `AshNeo4j.Vector` (#74)
+* (spatial POINT indexes — `AshNeo4j.Spatial` — follow the same shape; see `usage-rules/spatial.md`)
+
+This guide is a cohesive, runnable walk-through of creating and maintaining them.
+
+### Why manual
+
+AshNeo4j runs **no migrations on boot**. It never silently mutates your database schema on application start. Instead you call these helpers yourself — typically from a start-up or release task — so schema changes are explicit, reviewable, and under your control.
+
+Every statement uses `IF NOT EXISTS` / `IF EXISTS`, so the helpers are **idempotent and safe to re-run**. The dry-run functions (`constraint_statements/1`, `index_statements/3`) return the exact Cypher **without touching the database** — so the constraint/index sections below are runnable for review even before you connect.
+
+## Connecting
+
+Update the configuration for your local Neo4j and evaluate. (Only the live "create / drop / SHOW" cells need a connection — the dry-run cells do not.)
+
+```elixir
+config = [
+  uri: "bolt://localhost:7687",
+  auth: [username: "neo4j", password: "password"],
+  user_agent: "ashNeo4jSchemaHowTo/1",
+  pool_size: 5,
+  prefix: :default,
+  name: Bolt,
+  versions: [6.0, {5, 6..8}, {5, 0..4}],
+  log: false
+]
+
+AshNeo4j.BoltyHelper.start(config)
+AshNeo4j.BoltyHelper.is_connected()
+```
+
+## Example resources
+
+A small domain with three constraint shapes: a single-attribute identity, a **composite** primary key, and a vector attribute.
+
+```elixir
+defmodule Schema.Domain do
+  use Ash.Domain, validate_config_inclusion?: false
+
+  resources do
+    allow_unregistered? true
+  end
+end
+
+defmodule Schema.Product do
+  use Ash.Resource, domain: Schema.Domain, data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    label :Product
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :sku, :string, allow_nil?: false, public?: true
+    attribute :name, :string, public?: true
+  end
+
+  identities do
+    # a single-attribute identity → one uniqueness constraint
+    identity :unique_sku, [:sku]
+  end
+end
+
+defmodule Schema.Listing do
+  use Ash.Resource, domain: Schema.Domain, data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    label :Listing
+  end
+
+  attributes do
+    # a composite primary key → one composite IS UNIQUE constraint
+    attribute :marketplace, :string, allow_nil?: false, primary_key?: true, public?: true
+    attribute :sku, :string, allow_nil?: false, primary_key?: true, public?: true
+    attribute :price, :integer, public?: true
+  end
+end
+
+defmodule Schema.Note do
+  use Ash.Resource, domain: Schema.Domain, data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    label :Note
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :body, :string, public?: true
+    # a vector attribute → a VECTOR index (Cypher 25 / Neo4j ≥ 2025.06)
+    attribute :embedding, AshNeo4j.Type.Vector,
+      constraints: [element_type: :float32, dimensions: 1536],
+      public?: true
+  end
+end
+```
+
+## Identities → uniqueness constraints (#20)
+
+An Ash `identity` is enforced at the database level with a Neo4j uniqueness constraint — so you don't need `pre_check?` and its race window. A conflicting create surfaces as Ash's own `Ash.Error.Changes.InvalidAttribute` ("has already been taken").
+
+Inspect the Cypher first (no database needed):
+
+```elixir
+AshNeo4j.Constraint.constraint_statements(Schema.Product)
+#=> {:ok, ["CREATE CONSTRAINT product_pk IF NOT EXISTS FOR (n:Product) REQUIRE n.uuid IS UNIQUE",
+#         "CREATE CONSTRAINT product_unique_sku IF NOT EXISTS FOR (n:Product) REQUIRE n.sku IS UNIQUE"]}
+```
+
+Then create them (this one touches the database):
+
+```elixir
+AshNeo4j.Constraint.create_constraints(Schema.Product)
+#=> {:ok, [%Bolty.Response{}, ...]}   # one per constraint; safe to re-run (IF NOT EXISTS)
+```
+
+Constraint names are derived: `<label_lower>_<identity_name>` for an identity (`product_unique_sku`), and `<label_lower>_pk` for the primary key (`product_pk`).
+
+## Composite primary keys (#32)
+
+The resource's **primary key** also gets a uniqueness constraint — composite keys included, on Neo4j **Community Edition**. `Schema.Listing` has a composite `[:marketplace, :sku]` primary key:
+
+```elixir
+AshNeo4j.Constraint.constraint_statements(Schema.Listing)
+#=> {:ok, ["CREATE CONSTRAINT listing_pk IF NOT EXISTS FOR (n:Listing) REQUIRE (n.marketplace, n.sku) IS UNIQUE"]}
+```
+
+The primary-key constraint is **deduped**: if an identity already constrains the same attribute set, no redundant `_pk` constraint is created. Primary-key attributes are always required, so the constraint is always enforceable.
+
+```elixir
+AshNeo4j.Constraint.create_constraints(Schema.Listing)
+```
+
+## What's refused (not silently skipped)
+
+Some identities **cannot** be enforced as a Neo4j uniqueness constraint:
+
+* `nils_distinct?: false` — Neo4j treats nulls as always-distinct in a uniqueness constraint
+* a **filtered** identity (`where:`) — a constraint can't carry a predicate
+
+Rather than silently leave such an identity unenforced (and permit the duplicates the constraint exists to prevent), AshNeo4j **refuses** — returning `{:error, %AshNeo4j.Error.UnsupportedIdentity{}}` and creating **nothing** for that resource (all-or-nothing). The same cases are rejected at compile time by `AshNeo4j.Verifiers.VerifyIdentities`, so you find out when you define the resource, not in production.
+
+```elixir
+defmodule Schema.Loose do
+  use Ash.Resource, domain: Schema.Domain, data_layer: AshNeo4j.DataLayer
+
+  neo4j do
+    label :Loose
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :email, :string, public?: true
+  end
+
+  identities do
+    identity :unique_email, [:email], nils_distinct?: false
+  end
+end
+
+AshNeo4j.Constraint.constraint_statements(Schema.Loose)
+#=> {:error, %AshNeo4j.Error.UnsupportedIdentity{reason: :nils_not_distinct, ...}}
+```
+
+## Vector indexes (#74)
+
+A vector attribute is searchable without an index (a full scan), but an HNSW **VECTOR index** is what makes similarity search scale. Like constraints, you create it yourself. It requires Cypher 25 (Neo4j ≥ 2025.06).
+
+Dimensions and element type come from the attribute's `constraints`; the index options control naming, recreation, and the similarity function.
+
+```elixir
+AshNeo4j.Vector.index_statements(Schema.Note, :embedding)
+#=> {:ok, "CREATE VECTOR INDEX note_embedding_vector IF NOT EXISTS FOR (n:Note) ON (n.embedding) " <>
+#         "OPTIONS {indexConfig: {`vector.dimensions`: 1536, `vector.similarity_function`: 'cosine'}}"}
+```
+
+```elixir
+# create it (Cypher 25 required)
+AshNeo4j.Vector.create_index(Schema.Note, :embedding)
+
+# changed :dimensions or :similarity_function? recreate drops then re-creates:
+AshNeo4j.Vector.create_index(Schema.Note, :embedding, recreate: true, similarity_function: :euclidean)
+```
+
+## Maintaining
+
+Inspect what's actually on the server with native Cypher via the data layer's pool:
+
+```elixir
+{:ok, constraints} = AshNeo4j.Cypher.run("SHOW CONSTRAINTS")
+{:ok, indexes} = AshNeo4j.Cypher.run("SHOW INDEXES")
+{constraints, indexes}
+```
+
+Drop when a resource's schema changes (both use `IF EXISTS`, so they're no-ops when absent):
+
+```elixir
+AshNeo4j.Constraint.drop_constraints(Schema.Product)
+AshNeo4j.Vector.drop_index(Schema.Note, :embedding)
+```
+
+A typical **release task** creates the schema for every resource on deploy — idempotent, so it's safe on every release:
+
+```elixir
+for resource <- [Schema.Product, Schema.Listing] do
+  {resource, AshNeo4j.Constraint.create_constraints(resource)}
+end
+```
+
+That's the whole schema surface: declare constraints and indexes in code, inspect the Cypher with the dry-run helpers, create them from a release task, and re-run freely. No migrations on boot, nothing implicit.

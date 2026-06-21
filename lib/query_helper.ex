@@ -27,16 +27,20 @@ defmodule AshNeo4j.QueryHelper do
 
   defp run_simple_query(ash_query) do
     mapping = ResourceInfo.mapping(ash_query.resource)
-    {terms, sort_params} = sort_terms(ash_query, mapping)
 
-    query =
-      ash_query
-      |> build_query(mapping)
-      |> Query.merge_params(sort_params)
-      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-      |> Query.add_order_by(terms)
+    # A predicate we couldn't form (e.g. an unresolvable traverse, #342) is an
+    # `{:error, _}` that doesn't match `%Query{}` — `with` passes it straight
+    # through rather than running a fabricated query.
+    with %Query{} = base <- build_query(ash_query, mapping),
+         {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
+      query =
+        base
+        |> Query.merge_params(sort_params)
+        |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+        |> Query.add_order_by(terms)
 
-    run_cypher_query(query)
+      run_cypher_query(query)
+    end
   end
 
   defp run_combination_query(ash_query, combinations) do
@@ -62,16 +66,17 @@ defmodule AshNeo4j.QueryHelper do
         build_branch_query(branch_dl_query, mapping, "b#{idx}_", :nodes)
       end)
 
-    {terms, sort_params} = sort_terms(ash_query, mapping)
+    with nil <- Enum.find(branch_queries, &match?({:error, _}, &1)),
+         {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
+      query =
+        branch_queries
+        |> Query.combination_block(union_type: union_type)
+        |> Query.merge_params(sort_params)
+        |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+        |> Query.add_order_by(terms)
 
-    query =
-      branch_queries
-      |> Query.combination_block(union_type: union_type)
-      |> Query.merge_params(sort_params)
-      |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-      |> Query.add_order_by(terms)
-
-    run_cypher_query(query)
+      run_cypher_query(query)
+    end
   end
 
   defp run_in_memory_combination(ash_query, mapping, branch_dl_queries, all_types) do
@@ -79,14 +84,9 @@ defmodule AshNeo4j.QueryHelper do
       branch_dl_queries
       |> Enum.with_index()
       |> Enum.map(fn {branch_dl_query, idx} ->
-        query = build_branch_query(branch_dl_query, mapping, "b#{idx}_", :ids)
-
-        case Cypher.run(query) do
-          {:ok, %Bolty.Response{results: results}} ->
-            {:ok, MapSet.new(results, &Map.get(&1, "sid"))}
-
-          {:error, _} = err ->
-            err
+        with %Query{} = query <- build_branch_query(branch_dl_query, mapping, "b#{idx}_", :ids),
+             {:ok, %Bolty.Response{results: results}} <- Cypher.run(query) do
+          {:ok, MapSet.new(results, &Map.get(&1, "sid"))}
         end
       end)
 
@@ -100,16 +100,16 @@ defmodule AshNeo4j.QueryHelper do
         if keep_ids == [] do
           {:ok, []}
         else
-          {terms, sort_params} = sort_terms(ash_query, mapping)
+          with {:ok, {terms, sort_params}} <- sort_terms(ash_query, mapping) do
+            final =
+              mapping.label_pair
+              |> Query.node_read_by_ids(keep_ids)
+              |> Query.merge_params(sort_params)
+              |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
+              |> Query.add_order_by(terms)
 
-          final =
-            mapping.label_pair
-            |> Query.node_read_by_ids(keep_ids)
-            |> Query.merge_params(sort_params)
-            |> Query.paginate_nodes(terms, ash_query.offset, ash_query.limit)
-            |> Query.add_order_by(terms)
-
-          run_cypher_query(final)
+            run_cypher_query(final)
+          end
         end
 
       {:error, reason} ->
@@ -139,8 +139,8 @@ defmodule AshNeo4j.QueryHelper do
       {:ok, %Bolty.Response{results: results}} ->
         {:ok, results}
 
-      {:error, _} ->
-        {:error, "Error running cypher query"}
+      {:error, error} ->
+        {:error, AshNeo4j.Error.Neo4j.from_bolt(error)}
     end
   end
 
@@ -167,19 +167,23 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
-  defp classify_combination(_), do: {:error, "AshNeo4j: combination_of must start with :base"}
+  defp classify_combination(_),
+    do: {:error, AshNeo4j.Error.Internal.exception(detail: "combination_of must start with :base")}
 
-  # builder: :nodes | :ids — which branch_node_read variant to use
+  # builder: :nodes | :ids — which branch_node_read variant to use.
+  # Returns the branch Cypher.Query, or `{:error, _}` if a branch predicate
+  # can't be formed (threaded up by the combination runners).
   defp build_branch_query(branch_dl_query, %ResourceMapping{} = mapping, param_prefix, builder) do
-    conditions = extract_branch_conditions(branch_dl_query, mapping)
-    build = if builder == :ids, do: &Query.branch_node_read_ids/3, else: &Query.branch_node_read/3
-    build.(mapping.label_pair, conditions, param_prefix: param_prefix)
+    with {:ok, conditions} <- extract_branch_conditions(branch_dl_query, mapping) do
+      build = if builder == :ids, do: &Query.branch_node_read_ids/3, else: &Query.branch_node_read/3
+      build.(mapping.label_pair, conditions, param_prefix: param_prefix)
+    end
   end
 
   defp extract_branch_conditions(branch_dl_query, %ResourceMapping{} = mapping) do
     case branch_dl_query.filter do
       nil ->
-        []
+        {:ok, []}
 
       filter ->
         simple_filter = Ash.Filter.to_simple_filter(filter, skip_invalid?: true)
@@ -196,28 +200,379 @@ defmodule AshNeo4j.QueryHelper do
   end
 
   defp build_query(ash_query, %ResourceMapping{} = mapping) do
-    if ash_query.filter == nil do
-      Query.node_read(mapping.label_pair)
-    else
-      simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
+    expression = if ash_query.filter, do: Map.get(ash_query.filter, :expression)
 
-      predicates =
-        simple_filter
-        |> Map.get(:predicates, [])
-        |> Enum.reject(fn pred ->
-          match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(pred, :left))
-        end)
-
-      if predicates == [] do
-        Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
+    cond do
+      ash_query.filter == nil ->
         Query.node_read(mapping.label_pair)
-      else
-        build_filtered_query(mapping, predicates)
+
+      # A filter that *is* a single `fragment(...)` (the Cypher escape hatch, #33) —
+      # render it straight into the WHERE.
+      match?(%Ash.Query.Function.Fragment{}, expression) ->
+        build_fragment_query(expression, mapping)
+
+      # A fragment combined with other conditions can't be rendered yet, and raw
+      # Cypher can't be evaluated in-memory — refuse rather than silently mis-answer.
+      contains_fragment?(expression) ->
+        {:error, AshNeo4j.Error.UnsupportedFilterFragment.exception(resource: mapping.module, reason: :combined)}
+
+      true ->
+        simple_filter = Ash.Filter.to_simple_filter(ash_query.filter, skip_invalid?: true)
+
+        predicates =
+          simple_filter
+          |> Map.get(:predicates, [])
+          |> Enum.reject(fn pred ->
+            match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(pred, :left))
+          end)
+
+        if predicates == [] do
+          Logger.debug("AshNeo4j.QueryHelper: filter #{inspect(ash_query.filter)} is not a simple filter")
+          Query.node_read(mapping.label_pair)
+        else
+          build_filtered_query(mapping, predicates)
+        end
+    end
+  end
+
+  # Renders a single `fragment(...)` (#33) to a node read with the fragment as the
+  # WHERE: `MATCH (s:Label) WHERE <fragment> OPTIONAL MATCH (s)-[r]-(d) RETURN …`.
+  # Refuses (no silent in-memory fallback) when an argument isn't a plain attribute
+  # reference or literal.
+  defp build_fragment_query(%Ash.Query.Function.Fragment{} = fragment, %ResourceMapping{} = mapping) do
+    case render_fragment(fragment, mapping) do
+      {:ok, {where, params}} ->
+        Query.node_read_fragment(mapping.label_pair, where, params)
+
+      {:error, reason} ->
+        {:error, AshNeo4j.Error.UnsupportedFilterFragment.exception(resource: mapping.module, reason: reason)}
+    end
+  end
+
+  @doc false
+  # Walks the fragment tokens — `{:raw, cypher}` literal (author-controlled), an
+  # attribute `{:expr, ref}` → `s.<property>`, a literal `{:expr, value}` → a bound
+  # `$frag_N` param (injection-safe). Other argument shapes are refused. Public for
+  # testing the render of a `fragment(...)` without a live (APOC) server.
+  def render_fragment(%Ash.Query.Function.Fragment{arguments: tokens}, %ResourceMapping{} = mapping) do
+    tokens
+    |> Enum.reduce_while({:ok, {"", %{}, 0}}, fn token, {:ok, {acc_str, acc_params, index}} ->
+      case render_fragment_token(token, mapping, index) do
+        {:ok, piece, params, next_index} ->
+          {:cont, {:ok, {acc_str <> piece, Map.merge(acc_params, params), next_index}}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, {where, params, _index}} -> {:ok, {where, params}}
+      error -> error
+    end
+  end
+
+  defp render_fragment_token({:raw, cypher}, _mapping, index) when is_binary(cypher), do: {:ok, cypher, %{}, index}
+
+  defp render_fragment_token({:expr, %Ash.Query.Ref{attribute: attribute, relationship_path: []}}, mapping, index) do
+    name = Map.get(attribute, :name, attribute)
+
+    if Ash.Resource.Info.attribute(mapping.module, name) do
+      {:ok, "s.#{Keyword.get(mapping.properties, name, name)}", %{}, index}
+    else
+      {:error, {:unsupported_argument, attribute}}
+    end
+  end
+
+  defp render_fragment_token({:expr, value}, _mapping, index)
+       when is_number(value) or is_binary(value) or is_boolean(value) do
+    key = "frag_#{index}"
+    {:ok, "$#{key}", %{key => value}, index + 1}
+  end
+
+  defp render_fragment_token({:expr, other}, _mapping, _index), do: {:error, {:unsupported_argument, other}}
+
+  defp contains_fragment?(%Ash.Query.Function.Fragment{}), do: true
+  defp contains_fragment?(%_struct{} = struct), do: struct |> Map.from_struct() |> Map.values() |> Enum.any?(&contains_fragment?/1)
+  defp contains_fragment?(list) when is_list(list), do: Enum.any?(list, &contains_fragment?/1)
+  defp contains_fragment?(%{} = map), do: map |> Map.values() |> Enum.any?(&contains_fragment?/1)
+  defp contains_fragment?(_), do: false
+
+  defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
+    case Enum.find(predicates, &traverse_predicate?/1) do
+      nil -> build_relationship_or_property_query(mapping, predicates)
+      traverse_predicate -> build_traversal_query(mapping, traverse_predicate)
+    end
+  end
+
+  # A reached-node predicate over a traversal: a field comparison (#321), a
+  # field aggregate (#338), or a spatial predicate with the traversal as its
+  # geometry argument (#330).
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, {agg, field}]}})
+       when agg in [:min, :max, :avg, :sum] and is_atom(field),
+       do: true
+
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.Traverse{arguments: [_chain, field]}})
+       when is_atom(field),
+       do: true
+
+  defp traverse_predicate?(%AshNeo4j.Functions.StDwithin{arguments: [%AshNeo4j.Functions.Traverse{} | _]}), do: true
+  defp traverse_predicate?(%AshNeo4j.Functions.StContains{arguments: [%AshNeo4j.Functions.Traverse{} | _]}), do: true
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.StDistance{arguments: [%AshNeo4j.Functions.Traverse{} | _]}}), do: true
+
+  defp traverse_predicate?(%{left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [%AshNeo4j.Functions.Traverse{} | _]}}),
+    do: true
+
+  defp traverse_predicate?(_), do: false
+
+  # Membership over the reached set (#334): `traverse(^chain, :exists) == true|false`.
+  # `:exists` renders to `EXISTS {}` / `NOT EXISTS {}` — no reached-node field, so
+  # no reached-resource typing needed (composes over reverse chains too).
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, :exists]},
+         right: value
+       })
+       when operator in [:==, :!=] and is_boolean(value) do
+    with {:ok, {segments, _reached}} <- chain_segments(mapping, chain) do
+      exists? = if operator == :==, do: value, else: not value
+      traversal_predicate(mapping, segments, {:exists, exists?})
+    end
+  end
+
+  # Cardinality over the reached set (#334): `traverse(^chain, :count) <op> n`.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, :count]},
+         right: value
+       })
+       when operator in [:==, :!=, :<, :<=, :>, :>=] and is_integer(value) do
+    with {:ok, {segments, _reached}} <- chain_segments(mapping, chain) do
+      traversal_predicate(mapping, segments, {:count, operator, value})
+    end
+  end
+
+  # Field aggregate over the reached set (#338): `traverse(^chain, {:min, :field}) <op> value`.
+  # Reads `d.field`, so it needs the reached resource's property mapping — a
+  # forward relationship-name chain resolves it; a reverse-terminal chain (#336)
+  # gives `reached = nil` and falls back to an unfiltered read.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, {agg, field}]},
+         right: value
+       })
+       when agg in [:min, :max, :avg, :sum] and operator in [:==, :!=, :<, :<=, :>, :>=] do
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      traversal_aggregate(mapping, segments, reached, agg, field, operator, value)
+    end
+  end
+
+  # Reached-node field comparison: `traverse(^chain, :field) <op> value`.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %AshNeo4j.Functions.Traverse{arguments: [chain, field]},
+         right: value
+       }) do
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      cond do
+        is_nil(reached) ->
+          unresolvable(mapping, :unresolved_reached, %{chain: chain, field: field})
+
+        not mapped_property?(reached, field) ->
+          unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
+
+        true ->
+          condition = {property_name(ResourceInfo.mapping(reached), field), operator, to_param_value(value), false}
+          traversal_query(mapping, segments, [condition])
       end
     end
   end
 
-  defp build_filtered_query(%ResourceMapping{} = mapping, predicates) do
+  # Composition (#330/#332): a spatial predicate with the traversal as its geometry
+  # argument — render it against the reached node. Needs a resolvable reached
+  # resource (relationship-name chain) for the reached geo attribute.
+  defp build_traversal_query(%ResourceMapping{} = mapping, %AshNeo4j.Functions.StDwithin{
+         arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, test_point, threshold]
+       })
+       when is_number(threshold) do
+    spatial_traversal(mapping, chain, fn reached ->
+      geo_condition(reached, field, test_point, fn param ->
+        {point_property(reached, field), :st_dwithin, {param, threshold}, false}
+      end)
+    end)
+  end
+
+  defp build_traversal_query(%ResourceMapping{} = mapping, %{
+         operator: operator,
+         left: %distance{arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, test_point]},
+         right: threshold
+       })
+       when distance in [AshNeo4j.Functions.StDistance, AshNeo4j.Functions.StDistanceInMeters] and is_number(threshold) do
+    spatial_traversal(mapping, chain, fn reached ->
+      geo_condition(reached, field, test_point, fn param ->
+        {point_property(reached, field), :st_distance, {operator, param, threshold}, false}
+      end)
+    end)
+  end
+
+  defp build_traversal_query(%ResourceMapping{} = mapping, %AshNeo4j.Functions.StContains{
+         arguments: [%AshNeo4j.Functions.Traverse{arguments: [chain, field]}, %Geo.Point{} = point]
+       }) do
+    spatial_traversal(mapping, chain, fn reached ->
+      if polygon_attribute?(reached, field) do
+        {property_name(reached, field), :st_contains, to_param_value(point), false}
+      end
+    end)
+  end
+
+  # Unsupported traverse predicate shape — can't form it, so return an error
+  # rather than a fabricated/unfiltered read (#342).
+  defp build_traversal_query(%ResourceMapping{} = mapping, predicate) do
+    unresolvable(mapping, :unsupported_predicate, %{predicate: predicate})
+  end
+
+  # Resolves the chain + reached resource, applies `condition_fn` against the
+  # reached mapping (`nil` = not applicable), then builds the traversal read.
+  defp spatial_traversal(%ResourceMapping{} = mapping, chain, condition_fn) do
+    with {:ok, {segments, reached}} <- chain_segments(mapping, chain) do
+      if is_nil(reached) do
+        unresolvable(mapping, :unresolved_reached, %{chain: chain})
+      else
+        case condition_fn.(ResourceInfo.mapping(reached)) do
+          nil -> unresolvable(mapping, :unmapped_property, %{reached: reached})
+          {:error, _} = error -> error
+          condition -> traversal_query(mapping, segments, [condition])
+        end
+      end
+    end
+  end
+
+  # resolve_chain + map an unresolved hop to a returned `UnresolvableTraversal`
+  # (#342), so the filter path never runs a query with a fabricated edge label.
+  defp chain_segments(%ResourceMapping{} = mapping, chain) do
+    case resolve_chain(mapping.module, chain) do
+      {:ok, result} -> {:ok, result}
+      {:error, {:unresolved_hop, hop}} -> unresolvable(mapping, :unresolved_hop, %{hop: hop, chain: chain})
+    end
+  end
+
+  defp traversal_query(%ResourceMapping{} = mapping, [], _conditions),
+    do: unresolvable(mapping, :empty_chain, %{})
+
+  defp traversal_query(%ResourceMapping{} = mapping, segments, conditions) do
+    Query.traversal_read(mapping.label_pair, segments, conditions)
+  end
+
+  defp traversal_predicate(%ResourceMapping{} = mapping, [], _agg),
+    do: unresolvable(mapping, :empty_chain, %{})
+
+  defp traversal_predicate(%ResourceMapping{} = mapping, segments, agg) do
+    Query.traversal_predicate_read(mapping.label_pair, segments, agg)
+  end
+
+  defp traversal_aggregate(%ResourceMapping{} = mapping, [], _reached, _agg, _field, _op, _value),
+    do: unresolvable(mapping, :empty_chain, %{})
+
+  # No resolved reached resource (e.g. reverse-terminal chain, #336) — can't map
+  # the reached field to a property.
+  defp traversal_aggregate(%ResourceMapping{} = mapping, _segments, nil, agg, field, _op, _value),
+    do: unresolvable(mapping, :unresolved_reached, %{field: field, aggregate: agg})
+
+  defp traversal_aggregate(%ResourceMapping{} = mapping, segments, reached, agg, field, op, value) do
+    if mapped_property?(reached, field) do
+      prop = property_name(ResourceInfo.mapping(reached), field)
+      Query.traversal_aggregate_read(mapping.label_pair, segments, {agg, prop, op, to_param_value(value)})
+    else
+      unresolvable(mapping, :unmapped_property, %{reached: reached, field: field})
+    end
+  end
+
+  # Builds the `{:error, %UnresolvableTraversal{}}` a data layer returns when a
+  # traverse predicate can't be formed — `:reason` distinguishes the failure
+  # mode, `:context` carries the specifics.
+  defp unresolvable(%ResourceMapping{module: module}, reason, context) do
+    {:error, AshNeo4j.Error.UnresolvableTraversal.exception(world: module, reason: reason, context: context)}
+  end
+
+  # True when `field` resolves to a property in the reached resource's mapping.
+  defp mapped_property?(resource, field) do
+    Keyword.has_key?(ResourceInfo.mapping(resource).properties, field)
+  end
+
+  @doc """
+  Resolves a hop chain to `{:ok, {[{edge_label, direction, dest_label}], reached_resource}}`,
+  threading the current resource so relationship-name hops resolve at each step.
+  `reached_resource` is `nil` once an explicit-edge hop breaks the resource chain.
+
+  Returns `{:error, {:unresolved_hop, hop}}` when a relationship-name hop names no
+  declared `relate` edge (so it can't be a Cypher edge label) — instead of
+  silently using the name as the label (#342). Public so read-time consumers
+  (e.g. the projection calculation) can turn a `chain` opt into Cypher path
+  segments for `Cypher.Query.related_nodes/4`.
+  """
+  @spec resolve_chain(module(), list()) ::
+          {:ok, {[{atom(), atom(), atom() | nil}], module() | nil}} | {:error, {:unresolved_hop, term()}}
+  def resolve_chain(resource, chain) when is_list(chain) do
+    Enum.reduce_while(chain, {:ok, {[], resource}}, fn hop, {:ok, {acc, current}} ->
+      case resolve_hop(current, hop) do
+        {:error, _} = error -> {:halt, error}
+        {segment, next} -> {:cont, {:ok, {acc ++ [segment], next}}}
+      end
+    end)
+  end
+
+  def resolve_chain(_resource, _), do: {:ok, {[], nil}}
+
+  # Relationship-name hop — resolve via `relate` on the current resource. `:forward`
+  # walks the declared edge direction, `:reverse` flips it.
+  defp resolve_hop(resource, {direction, rel_name}) when is_atom(rel_name) and not is_nil(resource) do
+    case ResourceInfo.node_relationship(resource, rel_name) do
+      {_name, edge_label, edge_direction, dest_label} ->
+        cypher_direction = if direction == :reverse, do: flip_direction(edge_direction), else: edge_direction
+
+        # A `relate` edge is declared *out of* this resource, so `:reverse` of it
+        # has no well-defined reached type — the honest typed reverse is the
+        # explicit-edge form. Forward resolves to the relationship's destination.
+        {dest, next} =
+          if direction == :forward,
+            do: {dest_label, relationship_destination(resource, rel_name)},
+            else: {nil, nil}
+
+        {{edge_label, cypher_direction, dest}, next}
+
+      _ ->
+        # `rel_name` is not a declared `relate` edge — it can't be an edge label,
+        # so refuse rather than fabricate one (#342). Use `{:edge, label}` to
+        # name a raw edge explicitly.
+        {:error, {:unresolved_hop, {direction, rel_name}}}
+    end
+  end
+
+  # Explicit edge hop — `{:edge, label}` or `{:edge, label, dest_label}`. A given
+  # dest label resolves to its resource so the reached node is typed.
+  defp resolve_hop(_resource, {direction, {:edge, label}}), do: {{label, hop_direction(direction), nil}, nil}
+
+  defp resolve_hop(_resource, {direction, {:edge, label, dest}}),
+    do: {{label, hop_direction(direction), dest}, AshNeo4j.resource_for_label(dest)}
+
+  # Any other hop shape — incl. a relationship-name hop once the resource chain
+  # has broken (`current` is nil) — is unresolvable.
+  defp resolve_hop(_resource, hop), do: {:error, {:unresolved_hop, hop}}
+
+  defp relationship_destination(resource, rel_name) do
+    case Ash.Resource.Info.relationship(resource, rel_name) do
+      %{destination: destination} -> destination
+      _ -> nil
+    end
+  end
+
+  defp hop_direction(:forward), do: :outgoing
+  defp hop_direction(:reverse), do: :incoming
+
+  defp flip_direction(:outgoing), do: :incoming
+  defp flip_direction(:incoming), do: :outgoing
+  defp flip_direction(other), do: other
+
+  defp build_relationship_or_property_query(%ResourceMapping{} = mapping, predicates) do
     relationship_predicates =
       Enum.filter(predicates, fn predicate ->
         if Map.has_key?(predicate, :operator) and ref_or_atom?(predicate.left) do
@@ -232,8 +587,9 @@ defmodule AshNeo4j.QueryHelper do
 
     cond do
       Enum.empty?(relationship_predicates) ->
-        conditions = to_conditions(mapping, property_predicates)
-        Query.node_read_filtered(mapping.label_pair, conditions)
+        with {:ok, conditions} <- to_conditions(mapping, property_predicates) do
+          Query.node_read_filtered(mapping.label_pair, conditions)
+        end
 
       length(relationship_predicates) == 1 ->
         predicate = hd(relationship_predicates)
@@ -262,6 +618,157 @@ defmodule AshNeo4j.QueryHelper do
     end
   end
 
+  @doc """
+  Renders an update's `changeset.filter` guard (the "only-update-if" predicate,
+  #361) to `{:ok, conditions}` for the update `WHERE`, or
+  `{:error, %AshNeo4j.Error.UnsupportedUpdateFilter{}}` when it can't be rendered
+  **in full**.
+
+  Stance: never under-guard. The guard is only pushed down when the filter is a
+  conjunction (`and`-only — no `or`/`not`) of supported attribute predicates that
+  each render; a calculation ref or any predicate the pushdown drops makes the
+  whole guard unsupported, so the data layer returns rather than applies the
+  update unguarded. `nil` (no guard) is `{:ok, []}`.
+  """
+  @spec guard_conditions(ResourceMapping.t(), Ash.Filter.t() | nil) ::
+          {:ok, list()} | {:error, struct()}
+  def guard_conditions(%ResourceMapping{}, nil), do: {:ok, []}
+
+  def guard_conditions(%ResourceMapping{module: module} = mapping, filter) do
+    predicates =
+      filter
+      |> Ash.Filter.to_simple_filter(skip_invalid?: true)
+      |> Map.get(:predicates, [])
+
+    if simple_conjunction?(filter) and predicates != [] and not Enum.any?(predicates, &calculation_ref?/1) do
+      case to_conditions(mapping, predicates) do
+        # Every predicate rendered — a `nil` (unhandled) drop shortens the list.
+        {:ok, conditions} when length(conditions) == length(predicates) -> {:ok, conditions}
+        {:ok, _partial} -> {:error, unsupported_changeset_filter(module, filter)}
+        {:error, _} = error -> error
+      end
+    else
+      {:error, unsupported_changeset_filter(module, filter)}
+    end
+  end
+
+  defp unsupported_changeset_filter(module, filter) do
+    AshNeo4j.Error.UnsupportedChangesetFilter.exception(resource: module, filter: filter)
+  end
+
+  @doc """
+  Renders `changeset.atomics` (a keyword of `{field, Ash.Expr}`, #361) into
+  `{:ok, {set_expressions, params}}` for the update `SET`, where each entry is
+  `"n.<prop> = <cypher>"` evaluated against the **live** node — or
+  `{:error, %AshNeo4j.Error.UnsupportedAtomic{}}` when an expression can't be
+  rendered.
+
+  Renders: arithmetic (`+ - * /`), comparisons, `if/3` (⇒ `CASE`), string concat
+  (`<>` ⇒ `+`) and `string_trim` (⇒ `trim`, Ash's string cast), attribute refs
+  (`n.<prop>`) and scalar literals — numbers/strings/booleans/nil, and atoms (e.g.
+  `Ash.Type.Atom` enum values) bound as their stored string form. An expression
+  node it doesn't cover (e.g. another Ash function) is refused rather than
+  mis-written (stance a). Param keys are `am_`-prefixed and threaded across all
+  atomics so they stay unique.
+  """
+  @spec render_atomic_sets(module(), ResourceMapping.t(), keyword()) ::
+          {:ok, {[binary()], map()}} | {:error, struct()}
+  def render_atomic_sets(_resource, %ResourceMapping{}, []), do: {:ok, {[], %{}}}
+
+  def render_atomic_sets(resource, %ResourceMapping{module: module} = mapping, atomics) do
+    Enum.reduce_while(atomics, {:ok, {[], %{}}}, fn {field, expr}, {:ok, {sets, params}} ->
+      with {:ok, hydrated} <- Ash.Filter.hydrate_refs(expr, %{resource: resource, public?: false}),
+           {:ok, cypher, params} <- render_atomic_node(mapping, hydrated, params) do
+        {:cont, {:ok, {sets ++ ["n.#{property_name(mapping, field)} = #{cypher}"], params}}}
+      else
+        _ -> {:halt, {:error, AshNeo4j.Error.UnsupportedAtomic.exception(resource: module, expression: expr)}}
+      end
+    end)
+  end
+
+  # `+ - * /` (parenthesised) and comparisons, dispatched on the `:operator` atom.
+  @atomic_binary_ops %{
+    +: "+",
+    -: "-",
+    *: "*",
+    /: "/",
+    >: ">",
+    >=: ">=",
+    <: "<",
+    <=: "<=",
+    ==: "=",
+    !=: "<>"
+  }
+
+  defp render_atomic_node(mapping, %Ash.Query.Ref{} = ref, params),
+    do: {:ok, "n.#{property_name(mapping, ref)}", params}
+
+  defp render_atomic_node(mapping, %Ash.Query.Function.If{arguments: [condition, then | rest]}, params) do
+    with {:ok, c, params} <- render_atomic_node(mapping, condition, params),
+         {:ok, t, params} <- render_atomic_node(mapping, then, params),
+         {:ok, e, params} <- render_atomic_else(mapping, rest, params) do
+      {:ok, "CASE WHEN #{c} THEN #{t} ELSE #{e} END", params}
+    end
+  end
+
+  # String atomics: Ash casts them as `if trim(expr) == "" then null else trim(expr)`
+  # (empty-string ⇒ nil). `string_trim/1` ⇒ Cypher `trim/1`, and string `<>` ⇒ `+`.
+  defp render_atomic_node(mapping, %Ash.Query.Function.StringTrim{arguments: [inner]}, params) do
+    with {:ok, s, params} <- render_atomic_node(mapping, inner, params) do
+      {:ok, "trim(#{s})", params}
+    end
+  end
+
+  defp render_atomic_node(mapping, %Ash.Query.Operator.Basic.Concat{left: left, right: right}, params) do
+    with {:ok, l, params} <- render_atomic_node(mapping, left, params),
+         {:ok, r, params} <- render_atomic_node(mapping, right, params) do
+      {:ok, "(#{l} + #{r})", params}
+    end
+  end
+
+  defp render_atomic_node(mapping, %{operator: op, left: left, right: right}, params)
+       when is_map_key(@atomic_binary_ops, op) do
+    with {:ok, l, params} <- render_atomic_node(mapping, left, params),
+         {:ok, r, params} <- render_atomic_node(mapping, right, params) do
+      {:ok, "(#{l} #{@atomic_binary_ops[op]} #{r})", params}
+    end
+  end
+
+  # Atom literal (e.g. an `Ash.Type.Atom` enum value) — stored as its string form,
+  # matching how the data layer writes atom attributes (Neo4j has no atom type).
+  defp render_atomic_node(_mapping, atom, params)
+       when is_atom(atom) and atom not in [nil, true, false] do
+    key = "am_#{map_size(params)}"
+    {:ok, "$#{key}", Map.put(params, key, Atom.to_string(atom))}
+  end
+
+  defp render_atomic_node(_mapping, literal, params)
+       when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal) do
+    key = "am_#{map_size(params)}"
+    {:ok, "$#{key}", Map.put(params, key, literal)}
+  end
+
+  defp render_atomic_node(_mapping, other, _params), do: {:error, other}
+
+  defp render_atomic_else(_mapping, [], params), do: {:ok, "null", params}
+  defp render_atomic_else(mapping, [else_], params), do: render_atomic_node(mapping, else_, params)
+
+  # True when the filter is an `and`-only tree of leaf predicates — no `or`/`not`,
+  # so `to_simple_filter`'s flattened predicate list represents it faithfully.
+  defp simple_conjunction?(%Ash.Filter{expression: expression}), do: simple_conjunction?(expression)
+  defp simple_conjunction?(nil), do: true
+
+  defp simple_conjunction?(%Ash.Query.BooleanExpression{op: :and, left: left, right: right}),
+    do: simple_conjunction?(left) and simple_conjunction?(right)
+
+  defp simple_conjunction?(%Ash.Query.BooleanExpression{op: :or}), do: false
+  defp simple_conjunction?(%Ash.Query.Not{}), do: false
+  defp simple_conjunction?(_leaf), do: true
+
+  defp calculation_ref?(predicate) do
+    match?(%Ash.Query.Ref{attribute: %Ash.Query.Calculation{}}, Map.get(predicate, :left))
+  end
+
   defp to_conditions(%ResourceMapping{} = mapping, predicates) do
     predicates
     |> Enum.map(fn
@@ -274,15 +781,17 @@ defmodule AshNeo4j.QueryHelper do
       %{operator: op, left: %AshNeo4j.Functions.StDistance{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_distance, {op, param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: %AshNeo4j.Functions.StDistanceInMeters{arguments: [ref, test_point]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_distance, {op, to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_distance, {op, param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: left} = predicate when is_struct(left, Ash.Query.Ref) or is_atom(left) ->
@@ -317,27 +826,47 @@ defmodule AshNeo4j.QueryHelper do
 
       %{name: :st_dwithin, arguments: [ref, test_point, threshold]} when is_number(threshold) ->
         if point_attribute?(mapping, ref) do
-          prop = point_property(mapping, ref)
-          {prop, :st_dwithin, {to_geo_param!(mapping, ref, test_point), threshold}, false}
+          geo_condition(mapping, ref, test_point, fn param ->
+            {point_property(mapping, ref), :st_dwithin, {param, threshold}, false}
+          end)
         end
 
       %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        {prop, :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          {property_name(mapping, ref), :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+        end
 
       %{operator: op, left: %AshNeo4j.Functions.VectorCosineDistance{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        {prop, :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          {property_name(mapping, ref), :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
+        end
 
       predicate ->
         Logger.debug("AshNeo4j.QueryHelper: predicate #{inspect(predicate)} not handled")
         nil
     end)
-    |> Enum.reject(&is_nil/1)
+    |> finalize_conditions()
+  end
+
+  # The condition list, or the first `{:error, _}` a builder produced (e.g. a
+  # geo dimension mismatch) — so the data layer returns it rather than running a
+  # query missing that predicate (#350).
+  defp finalize_conditions(mapped) do
+    case Enum.find(mapped, &match?({:error, _}, &1)) do
+      {:error, _} = error -> error
+      nil -> {:ok, Enum.reject(mapped, &is_nil/1)}
+    end
+  end
+
+  # Builds a spatial condition from a dimension-checked geo param, or returns the
+  # `{:error, %GeoDimensionMismatch{}}` to thread up.
+  defp geo_condition(mapping, ref, value, builder) do
+    case to_geo_param(mapping, ref, value) do
+      {:error, _} = error -> error
+      {:ok, param} -> builder.(param)
+    end
   end
 
   # True when the referenced attribute is a Point-shaped Geo attribute —
@@ -355,19 +884,19 @@ defmodule AshNeo4j.QueryHelper do
   # silently drops rows) for a 2D/3D mix, so a mismatch raises
   # `AshNeo4j.Error.GeoDimensionMismatch` here instead (#270). Bridge worlds
   # explicitly with `AshNeo4j.Geo.force_2d/1`.
-  defp to_geo_param!(mapping, ref, value) do
+  defp to_geo_param(mapping, ref, value) do
     types = geo_types_of(mapping, ref)
     vd = value_dim(value)
 
     cond do
       vd == 3 and :point in types and :point_z not in types ->
-        raise AshNeo4j.Error.GeoDimensionMismatch, {2, 3}
+        {:error, AshNeo4j.Error.GeoDimensionMismatch.exception(attr_dim: 2, value_dim: 3)}
 
       vd == 2 and :point_z in types and :point not in types ->
-        raise AshNeo4j.Error.GeoDimensionMismatch, {3, 2}
+        {:error, AshNeo4j.Error.GeoDimensionMismatch.exception(attr_dim: 3, value_dim: 2)}
 
       true ->
-        to_param_value(value)
+        {:ok, to_param_value(value)}
     end
   end
 
@@ -376,7 +905,7 @@ defmodule AshNeo4j.QueryHelper do
 
     case name && Ash.Resource.Info.attribute(module, name) do
       %{constraints: constraints} ->
-        case Keyword.get(constraints || [], :geo_types) do
+        case Keyword.get(constraints, :geo_types) do
           types when is_list(types) -> types
           type when is_atom(type) -> [type]
           _ -> []
@@ -407,7 +936,7 @@ defmodule AshNeo4j.QueryHelper do
     if name do
       case Ash.Resource.Info.attribute(module, name) do
         %{constraints: constraints} ->
-          case Keyword.get(constraints || [], :geo_types) do
+          case Keyword.get(constraints, :geo_types) do
             types when is_list(types) -> geo_type in types
             ^geo_type -> true
             _ -> false
@@ -448,15 +977,16 @@ defmodule AshNeo4j.QueryHelper do
   defp sort_terms(ash_query, %ResourceMapping{} = mapping) do
     case ash_query.sort do
       sort when sort in [nil, []] ->
-        {[], %{}}
+        {:ok, {[], %{}}}
 
       sort ->
         sort
         |> Enum.with_index()
-        |> Enum.reduce({[], %{}}, fn {{name, order}, index}, {terms, params} ->
+        |> Enum.reduce_while({:ok, {[], %{}}}, fn {{name, order}, index}, {:ok, {terms, params}} ->
           case sort_term(mapping, name, order, index) do
-            nil -> {terms, params}
-            {term, term_params} -> {terms ++ [term], Map.merge(params, term_params)}
+            nil -> {:cont, {:ok, {terms, params}}}
+            {:error, _} = error -> {:halt, error}
+            {term, term_params} -> {:cont, {:ok, {terms ++ [term], Map.merge(params, term_params)}}}
           end
         end)
     end
@@ -467,11 +997,12 @@ defmodule AshNeo4j.QueryHelper do
   defp sort_term(mapping, %Ash.Query.Calculation{module: Ash.Resource.Calculation.Expression, opts: opts}, order, index) do
     case Keyword.get(opts, :expr) do
       %Ash.Query.Call{name: fname, args: [ref, query_vec]} when fname in [:vector_similarity, :vector_cosine_distance] ->
-        AshNeo4j.Cypher.require_cypher25!()
-        prop = property_name(mapping, ref)
-        key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
-        expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
-        {{expr, order}, %{key => to_vector_param(query_vec)}}
+        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+          prop = property_name(mapping, ref)
+          key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
+          expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
+          {{expr, order}, %{key => to_vector_param(query_vec)}}
+        end
 
       _ ->
         nil

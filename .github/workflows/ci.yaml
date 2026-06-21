@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 ash_neo4j contributors <https://github.com/diffo-dev/ash_neo4j/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
+name: CI
+
+on: [push, pull_request]
+
+# Type-check gates only — no database. The test suite needs a Neo4j and is run
+# locally / separately. `mix compile --warnings-as-errors` runs Elixir 1.20's
+# set-theoretic type checker; `mix dialyzer` adds success typing.
+jobs:
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir / Erlang (from mise.toml)
+        uses: jdx/mise-action@v2
+
+      - name: Cache deps and build (incl. Dialyzer PLT)
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile (1.20 type checker + warnings as errors)
+        run: mix compile --force --warnings-as-errors
+
+      - name: Dialyzer
+        run: mix dialyzer

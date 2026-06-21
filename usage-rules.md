@@ -125,6 +125,69 @@ Calculations on embedded struct fields (`Ash.TypedStruct`, nested types) work th
 
 Custom calculation modules (`:calculate` callback) are not currently supported — only expression (`expr(...)`) calculations.
 
+## Graph traversal expressions — `traverse/2` (#321)
+
+**This is the graph-native differentiator — reach for it before a join-shaped load or an imperative multi-query walk.** `traverse(^hop_chain, projection)` expresses a multi-hop, direction-and-type-selected path *inside* an `Ash.Expr`, and the data layer pushes it down to a single Cypher path pattern. A relational data layer can't do this — it models relationships as joins and has no notion of a path as an expression value.
+
+```elixir
+require Ash.Query
+import Ash.Expr
+
+# hop_chain — a list of {:forward | :reverse, edge_selector}.
+# :forward walks an outgoing edge, :reverse an incoming one.
+# edge_selector is an Ash relationship name (resolved on the source resource
+# to its edge label + destination), or {:edge, LABEL} / {:edge, LABEL, DEST}.
+chain = [{:forward, :posts}]
+
+# reached-node field comparison — authors who wrote a post scoring > 50
+Author
+|> Ash.Query.filter(traverse(^chain, :score) > 50)
+|> Ash.read!()
+```
+
+Projection (the second argument, default `:node`) selects what to pull from the reached set:
+
+```elixir
+# compose with spatial — "services whose site is within 5 km of a point", one query
+Service |> Ash.Query.filter(st_dwithin(traverse(^chain, :location), ^point, 5_000))
+
+# membership / cardinality over the reached set (#334)
+Service |> Ash.Query.filter(traverse(^chain, :exists) == true)    # reaches a node
+Service |> Ash.Query.filter(traverse(^chain, :exists) == false)   # reaches none
+Service |> Ash.Query.filter(traverse(^chain, :count) > 0)
+
+# field aggregates over the reached set (#338)
+Party |> Ash.Query.filter(traverse(^chain, {:min, :population}) > 5_200_000)
+```
+
+`traverse` is **pushdown-only** — it needs the graph, so it has no in-memory value and is recognised in **`filter`** in this slice. `sort` (#335), `calculate`/policy, and variable-length are fast-follows (open epic #321). A chain that can't be formed (unknown relationship, missing field, unreachable type) returns `{:error, %AshNeo4j.Error.UnresolvableTraversal{}}` — it never fabricates an edge. To **return** a reached value (not filter on it), use `AshNeo4j.Calculations.ProjectedTraversal` (below). Full rules in `usage-rules/traverse.md`.
+
+## Atomic and bulk writes (#361, #379)
+
+AshNeo4j renders Ash atomics straight to Cypher — no read-modify-write round trip.
+
+```elixir
+require Ash.Query
+import Ash.Expr
+
+# atomic update — changeset.atomics render to a Cypher SET (numeric, string
+# concat/trim, enum/atom forms)
+post |> Ash.Changeset.for_update(:update) |> Ash.Changeset.atomic_update(:score, expr(score + 1)) |> Ash.update!()
+
+# bulk atomic update — one UPDATE query, not N round-trips
+Post |> Ash.Query.filter(draft == true) |> Ash.bulk_update!(:publish, %{}, strategy: :atomic)
+
+# bulk atomic destroy — "delete what matches"; a guarded node is skipped, not deleted
+Specification |> Ash.bulk_destroy!(:destroy, %{}, strategy: :atomic)
+
+# atomic upsert — create-or-update keyed on an identity renders a Cypher MERGE,
+# so concurrent upserts converge on one node
+Ash.create!(Upsert, %{first_name: "Donald", surname: "Duck", field: "two"},
+  upsert?: true, upsert_identity: :full_name)
+```
+
+A single **filtered (optimistic-lock) update or destroy** whose guard no longer holds returns `Ash.Error.Changes.StaleRecord` — not a silent no-op — so a lost update is observable. The same guard-on-miss → `StaleRecord` rule applies to guarded relationship attach/detach (#368). Full rules in `usage-rules/atomics.md`.
+
 ## Spatial types and expressions
 
 AshNeo4j stores geometries using [`ash_geo`](https://hex.pm/packages/ash_geo) types — declare attributes as `AshGeo.GeoJson` with a `geo_types` constraint, carrying [`%Geo.*{}`](https://hex.pm/packages/geo) structs. `st_*` expression functions (`st_contains`, `st_within`, `st_intersects`, `st_distance`, `st_distance_in_meters`, `st_dwithin`, `st_closest_point`) match ash_geo / PostGIS signatures. Predicates push down to Neo4j's native `point.distance` and `point.withinBBox` wherever possible.
@@ -154,11 +217,11 @@ On disk, each geometry stores as a canonical RFC 7946 GeoJSON `STRING` at `<attr
 
 ## Vector embeddings and similarity search
 
-AshNeo4j stores vector embeddings with the `AshNeo4j.Types.Vector` attribute type (Elixir `[float()]`, persisted as a Neo4j `LIST<FLOAT>`) and ranks/filters them with the `vector_similarity` and `vector_cosine_distance` expression functions. The requirement is **Cypher 25 (Neo4j ≥ 2025.06), not Bolt 6.0** — with list storage and list params, similarity search works over Bolt 5.8. The built-in `Ash.Type.Vector` is a different module and is not supported; use `AshNeo4j.Types.Vector`.
+AshNeo4j stores vector embeddings with the `AshNeo4j.Type.Vector` attribute type (Elixir `[float()]`, persisted as a Neo4j `LIST<FLOAT>`) and ranks/filters them with the `vector_similarity` and `vector_cosine_distance` expression functions. The requirement is **Cypher 25 (Neo4j ≥ 2025.06), not Bolt 6.0** — with list storage and list params, similarity search works over Bolt 5.8. The built-in `Ash.Type.Vector` is a different module and is not supported; use `AshNeo4j.Type.Vector`.
 
 ```elixir
 attributes do
-  attribute :embedding, AshNeo4j.Types.Vector,
+  attribute :embedding, AshNeo4j.Type.Vector,
     constraints: [element_type: :float32, dimensions: 1536]
 end
 
@@ -207,6 +270,20 @@ record = Ash.get!(SomeBaseInstance, id)
 ```
 
 Resolution is dynamic against loaded modules (no registry): a candidate is a loaded `AshNeo4j.DataLayer` resource whose own labels are a subset of the node's; the outermost (most-nuanced) is kept per domain. Labels that don't resolve to a loaded module are left unknown (omitted). Returns `[]` for a record not produced by this data layer. **Pre-1.0 and may change** — shipped to learn its shape from real downstream use.
+
+### Read-time projection — `AshNeo4j.Calculations.ProjectedTraversal` (exploratory, #329)
+
+The read-time companion to `worlds/1`. Declare it to follow a hop `chain` to a reached node and return it as a value, late-binding the reached node's concrete type at read time — useful when the reached node's subtype isn't known at the source resource's compile time:
+
+```elixir
+calculate :site, :struct,
+  {AshNeo4j.Calculations.ProjectedTraversal,
+   chain: [{:forward, :place_ref}, {:forward, :place}]}
+```
+
+Per record it returns one of: the **concrete record** (labels resolved to a loaded world); **`%AshNeo4j.Unknown{}`** (a node was reached but its labels resolve to no loaded world — it can't be returned as a typed record); **`nil`** (nothing reached); or `%Ash.NotLoaded{}` (until loaded).
+
+`AshNeo4j.Unknown` is a first-class value, complementary to `Ash.NotLoaded`: `NotLoaded` means "not fetched **yet**" (ask again); `Unknown` means "reached, but **couldn't be determined** in the current view of the graph". Pattern-match it alongside `nil` and concrete values — never read `nil`-meaning-absent into it. Shape: `%AshNeo4j.Unknown{world: queried_resource, reason: atom_or_nested_unknown, context: map}`.
 
 ## Naming conventions
 
