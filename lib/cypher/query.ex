@@ -815,7 +815,7 @@ defmodule AshNeo4j.Cypher.Query do
   end
 
   @doc """
-  Atomic upsert (#379): `MERGE (n:L1:L2 {merge_props}) [ON CREATE SET n += {create_props}]
+  Atomic upsert (#379): `MERGE (n:L1:L2 {merge_props}) [ON CREATE SET n += {create_props}[, n:L3:L4]]
   [ON MATCH SET n += {match_props}] RETURN n`.
 
   `merge_props` are the upsert identity's properties (matched-or-created on);
@@ -824,15 +824,26 @@ defmodule AshNeo4j.Cypher.Query do
   matched. With the identity's uniqueness constraint (#20) this is a race-free,
   single-statement upsert. Param prefixes are distinct (`n_`/`nc_`/`nm_`) so the
   three property sets on the `:n` alias don't collide.
+
+  `create_labels` (#392) are extra labels — typically the fragment/base-type and
+  domain-fragment labels in `all_labels` beyond the `[domain, module]` `label_pair`
+  used to MERGE — added with `ON CREATE SET n:L3:L4` so an upserted node carries the
+  same full label set a plain create writes. The MERGE matches on `label_pair` (a
+  label subset still matches a node already carrying the extra labels), so existing
+  nodes are located correctly and only newly created ones get the labels set.
   """
-  @spec upsert_node(atom() | [atom()], map(), map(), map()) :: t()
-  def upsert_node(label, merge_props, create_props, match_props)
-      when is_map(merge_props) and is_map(create_props) and is_map(match_props) do
+  @spec upsert_node(atom() | [atom()], map(), map(), map(), [atom()]) :: t()
+  def upsert_node(label, merge_props, create_props, match_props, create_labels \\ [])
+      when is_map(merge_props) and is_map(create_props) and is_map(match_props) and is_list(create_labels) do
     {merge_pattern, merge_params} = Cypher.parameterized_node(:n, List.wrap(label), merge_props)
     {create_cypher, create_params} = Cypher.parameterized_properties(:nc, create_props)
     {match_cypher, match_params} = Cypher.parameterized_properties(:nm, match_props)
 
-    on_create = if map_size(create_props) > 0, do: [%OnCreateSet{expression: "n += #{create_cypher}"}], else: []
+    on_create_exprs =
+      (if(map_size(create_props) > 0, do: ["n += #{create_cypher}"], else: [])) ++
+        if(create_labels != [], do: ["n:" <> Enum.map_join(create_labels, ":", &to_string/1)], else: [])
+
+    on_create = if on_create_exprs != [], do: [%OnCreateSet{expression: Enum.join(on_create_exprs, ", ")}], else: []
     on_match = if map_size(match_props) > 0, do: [%OnMatchSet{expression: "n += #{match_cypher}"}], else: []
 
     %__MODULE__{

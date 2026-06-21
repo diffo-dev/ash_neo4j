@@ -11,6 +11,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.10.1](https://github.com/diffo-dev/ash_neo4j/compare/v0.10.0...v0.10.1) (2026-06-21)
+
+
+
+
+### Bug Fixes:
+
+* atomic upsert writes all_labels, not label_pair (#392) by Matt Beanland
+
 ## [v0.10.0](https://github.com/diffo-dev/ash_neo4j/compare/v0.9.0...v0.10.0) (2026-06-21)
 
 This release opened on functionality and pivoted to industrialisation and integrity: the write path is now atomic and constraint-backed, the read path gains a graph-native traversal expression, and the whole data layer returns typed errors rather than raising. The headline is **graph traversal as a first-class Ash expression** — a multi-hop path that pushes down to Cypher and composes with the rest of your filter, which a relational data layer structurally cannot offer.

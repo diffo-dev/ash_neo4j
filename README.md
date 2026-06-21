@@ -31,7 +31,7 @@ Add to deps in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ash_neo4j, "~> 0.9"},
+    {:ash_neo4j, "~> 0.10"},
   ]
 end
 ```
@@ -237,7 +237,7 @@ Neo4j 2025.06 introduced **versioned Cypher**: the long-standing language is now
 
 AshNeo4j detects the connected server version (from `Bolty.connection_info/1`'s `server_version`) and, on **Neo4j ≥ 2025.06**, automatically prepends `CYPHER 25 ` to every query so it runs against the Cypher 25 language. On older servers no prefix is emitted and queries run against the server default (Cypher 5). The result is cached per pool; `AshNeo4j.BoltyHelper.cypher25?/0` reports it.
 
-This is distinct from the **Bolt protocol** version (5.6–6.0) — the Bolt version is how the driver talks to the server, while Cypher 5 / 25 is the query language version. Some features require Cypher 25 regardless of Bolt version: for example vector similarity search (see `usage-rules/vectors.md`) needs Neo4j ≥ 2025.06 but works over Bolt 5.8. A feature that requires it calls `AshNeo4j.Cypher.require_cypher25!/0`, which raises `AshNeo4j.Error.RequiresCypher25` on an older server.
+This is distinct from the **Bolt protocol** version (5.6–6.0) — the Bolt version is how the driver talks to the server, while Cypher 5 / 25 is the query language version. Some features require Cypher 25 regardless of Bolt version: for example vector similarity search (see `usage-rules/vectors.md`) needs Neo4j ≥ 2025.06 but works over Bolt 5.8. A feature that requires it calls `AshNeo4j.Cypher.require_cypher25/0`, which returns `{:error, %AshNeo4j.Error.RequiresCypher25{}}` on an older server (the data layer returns this error, it never raises).
 
 > Until [bolty#47](https://github.com/diffo-dev/bolty/issues/47) adds a `cypher25` indicator to `Bolty.Policy`, AshNeo4j derives this from the `server_version` string (`"Neo4j/YYYY.MM.*"` ≥ `2025.06`).
 
