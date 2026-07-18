@@ -839,14 +839,16 @@ defmodule AshNeo4j.QueryHelper do
 
       %{operator: op, left: %AshNeo4j.Functions.VectorSimilarity{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        with :ok <- AshNeo4j.Cypher.require_cypher25() do
-          {property_name(mapping, ref), :vector_similarity, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25(),
+             {:ok, vec} <- to_vector_param(query_vec) do
+          {property_name(mapping, ref), :vector_similarity, {op, vec, threshold}, false}
         end
 
       %{operator: op, left: %AshNeo4j.Functions.VectorCosineDistance{arguments: [ref, query_vec]}, right: threshold}
       when op in [:<, :<=, :>, :>=, :==, :!=] and is_number(threshold) ->
-        with :ok <- AshNeo4j.Cypher.require_cypher25() do
-          {property_name(mapping, ref), :vector_cosine_distance, {op, to_vector_param(query_vec), threshold}, false}
+        with :ok <- AshNeo4j.Cypher.require_cypher25(),
+             {:ok, vec} <- to_vector_param(query_vec) do
+          {property_name(mapping, ref), :vector_cosine_distance, {op, vec, threshold}, false}
         end
 
       predicate ->
@@ -1040,11 +1042,12 @@ defmodule AshNeo4j.QueryHelper do
   defp sort_term(mapping, %Ash.Query.Calculation{module: Ash.Resource.Calculation.Expression, opts: opts}, order, index) do
     case vector_call(Keyword.get(opts, :expr)) do
       {fname, ref, query_vec} ->
-        with :ok <- AshNeo4j.Cypher.require_cypher25() do
+        with :ok <- AshNeo4j.Cypher.require_cypher25(),
+             {:ok, vec} <- to_vector_param(query_vec) do
           prop = property_name(mapping, ref)
           key = "sort_#{Cypher.sanitize_param(prop)}_#{index}_vec"
           expr = Cypher.vector_scalar(fname, :s, prop, "$#{key}")
-          {{expr, order}, %{key => to_vector_param(query_vec)}}
+          {{expr, order}, %{key => vec}}
         end
 
       nil ->
@@ -1101,8 +1104,13 @@ defmodule AshNeo4j.QueryHelper do
 
   # The query embedding is passed as a plain LIST<FLOAT> param — what
   # `vector.similarity.cosine/2` expects, and consistent with list storage.
-  defp to_vector_param(value) when is_list(value), do: Enum.map(value, &(&1 / 1))
-  defp to_vector_param(%Bolty.Types.Vector{data: data}), do: Enum.map(data, &(&1 / 1))
+  # `vector_similarity`/`vector_cosine_distance` don't cast the embedding, so a
+  # non-vector value (e.g. a string) reaches here unconverted; refuse it with a
+  # typed error rather than raising a FunctionClauseError deep in the data layer
+  # (#412).
+  defp to_vector_param(value) when is_list(value), do: {:ok, Enum.map(value, &(&1 / 1))}
+  defp to_vector_param(%Bolty.Types.Vector{data: data}), do: {:ok, Enum.map(data, &(&1 / 1))}
+  defp to_vector_param(value), do: {:error, AshNeo4j.Error.UnsupportedVectorParam.exception(value: value)}
 
   # Builds the on-disk property name for a Point attribute under the symmetric
   # split — `<attr>.point` is where the native Neo4j POINT lives (the indexable

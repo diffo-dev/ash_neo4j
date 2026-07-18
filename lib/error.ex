@@ -65,6 +65,27 @@ defmodule AshNeo4j.Error.UnsupportedAtomic do
   end
 end
 
+defmodule AshNeo4j.Error.UnsupportedVectorParam do
+  @moduledoc """
+  **Returned** (never raised) when a `vector_similarity` / `vector_cosine_distance`
+  query embedding isn't a list of numbers or a `%Bolty.Types.Vector{}` (#412).
+
+  `vector_similarity(embedding, ^value)` performs no cast on `value` (its
+  `args` are `[:any, :any]`), so a non-vector `value` (e.g. a string) reaches the
+  pushdown builder unconverted. Rather than let `to_vector_param/1` raise a
+  `FunctionClauseError` deep in the data layer, we refuse up front with a typed,
+  user-facing error, consistent with the rest of the returned-error family (#350).
+
+  Pass the query embedding as a list of numbers (`[1.0, 0.0, 0.0]`) or a
+  `%Bolty.Types.Vector{}`.
+  """
+  use Splode.Error, fields: [:value], class: :invalid
+
+  def message(%{value: value}) do
+    "vector query embedding must be a list of numbers or a %Bolty.Types.Vector{}, got #{inspect(value)}"
+  end
+end
+
 defmodule AshNeo4j.Error.GeoDimensionMismatch do
   @moduledoc """
   Returned (never raised) when a spatial operation combines geometries of
